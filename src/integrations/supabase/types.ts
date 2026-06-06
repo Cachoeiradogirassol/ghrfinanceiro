@@ -14,16 +14,262 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      accounts: {
+        Row: {
+          cost_center_id: string
+          created_at: string
+          id: string
+          kind: string
+          name: string
+        }
+        Insert: {
+          cost_center_id: string
+          created_at?: string
+          id?: string
+          kind?: string
+          name: string
+        }
+        Update: {
+          cost_center_id?: string
+          created_at?: string
+          id?: string
+          kind?: string
+          name?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "accounts_cost_center_id_fkey"
+            columns: ["cost_center_id"]
+            isOneToOne: false
+            referencedRelation: "cost_centers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      bank_accounts: {
+        Row: {
+          bank: string | null
+          created_at: string
+          id: string
+          initial_balance: number
+          master_only: boolean
+          name: string
+        }
+        Insert: {
+          bank?: string | null
+          created_at?: string
+          id?: string
+          initial_balance?: number
+          master_only?: boolean
+          name: string
+        }
+        Update: {
+          bank?: string | null
+          created_at?: string
+          id?: string
+          initial_balance?: number
+          master_only?: boolean
+          name?: string
+        }
+        Relationships: []
+      }
+      bank_statement_lines: {
+        Row: {
+          amount: number
+          bank_account_id: string
+          created_at: string
+          description: string | null
+          id: string
+          matched_transaction_id: string | null
+          reconciled: boolean
+          statement_date: string
+        }
+        Insert: {
+          amount: number
+          bank_account_id: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          matched_transaction_id?: string | null
+          reconciled?: boolean
+          statement_date: string
+        }
+        Update: {
+          amount?: number
+          bank_account_id?: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          matched_transaction_id?: string | null
+          reconciled?: boolean
+          statement_date?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bank_statement_lines_bank_account_id_fkey"
+            columns: ["bank_account_id"]
+            isOneToOne: false
+            referencedRelation: "bank_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bank_statement_lines_matched_transaction_id_fkey"
+            columns: ["matched_transaction_id"]
+            isOneToOne: false
+            referencedRelation: "transactions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      cost_centers: {
+        Row: {
+          code: number
+          created_at: string
+          id: string
+          master_only: boolean
+          name: string
+        }
+        Insert: {
+          code: number
+          created_at?: string
+          id?: string
+          master_only?: boolean
+          name: string
+        }
+        Update: {
+          code?: number
+          created_at?: string
+          id?: string
+          master_only?: boolean
+          name?: string
+        }
+        Relationships: []
+      }
+      transactions: {
+        Row: {
+          account_id: string
+          amount: number
+          bank_account_id: string | null
+          cost_center_id: string
+          created_at: string
+          created_by: string | null
+          description: string | null
+          document_datetime: string | null
+          due_date: string
+          id: string
+          is_batch: boolean
+          paid_at: string | null
+          parent_transaction_id: string | null
+          status: Database["public"]["Enums"]["transaction_status"]
+          type: Database["public"]["Enums"]["transaction_type"]
+          updated_at: string
+        }
+        Insert: {
+          account_id: string
+          amount: number
+          bank_account_id?: string | null
+          cost_center_id: string
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          document_datetime?: string | null
+          due_date: string
+          id?: string
+          is_batch?: boolean
+          paid_at?: string | null
+          parent_transaction_id?: string | null
+          status?: Database["public"]["Enums"]["transaction_status"]
+          type: Database["public"]["Enums"]["transaction_type"]
+          updated_at?: string
+        }
+        Update: {
+          account_id?: string
+          amount?: number
+          bank_account_id?: string | null
+          cost_center_id?: string
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          document_datetime?: string | null
+          due_date?: string
+          id?: string
+          is_batch?: boolean
+          paid_at?: string | null
+          parent_transaction_id?: string | null
+          status?: Database["public"]["Enums"]["transaction_status"]
+          type?: Database["public"]["Enums"]["transaction_type"]
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "transactions_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "transactions_bank_account_id_fkey"
+            columns: ["bank_account_id"]
+            isOneToOne: false
+            referencedRelation: "bank_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "transactions_cost_center_id_fkey"
+            columns: ["cost_center_id"]
+            isOneToOne: false
+            referencedRelation: "cost_centers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "transactions_parent_transaction_id_fkey"
+            columns: ["parent_transaction_id"]
+            isOneToOne: false
+            referencedRelation: "transactions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_roles: {
+        Row: {
+          created_at: string
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
+      is_master: { Args: never; Returns: boolean }
     }
     Enums: {
-      [_ in never]: never
+      app_role: "master" | "user"
+      transaction_status: "pending" | "paid" | "reconciled"
+      transaction_type: "payable" | "receivable"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +396,10 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      app_role: ["master", "user"],
+      transaction_status: ["pending", "paid", "reconciled"],
+      transaction_type: ["payable", "receivable"],
+    },
   },
 } as const

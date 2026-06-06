@@ -72,14 +72,24 @@ export function AppLayout({ children }: { children?: React.ReactNode }) {
             </Link>
           ))}
           {isMaster && (
-            <Link
-              to="/contas"
-              activeProps={{ className: "bg-primary text-primary-foreground" }}
-              className="flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium hover:bg-accent transition-colors"
-            >
-              <Settings className="h-4 w-4" />
-              Plano de Contas
-            </Link>
+            <>
+              <Link
+                to="/contas"
+                activeProps={{ className: "bg-primary text-primary-foreground" }}
+                className="flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium hover:bg-accent transition-colors"
+              >
+                <Settings className="h-4 w-4" />
+                Plano de Contas
+              </Link>
+              <Link
+                to="/configuracoes"
+                activeProps={{ className: "bg-primary text-primary-foreground" }}
+                className="flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium hover:bg-accent transition-colors"
+              >
+                <Settings className="h-4 w-4" />
+                Configurações
+              </Link>
+            </>
           )}
         </nav>
         <div className="p-3 border-t border-border space-y-2">

@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
+import { Route as RelatoriosRouteImport } from './routes/relatorios'
 import { Route as ProjecaoRouteImport } from './routes/projecao'
 import { Route as ContasRouteImport } from './routes/contas'
 import { Route as ConfiguracoesRouteImport } from './routes/configuracoes'
@@ -27,6 +28,11 @@ import { Route as ApiChatRouteImport } from './routes/api/chat'
 const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
   id: '/sitemap.xml',
   path: '/sitemap.xml',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RelatoriosRoute = RelatoriosRouteImport.update({
+  id: '/relatorios',
+  path: '/relatorios',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ProjecaoRoute = ProjecaoRouteImport.update({
@@ -104,6 +110,7 @@ export interface FileRoutesByFullPath {
   '/configuracoes': typeof ConfiguracoesRouteWithChildren
   '/contas': typeof ContasRoute
   '/projecao': typeof ProjecaoRoute
+  '/relatorios': typeof RelatoriosRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/api/chat': typeof ApiChatRoute
   '/api/chat-reports': typeof ApiChatReportsRoute
@@ -120,6 +127,7 @@ export interface FileRoutesByTo {
   '/configuracoes': typeof ConfiguracoesRouteWithChildren
   '/contas': typeof ContasRoute
   '/projecao': typeof ProjecaoRoute
+  '/relatorios': typeof RelatoriosRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/api/chat': typeof ApiChatRoute
   '/api/chat-reports': typeof ApiChatReportsRoute
@@ -137,6 +145,7 @@ export interface FileRoutesById {
   '/configuracoes': typeof ConfiguracoesRouteWithChildren
   '/contas': typeof ContasRoute
   '/projecao': typeof ProjecaoRoute
+  '/relatorios': typeof RelatoriosRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/api/chat': typeof ApiChatRoute
   '/api/chat-reports': typeof ApiChatReportsRoute
@@ -155,6 +164,7 @@ export interface FileRouteTypes {
     | '/configuracoes'
     | '/contas'
     | '/projecao'
+    | '/relatorios'
     | '/sitemap.xml'
     | '/api/chat'
     | '/api/chat-reports'
@@ -171,6 +181,7 @@ export interface FileRouteTypes {
     | '/configuracoes'
     | '/contas'
     | '/projecao'
+    | '/relatorios'
     | '/sitemap.xml'
     | '/api/chat'
     | '/api/chat-reports'
@@ -187,6 +198,7 @@ export interface FileRouteTypes {
     | '/configuracoes'
     | '/contas'
     | '/projecao'
+    | '/relatorios'
     | '/sitemap.xml'
     | '/api/chat'
     | '/api/chat-reports'
@@ -204,6 +216,7 @@ export interface RootRouteChildren {
   ConfiguracoesRoute: typeof ConfiguracoesRouteWithChildren
   ContasRoute: typeof ContasRoute
   ProjecaoRoute: typeof ProjecaoRoute
+  RelatoriosRoute: typeof RelatoriosRoute
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
   ApiChatRoute: typeof ApiChatRoute
   ApiChatReportsRoute: typeof ApiChatReportsRoute
@@ -218,6 +231,13 @@ declare module '@tanstack/react-router' {
       path: '/sitemap.xml'
       fullPath: '/sitemap.xml'
       preLoaderRoute: typeof SitemapDotxmlRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/relatorios': {
+      id: '/relatorios'
+      path: '/relatorios'
+      fullPath: '/relatorios'
+      preLoaderRoute: typeof RelatoriosRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/projecao': {
@@ -337,6 +357,7 @@ const rootRouteChildren: RootRouteChildren = {
   ConfiguracoesRoute: ConfiguracoesRouteWithChildren,
   ContasRoute: ContasRoute,
   ProjecaoRoute: ProjecaoRoute,
+  RelatoriosRoute: RelatoriosRoute,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
   ApiChatRoute: ApiChatRoute,
   ApiChatReportsRoute: ApiChatReportsRoute,

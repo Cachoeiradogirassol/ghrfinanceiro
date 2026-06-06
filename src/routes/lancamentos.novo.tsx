@@ -1,12 +1,14 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { AppLayout } from "@/components/AppLayout";
 import { useServerFn } from "@tanstack/react-start";
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   listCostCenters,
   listAccounts,
   listBankAccounts,
   createTransaction,
+  listContacts,
+  createContact,
 } from "@/lib/finance.functions";
 import { useState, useMemo } from "react";
 import { Card } from "@/components/ui/card";
@@ -26,8 +28,9 @@ import {
   RadioGroup,
   RadioGroupItem,
 } from "@/components/ui/radio-group";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { toast } from "sonner";
-import { Layers } from "lucide-react";
+import { Layers, AlertTriangle, Search, UserPlus } from "lucide-react";
 
 export const Route = createFileRoute("/lancamentos/novo")({
   head: () => ({ meta: [{ title: "Novo Lançamento — CONTROLE.GHR" }] }),
@@ -38,21 +41,49 @@ export const Route = createFileRoute("/lancamentos/novo")({
   ),
 });
 
+// Keywords that mark a category as "payment-only" (no nota fiscal physical purchase)
+const PAYMENT_ONLY_KEYWORDS = [
+  "equipe",
+  "gps",
+  "fgts",
+  "simples",
+  "pró-labore",
+  "pro-labore",
+  "imposto",
+  "honorário",
+  "honorario",
+  "adiantamento",
+  "luz",
+  "internet",
+  "telefone",
+];
+
+function isPaymentOnlyCategory(accountName?: string) {
+  if (!accountName) return false;
+  const n = accountName.toLowerCase();
+  return PAYMENT_ONLY_KEYWORDS.some((k) => n.includes(k));
+}
+
 function Form() {
   const ccFn = useServerFn(listCostCenters);
   const accFn = useServerFn(listAccounts);
   const bkFn = useServerFn(listBankAccounts);
+  const contactsFn = useServerFn(listContacts);
+  const createContactFn = useServerFn(createContact);
   const createFn = useServerFn(createTransaction);
   const nav = useNavigate();
+  const qc = useQueryClient();
 
   const ccs = useQuery({ queryKey: ["cc"], queryFn: () => ccFn() });
   const accs = useQuery({ queryKey: ["acc"], queryFn: () => accFn() });
   const banks = useQuery({ queryKey: ["banks"], queryFn: () => bkFn() });
+  const contacts = useQuery({ queryKey: ["contacts"], queryFn: () => contactsFn() });
 
   const [type, setType] = useState<"payable" | "receivable">("payable");
   const [costCenterId, setCostCenterId] = useState("");
   const [accountId, setAccountId] = useState("");
   const [bankId, setBankId] = useState<string>("");
+  const [paymentMethod, setPaymentMethod] = useState<string>("");
   const [amount, setAmount] = useState("");
   const [description, setDescription] = useState("");
   const [docDt, setDocDt] = useState("");
@@ -60,11 +91,80 @@ function Form() {
     new Date().toISOString().slice(0, 10),
   );
   const [isBatch, setIsBatch] = useState(false);
+  const [status, setStatus] = useState<"pending" | "paid">("pending");
+
+  // Schedule
+  const [scheduleKind, setScheduleKind] = useState<"single" | "installment" | "recurring">("single");
+  const [installments, setInstallments] = useState("2");
+  const [recurringMonths, setRecurringMonths] = useState("12");
+
+  // Contact
+  const [contactSearch, setContactSearch] = useState("");
+  const [contactId, setContactId] = useState<string>("");
+  const [showNewContact, setShowNewContact] = useState(false);
+  const [newDocType, setNewDocType] = useState<"PF" | "PJ">("PF");
+  const [newDoc, setNewDoc] = useState("");
+  const [newContactType, setNewContactType] = useState<"FORNECEDOR" | "COLABORADOR">("FORNECEDOR");
+  const [duplicateAlert, setDuplicateAlert] = useState<string | null>(null);
 
   const filteredAccounts = useMemo(
     () => (accs.data ?? []).filter((a) => a.cost_center_id === costCenterId),
     [accs.data, costCenterId],
   );
+
+  const selectedAccount = useMemo(
+    () => (accs.data ?? []).find((a) => a.id === accountId),
+    [accs.data, accountId],
+  );
+  const paymentOnly = isPaymentOnlyCategory(selectedAccount?.name);
+  const docDtLabel = paymentOnly ? "Data/Hora do Pagamento" : "Data/Hora da Nota";
+  const docDtRequired = !paymentOnly || status === "paid";
+
+  const filteredContacts = useMemo(() => {
+    const q = contactSearch.trim().toLowerCase();
+    if (!q) return (contacts.data ?? []).slice(0, 8);
+    return (contacts.data ?? [])
+      .filter(
+        (c) =>
+          c.name.toLowerCase().includes(q) ||
+          c.document_number.includes(q.replace(/\D/g, "")),
+      )
+      .slice(0, 8);
+  }, [contacts.data, contactSearch]);
+
+  const selectedContact = useMemo(
+    () => (contacts.data ?? []).find((c) => c.id === contactId),
+    [contacts.data, contactId],
+  );
+
+  const contactMut = useMutation({
+    mutationFn: () =>
+      createContactFn({
+        data: {
+          name: contactSearch.trim(),
+          type: newContactType,
+          document_type: newDocType,
+          document_number: newDoc,
+          master_only: false,
+        },
+      }),
+    onSuccess: (row) => {
+      toast.success("Contato cadastrado");
+      setContactId(row.id);
+      setShowNewContact(false);
+      setNewDoc("");
+      setDuplicateAlert(null);
+      qc.invalidateQueries({ queryKey: ["contacts"] });
+    },
+    onError: (e) => {
+      const msg = e instanceof Error ? e.message : "Erro";
+      if (msg.startsWith("Atenção:")) {
+        setDuplicateAlert(msg);
+      } else {
+        toast.error(msg);
+      }
+    },
+  });
 
   const mut = useMutation({
     mutationFn: () =>
@@ -73,13 +173,26 @@ function Form() {
           cost_center_id: costCenterId,
           account_id: accountId,
           bank_account_id: bankId || null,
+          contact_id: contactId,
           type,
           amount: parseFloat(amount),
           description: description || null,
           document_datetime: docDt ? new Date(docDt).toISOString() : null,
           due_date: dueDate,
           is_batch: isBatch,
-          status: "pending",
+          status,
+          payment_method: (paymentMethod || null) as
+            | "pix"
+            | "boleto"
+            | "credit_card"
+            | "cash"
+            | null,
+          schedule:
+            scheduleKind === "installment"
+              ? { kind: "installment", installments: parseInt(installments, 10) }
+              : scheduleKind === "recurring"
+                ? { kind: "recurring", recurring_months: parseInt(recurringMonths, 10) }
+                : { kind: "single" },
         },
       }),
     onSuccess: () => {
@@ -88,6 +201,14 @@ function Form() {
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : "Erro"),
   });
+
+  const canSave =
+    costCenterId &&
+    accountId &&
+    contactId &&
+    amount &&
+    (!docDtRequired || docDt) &&
+    !mut.isPending;
 
   return (
     <div className="p-8 max-w-3xl">
@@ -145,6 +266,162 @@ function Form() {
           </div>
         </div>
 
+        {/* Contact / Beneficiário */}
+        <div className="space-y-2">
+          <Label>Fornecedor / Beneficiário *</Label>
+          {selectedContact ? (
+            <div className="flex items-center justify-between p-3 rounded-md border bg-muted/30">
+              <div>
+                <div className="font-medium">{selectedContact.name}</div>
+                <div className="text-xs text-muted-foreground">
+                  {selectedContact.type} · {selectedContact.document_type} ·{" "}
+                  {selectedContact.document_number}
+                </div>
+              </div>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => {
+                  setContactId("");
+                  setContactSearch("");
+                }}
+              >
+                Trocar
+              </Button>
+            </div>
+          ) : (
+            <div className="relative">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  className="pl-9"
+                  placeholder="Digite nome ou CPF/CNPJ..."
+                  value={contactSearch}
+                  onChange={(e) => {
+                    setContactSearch(e.target.value);
+                    setShowNewContact(false);
+                    setDuplicateAlert(null);
+                  }}
+                />
+              </div>
+              {contactSearch && !showNewContact && (
+                <div className="mt-2 border rounded-md max-h-56 overflow-auto bg-popover">
+                  {filteredContacts.map((c) => (
+                    <button
+                      key={c.id}
+                      type="button"
+                      onClick={() => {
+                        setContactId(c.id);
+                        setContactSearch("");
+                      }}
+                      className="w-full text-left px-3 py-2 hover:bg-accent text-sm"
+                    >
+                      <div className="font-medium">{c.name}</div>
+                      <div className="text-xs text-muted-foreground">
+                        {c.type} · {c.document_number}
+                      </div>
+                    </button>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={() => setShowNewContact(true)}
+                    className="w-full text-left px-3 py-2 hover:bg-accent text-sm border-t flex items-center gap-2"
+                  >
+                    <UserPlus className="h-4 w-4" />
+                    Cadastrar "{contactSearch}" como novo contato
+                  </button>
+                </div>
+              )}
+              {showNewContact && (
+                <Card className="mt-2 p-4 space-y-3 bg-muted/30">
+                  <div className="text-sm font-medium">
+                    Novo contato: {contactSearch}
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <Label className="text-xs">Categoria</Label>
+                      <Select
+                        value={newContactType}
+                        onValueChange={(v) =>
+                          setNewContactType(v as "FORNECEDOR" | "COLABORADOR")
+                        }
+                      >
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="FORNECEDOR">Fornecedor</SelectItem>
+                          <SelectItem value="COLABORADOR">
+                            Colaborador / Sócio
+                          </SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label className="text-xs">Tipo de documento</Label>
+                      <Select
+                        value={newDocType}
+                        onValueChange={(v) => {
+                          setNewDocType(v as "PF" | "PJ");
+                          setNewDoc("");
+                          setDuplicateAlert(null);
+                        }}
+                      >
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="PF">CPF (Pessoa Física)</SelectItem>
+                          <SelectItem value="PJ">CNPJ (Pessoa Jurídica)</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  <div>
+                    <Label className="text-xs">
+                      {newDocType === "PF" ? "CPF *" : "CNPJ *"}
+                    </Label>
+                    <Input
+                      placeholder={
+                        newDocType === "PF"
+                          ? "000.000.000-00"
+                          : "00.000.000/0000-00"
+                      }
+                      value={newDoc}
+                      onChange={(e) => {
+                        setNewDoc(e.target.value);
+                        setDuplicateAlert(null);
+                      }}
+                    />
+                  </div>
+                  {duplicateAlert && (
+                    <Alert variant="destructive">
+                      <AlertTriangle className="h-4 w-4" />
+                      <AlertDescription>{duplicateAlert}</AlertDescription>
+                    </Alert>
+                  )}
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      onClick={() => contactMut.mutate()}
+                      disabled={
+                        !contactSearch.trim() ||
+                        !newDoc.trim() ||
+                        contactMut.isPending
+                      }
+                    >
+                      {contactMut.isPending ? "Salvando..." : "Cadastrar contato"}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setShowNewContact(false)}
+                    >
+                      Cancelar
+                    </Button>
+                  </div>
+                </Card>
+              )}
+            </div>
+          )}
+        </div>
+
         <div className="grid grid-cols-2 gap-4">
           <div>
             <Label>Valor (R$)</Label>
@@ -172,12 +449,45 @@ function Form() {
 
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <Label>Data/Hora da Nota</Label>
+            <Label>Forma de Pagamento</Label>
+            <Select value={paymentMethod} onValueChange={setPaymentMethod}>
+              <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="pix">Pix</SelectItem>
+                <SelectItem value="boleto">Boleto</SelectItem>
+                <SelectItem value="credit_card">Cartão de Crédito</SelectItem>
+                <SelectItem value="cash">Dinheiro Físico</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label>Status</Label>
+            <Select value={status} onValueChange={(v) => setStatus(v as "pending" | "paid")}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="pending">Pendente</SelectItem>
+                <SelectItem value="paid">Pago</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <Label>
+              {docDtLabel}
+              {docDtRequired ? " *" : " (opcional)"}
+            </Label>
             <Input
               type="datetime-local"
               value={docDt}
               onChange={(e) => setDocDt(e.target.value)}
             />
+            {paymentOnly && (
+              <p className="text-xs text-muted-foreground mt-1">
+                Categoria de pagamento — obrigatório apenas quando o status for "Pago".
+              </p>
+            )}
           </div>
           <div>
             <Label>Vencimento</Label>
@@ -198,6 +508,58 @@ function Form() {
           />
         </div>
 
+        {/* Schedule / Installments / Recurrence */}
+        <div className="space-y-3 p-3 rounded-md border bg-muted/20">
+          <Label>Conta Parcelada ou Recorrente</Label>
+          <RadioGroup
+            value={scheduleKind}
+            onValueChange={(v) =>
+              setScheduleKind(v as "single" | "installment" | "recurring")
+            }
+            className="grid grid-cols-3 gap-2"
+          >
+            <div className="flex items-center gap-2">
+              <RadioGroupItem value="single" id="sk-s" />
+              <Label htmlFor="sk-s" className="font-normal">Única</Label>
+            </div>
+            <div className="flex items-center gap-2">
+              <RadioGroupItem value="installment" id="sk-i" />
+              <Label htmlFor="sk-i" className="font-normal">Parcelada</Label>
+            </div>
+            <div className="flex items-center gap-2">
+              <RadioGroupItem value="recurring" id="sk-r" />
+              <Label htmlFor="sk-r" className="font-normal">Recorrente (mensal)</Label>
+            </div>
+          </RadioGroup>
+          {scheduleKind === "installment" && (
+            <div className="max-w-xs">
+              <Label className="text-xs">Quantidade de Parcelas</Label>
+              <Input
+                type="number"
+                min="2"
+                max="120"
+                value={installments}
+                onChange={(e) => setInstallments(e.target.value)}
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                Serão geradas {installments || 0} transações com vencimentos a cada 30 dias.
+              </p>
+            </div>
+          )}
+          {scheduleKind === "recurring" && (
+            <div className="max-w-xs">
+              <Label className="text-xs">Provisionar por quantos meses?</Label>
+              <Input
+                type="number"
+                min="1"
+                max="36"
+                value={recurringMonths}
+                onChange={(e) => setRecurringMonths(e.target.value)}
+              />
+            </div>
+          )}
+        </div>
+
         <label className="flex items-start gap-3 p-3 rounded-md border border-border bg-muted/30 cursor-pointer">
           <Checkbox
             checked={isBatch}
@@ -216,10 +578,7 @@ function Form() {
         </label>
 
         <div className="flex gap-2">
-          <Button
-            onClick={() => mut.mutate()}
-            disabled={!costCenterId || !accountId || !amount || mut.isPending}
-          >
+          <Button onClick={() => mut.mutate()} disabled={!canSave}>
             {mut.isPending ? "Salvando..." : "Salvar"}
           </Button>
           <Button variant="outline" onClick={() => nav({ to: "/lancamentos" })}>

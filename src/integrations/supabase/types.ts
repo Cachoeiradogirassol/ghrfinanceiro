@@ -121,6 +121,39 @@ export type Database = {
           },
         ]
       }
+      contacts: {
+        Row: {
+          created_at: string
+          document_number: string
+          document_type: string
+          id: string
+          master_only: boolean
+          name: string
+          type: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          document_number: string
+          document_type: string
+          id?: string
+          master_only?: boolean
+          name: string
+          type: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          document_number?: string
+          document_type?: string
+          id?: string
+          master_only?: boolean
+          name?: string
+          type?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       cost_centers: {
         Row: {
           code: number
@@ -150,6 +183,7 @@ export type Database = {
           account_id: string
           amount: number
           bank_account_id: string | null
+          contact_id: string | null
           cost_center_id: string
           created_at: string
           created_by: string | null
@@ -157,9 +191,14 @@ export type Database = {
           document_datetime: string | null
           due_date: string
           id: string
+          installment_number: number | null
+          installment_total: number | null
           is_batch: boolean
+          is_recurring: boolean
           paid_at: string | null
           parent_transaction_id: string | null
+          payment_method: string | null
+          recurrence_group_id: string | null
           status: Database["public"]["Enums"]["transaction_status"]
           type: Database["public"]["Enums"]["transaction_type"]
           updated_at: string
@@ -168,6 +207,7 @@ export type Database = {
           account_id: string
           amount: number
           bank_account_id?: string | null
+          contact_id?: string | null
           cost_center_id: string
           created_at?: string
           created_by?: string | null
@@ -175,9 +215,14 @@ export type Database = {
           document_datetime?: string | null
           due_date: string
           id?: string
+          installment_number?: number | null
+          installment_total?: number | null
           is_batch?: boolean
+          is_recurring?: boolean
           paid_at?: string | null
           parent_transaction_id?: string | null
+          payment_method?: string | null
+          recurrence_group_id?: string | null
           status?: Database["public"]["Enums"]["transaction_status"]
           type: Database["public"]["Enums"]["transaction_type"]
           updated_at?: string
@@ -186,6 +231,7 @@ export type Database = {
           account_id?: string
           amount?: number
           bank_account_id?: string | null
+          contact_id?: string | null
           cost_center_id?: string
           created_at?: string
           created_by?: string | null
@@ -193,9 +239,14 @@ export type Database = {
           document_datetime?: string | null
           due_date?: string
           id?: string
+          installment_number?: number | null
+          installment_total?: number | null
           is_batch?: boolean
+          is_recurring?: boolean
           paid_at?: string | null
           parent_transaction_id?: string | null
+          payment_method?: string | null
+          recurrence_group_id?: string | null
           status?: Database["public"]["Enums"]["transaction_status"]
           type?: Database["public"]["Enums"]["transaction_type"]
           updated_at?: string
@@ -213,6 +264,13 @@ export type Database = {
             columns: ["bank_account_id"]
             isOneToOne: false
             referencedRelation: "bank_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "transactions_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
             referencedColumns: ["id"]
           },
           {

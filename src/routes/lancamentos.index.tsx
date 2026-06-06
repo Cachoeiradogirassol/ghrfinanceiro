@@ -315,6 +315,7 @@ function List() {
                   <Button
                     size="icon"
                     variant="ghost"
+                    aria-label="Excluir lançamento"
                     onClick={() => mut.mutate(t.id)}
                   >
                     <Trash2 className="h-4 w-4" />

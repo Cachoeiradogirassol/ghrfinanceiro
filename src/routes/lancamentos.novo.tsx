@@ -93,6 +93,10 @@ function Form() {
   const [isBatch, setIsBatch] = useState(false);
   const [status, setStatus] = useState<"pending" | "paid">("pending");
 
+  // Rateio
+  const [rateio, setRateio] = useState(false);
+  const [splits, setSplits] = useState<Record<string, string>>({}); // cost_center_id -> amount string
+
   // Schedule
   const [scheduleKind, setScheduleKind] = useState<"single" | "installment" | "recurring">("single");
   const [installments, setInstallments] = useState("2");

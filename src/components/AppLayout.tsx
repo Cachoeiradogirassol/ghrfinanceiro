@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
-export function AppLayout(_props: { children?: React.ReactNode }) {
+export function AppLayout({ children }: { children?: React.ReactNode }) {
   const { user, isMaster, loading } = useAuth();
   const navigate = useNavigate();
   const router = useRouter();
@@ -97,7 +97,7 @@ export function AppLayout(_props: { children?: React.ReactNode }) {
         </div>
       </aside>
       <main className="flex-1 overflow-auto">
-        <Outlet />
+        {children ?? <Outlet />}
       </main>
     </div>
   );

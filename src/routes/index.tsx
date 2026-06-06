@@ -265,12 +265,13 @@ function DRETable({
     return <p className="text-sm text-muted-foreground">Sem dados realizados no período.</p>;
   }
   const months = data.series;
-  const rows = [
+  type IconType = React.ComponentType<{ className?: string }>;
+  const rows: Array<{ label: string; key: string; positive: boolean; sub?: boolean; icon?: IconType }> = [
     { label: "Receitas", key: "revenue", positive: true },
     { label: "Custos / Despesas", key: "expense", positive: false },
     { label: "Aportes Recebidos", key: "aporteRecebido", positive: true, sub: true, icon: ArrowDownLeft },
     { label: "Aportes Concedidos", key: "aporteConcedido", positive: false, sub: true, icon: ArrowUpRight },
-  ] as const;
+  ];
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-sm">
@@ -287,7 +288,7 @@ function DRETable({
         </thead>
         <tbody>
           {rows.map((r) => {
-            const Icon = "icon" in r ? r.icon : null;
+            const Icon = r.icon;
             return (
               <tr key={r.key} className={`border-b border-border/40 ${r.sub ? "text-muted-foreground" : ""}`}>
                 <td className="py-2 flex items-center gap-2">

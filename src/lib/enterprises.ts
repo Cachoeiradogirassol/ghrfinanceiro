@@ -1,11 +1,23 @@
-export const ENTERPRISES = [
+export interface Enterprise {
+  value:
+    | "turismo"
+    | "restaurante"
+    | "vinhedo"
+    | "institucional_fazenda"
+    | "impostos"
+    | "ghr";
+  label: string;
+  masterOnly?: boolean;
+}
+
+export const ENTERPRISES: Enterprise[] = [
   { value: "turismo", label: "Turismo (Cachoeira)" },
   { value: "restaurante", label: "Restaurante" },
   { value: "vinhedo", label: "Vinhedo" },
   { value: "institucional_fazenda", label: "Fazenda" },
   { value: "impostos", label: "Impostos" },
   { value: "ghr", label: "GHR (Holding)", masterOnly: true },
-] as const;
+];
 
 export type EnterpriseValue = (typeof ENTERPRISES)[number]["value"];
 

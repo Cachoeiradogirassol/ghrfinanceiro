@@ -7,6 +7,27 @@
 import { defineConfig } from "@lovable.dev/vite-tanstack-config";
 
 export default defineConfig({
+  vite: {
+    optimizeDeps: {
+      include: [
+        "@ai-sdk/react",
+        "@radix-ui/react-checkbox",
+        "@radix-ui/react-label",
+        "@radix-ui/react-radio-group",
+        "@radix-ui/react-select",
+        "@radix-ui/react-slot",
+        "@supabase/supabase-js",
+        "ai",
+        "class-variance-authority",
+        "clsx",
+        "lucide-react",
+        "recharts",
+        "sonner",
+        "tailwind-merge",
+        "zod",
+      ],
+    },
+  },
   tanstackStart: {
     // Redirect TanStack Start's bundled server entry to src/server.ts (our SSR error wrapper).
     // nitro/vite builds from this

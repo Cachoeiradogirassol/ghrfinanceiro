@@ -141,6 +141,56 @@ function Form() {
     [contacts.data, contactId],
   );
 
+  // Active cost centers grouped by enterprise (for rateio)
+  const activeCCs = useMemo(
+    () => (ccs.data ?? []).filter((c) => c.is_active !== false),
+    [ccs.data],
+  );
+
+  const splitTotal = useMemo(
+    () =>
+      Object.values(splits).reduce((s, v) => s + (parseFloat(v) || 0), 0),
+    [splits],
+  );
+  const totalAmount = parseFloat(amount) || 0;
+  const splitOk =
+    !rateio || (totalAmount > 0 && Math.abs(splitTotal - totalAmount) < 0.01);
+
+  // Aporte cruzado detection
+  const selectedBank = useMemo(
+    () => (banks.data ?? []).find((b) => b.id === bankId),
+    [banks.data, bankId],
+  );
+  const selectedCC = useMemo(
+    () => (ccs.data ?? []).find((c) => c.id === costCenterId),
+    [ccs.data, costCenterId],
+  );
+  const aporteCruzado =
+    selectedBank &&
+    selectedCC &&
+    selectedBank.enterprise &&
+    selectedCC.enterprise &&
+    selectedBank.enterprise !== selectedCC.enterprise &&
+    !rateio;
+
+  function distributeEqually() {
+    const ids = Object.keys(splits).filter((id) => splits[id] !== undefined);
+    if (ids.length === 0 || !totalAmount) return;
+    const each = (totalAmount / ids.length).toFixed(2);
+    const next: Record<string, string> = {};
+    ids.forEach((id) => (next[id] = each));
+    setSplits(next);
+  }
+
+  function toggleSplit(id: string, on: boolean) {
+    setSplits((prev) => {
+      const next = { ...prev };
+      if (on) next[id] = "";
+      else delete next[id];
+      return next;
+    });
+  }
+
   const contactMut = useMutation({
     mutationFn: () =>
       createContactFn({

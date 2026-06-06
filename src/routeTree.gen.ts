@@ -9,38 +9,161 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as ProjecaoRouteImport } from './routes/projecao'
+import { Route as ContasRouteImport } from './routes/contas'
+import { Route as ConciliacaoRouteImport } from './routes/conciliacao'
+import { Route as AuthRouteImport } from './routes/auth'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as LancamentosIndexRouteImport } from './routes/lancamentos.index'
+import { Route as LancamentosNovoRouteImport } from './routes/lancamentos.novo'
+import { Route as ApiChatRouteImport } from './routes/api/chat'
 
+const ProjecaoRoute = ProjecaoRouteImport.update({
+  id: '/projecao',
+  path: '/projecao',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ContasRoute = ContasRouteImport.update({
+  id: '/contas',
+  path: '/contas',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ConciliacaoRoute = ConciliacaoRouteImport.update({
+  id: '/conciliacao',
+  path: '/conciliacao',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthRoute = AuthRouteImport.update({
+  id: '/auth',
+  path: '/auth',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const LancamentosIndexRoute = LancamentosIndexRouteImport.update({
+  id: '/lancamentos/',
+  path: '/lancamentos/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LancamentosNovoRoute = LancamentosNovoRouteImport.update({
+  id: '/lancamentos/novo',
+  path: '/lancamentos/novo',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiChatRoute = ApiChatRouteImport.update({
+  id: '/api/chat',
+  path: '/api/chat',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/auth': typeof AuthRoute
+  '/conciliacao': typeof ConciliacaoRoute
+  '/contas': typeof ContasRoute
+  '/projecao': typeof ProjecaoRoute
+  '/api/chat': typeof ApiChatRoute
+  '/lancamentos/novo': typeof LancamentosNovoRoute
+  '/lancamentos/': typeof LancamentosIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/auth': typeof AuthRoute
+  '/conciliacao': typeof ConciliacaoRoute
+  '/contas': typeof ContasRoute
+  '/projecao': typeof ProjecaoRoute
+  '/api/chat': typeof ApiChatRoute
+  '/lancamentos/novo': typeof LancamentosNovoRoute
+  '/lancamentos': typeof LancamentosIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/auth': typeof AuthRoute
+  '/conciliacao': typeof ConciliacaoRoute
+  '/contas': typeof ContasRoute
+  '/projecao': typeof ProjecaoRoute
+  '/api/chat': typeof ApiChatRoute
+  '/lancamentos/novo': typeof LancamentosNovoRoute
+  '/lancamentos/': typeof LancamentosIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths:
+    | '/'
+    | '/auth'
+    | '/conciliacao'
+    | '/contas'
+    | '/projecao'
+    | '/api/chat'
+    | '/lancamentos/novo'
+    | '/lancamentos/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to:
+    | '/'
+    | '/auth'
+    | '/conciliacao'
+    | '/contas'
+    | '/projecao'
+    | '/api/chat'
+    | '/lancamentos/novo'
+    | '/lancamentos'
+  id:
+    | '__root__'
+    | '/'
+    | '/auth'
+    | '/conciliacao'
+    | '/contas'
+    | '/projecao'
+    | '/api/chat'
+    | '/lancamentos/novo'
+    | '/lancamentos/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AuthRoute: typeof AuthRoute
+  ConciliacaoRoute: typeof ConciliacaoRoute
+  ContasRoute: typeof ContasRoute
+  ProjecaoRoute: typeof ProjecaoRoute
+  ApiChatRoute: typeof ApiChatRoute
+  LancamentosNovoRoute: typeof LancamentosNovoRoute
+  LancamentosIndexRoute: typeof LancamentosIndexRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/projecao': {
+      id: '/projecao'
+      path: '/projecao'
+      fullPath: '/projecao'
+      preLoaderRoute: typeof ProjecaoRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/contas': {
+      id: '/contas'
+      path: '/contas'
+      fullPath: '/contas'
+      preLoaderRoute: typeof ContasRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/conciliacao': {
+      id: '/conciliacao'
+      path: '/conciliacao'
+      fullPath: '/conciliacao'
+      preLoaderRoute: typeof ConciliacaoRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/auth': {
+      id: '/auth'
+      path: '/auth'
+      fullPath: '/auth'
+      preLoaderRoute: typeof AuthRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
@@ -48,22 +171,40 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/lancamentos/': {
+      id: '/lancamentos/'
+      path: '/lancamentos'
+      fullPath: '/lancamentos/'
+      preLoaderRoute: typeof LancamentosIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/lancamentos/novo': {
+      id: '/lancamentos/novo'
+      path: '/lancamentos/novo'
+      fullPath: '/lancamentos/novo'
+      preLoaderRoute: typeof LancamentosNovoRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/chat': {
+      id: '/api/chat'
+      path: '/api/chat'
+      fullPath: '/api/chat'
+      preLoaderRoute: typeof ApiChatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AuthRoute: AuthRoute,
+  ConciliacaoRoute: ConciliacaoRoute,
+  ContasRoute: ContasRoute,
+  ProjecaoRoute: ProjecaoRoute,
+  ApiChatRoute: ApiChatRoute,
+  LancamentosNovoRoute: LancamentosNovoRoute,
+  LancamentosIndexRoute: LancamentosIndexRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}

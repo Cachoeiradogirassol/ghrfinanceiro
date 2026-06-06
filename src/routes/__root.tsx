@@ -77,14 +77,25 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Lovable App" },
-      { name: "description", content: "Lovable Generated Project" },
-      { name: "author", content: "Lovable" },
-      { property: "og:title", content: "Lovable App" },
-      { property: "og:description", content: "Lovable Generated Project" },
+      { title: "CONTROLE.GHR — Sistema de Gestão Financeira e IA Preditiva" },
+      {
+        name: "description",
+        content:
+          "Plataforma de gestão financeira do Grupo GHR: lançamentos, conciliação bancária, DRE dinâmico e projeções com IA preditiva.",
+      },
+      { name: "author", content: "CONTROLE.GHR" },
+      {
+        property: "og:title",
+        content: "CONTROLE.GHR — Sistema de Gestão Financeira e IA Preditiva",
+      },
+      {
+        property: "og:description",
+        content:
+          "Plataforma de gestão financeira do Grupo GHR: lançamentos, conciliação bancária, DRE dinâmico e projeções com IA preditiva.",
+      },
       { property: "og:type", content: "website" },
+      { property: "og:site_name", content: "CONTROLE.GHR" },
       { name: "twitter:card", content: "summary" },
-      { name: "twitter:site", content: "@Lovable" },
     ],
     links: [
       {

@@ -79,7 +79,7 @@ export function UsersTab() {
         <form onSubmit={submit} className="grid gap-3 md:grid-cols-2">
           <div><Label>Nome</Label><Input value={displayName} onChange={(e) => setDisplayName(e.target.value)} /></div>
           <div><Label>E-mail</Label><Input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} /></div>
-          <div><Label>Senha inicial</Label><Input type="password" required minLength={8} value={password} onChange={(e) => setPassword(e.target.value)} /></div>
+          <div><Label>Senha inicial</Label><PasswordInput required minLength={8} value={password} onChange={(e) => setPassword(e.target.value)} /></div>
           <div>
             <Label>Nível de acesso</Label>
             <Select value={role} onValueChange={(v) => setRole(v as "user" | "master")}>

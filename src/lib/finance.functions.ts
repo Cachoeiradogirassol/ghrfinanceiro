@@ -666,3 +666,85 @@ export const buildProjection = createServerFn({ method: "POST" })
       ghosts,
     };
   });
+
+// ---------- RECONCILIATION PERIODS ----------
+export const listReconciliationPeriods = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { data, error } = await context.supabase
+      .from("reconciliation_periods")
+      .select("*")
+      .order("start_date", { ascending: false });
+    if (error) throw new Error(error.message);
+    return data;
+  });
+
+export const createReconciliationPeriod = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) =>
+    z.object({ start_date: z.string(), end_date: z.string() }).parse(d),
+  )
+  .handler(async ({ context, data }) => {
+    if (data.end_date < data.start_date) throw new Error("Intervalo inválido.");
+    const { data: row, error } = await context.supabase
+      .from("reconciliation_periods")
+      .insert({
+        start_date: data.start_date,
+        end_date: data.end_date,
+        status: "OPEN",
+        created_by: context.userId,
+      })
+      .select()
+      .single();
+    if (error) throw new Error(error.message);
+    return row;
+  });
+
+export const closeReconciliationPeriod = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({ id: z.string().uuid() }).parse(d))
+  .handler(async ({ context, data }) => {
+    const { error } = await context.supabase
+      .from("reconciliation_periods")
+      .update({
+        status: "CLOSED",
+        closed_by: context.userId,
+        closed_at: new Date().toISOString(),
+      })
+      .eq("id", data.id);
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
+export const reopenReconciliationPeriod = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({ id: z.string().uuid() }).parse(d))
+  .handler(async ({ context, data }) => {
+    const { error } = await context.supabase
+      .from("reconciliation_periods")
+      .update({ status: "OPEN", closed_by: null, closed_at: null })
+      .eq("id", data.id);
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
+// ---------- AUDIT USERS MAP (master only) ----------
+const MASTER_EMAIL_AUDIT = "drs.cachoeira@gmail.com";
+export const listAuditUsers = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const isMaster = context.claims?.email === MASTER_EMAIL_AUDIT;
+    if (!isMaster) {
+      const { data: roleRow } = await context.supabase
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", context.userId)
+        .eq("role", "master")
+        .maybeSingle();
+      if (!roleRow) return [] as Array<{ id: string; email: string }>;
+    }
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data, error } = await supabaseAdmin.auth.admin.listUsers({ perPage: 200 });
+    if (error) throw new Error(error.message);
+    return data.users.map((u) => ({ id: u.id, email: u.email ?? "" }));
+  });

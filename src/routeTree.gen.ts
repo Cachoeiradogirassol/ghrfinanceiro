@@ -21,6 +21,7 @@ import { Route as LancamentosNovoRouteImport } from './routes/lancamentos.novo'
 import { Route as ConfiguracoesUsuariosRouteImport } from './routes/configuracoes.usuarios'
 import { Route as ConfiguracoesPlanoDeContasRouteImport } from './routes/configuracoes.plano-de-contas'
 import { Route as ConfiguracoesContasBancariasRouteImport } from './routes/configuracoes.contas-bancarias'
+import { Route as ApiChatReportsRouteImport } from './routes/api/chat-reports'
 import { Route as ApiChatRouteImport } from './routes/api/chat'
 
 const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
@@ -85,6 +86,11 @@ const ConfiguracoesContasBancariasRoute =
     path: '/contas-bancarias',
     getParentRoute: () => ConfiguracoesRoute,
   } as any)
+const ApiChatReportsRoute = ApiChatReportsRouteImport.update({
+  id: '/api/chat-reports',
+  path: '/api/chat-reports',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiChatRoute = ApiChatRouteImport.update({
   id: '/api/chat',
   path: '/api/chat',
@@ -100,6 +106,7 @@ export interface FileRoutesByFullPath {
   '/projecao': typeof ProjecaoRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/api/chat': typeof ApiChatRoute
+  '/api/chat-reports': typeof ApiChatReportsRoute
   '/configuracoes/contas-bancarias': typeof ConfiguracoesContasBancariasRoute
   '/configuracoes/plano-de-contas': typeof ConfiguracoesPlanoDeContasRoute
   '/configuracoes/usuarios': typeof ConfiguracoesUsuariosRoute
@@ -115,6 +122,7 @@ export interface FileRoutesByTo {
   '/projecao': typeof ProjecaoRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/api/chat': typeof ApiChatRoute
+  '/api/chat-reports': typeof ApiChatReportsRoute
   '/configuracoes/contas-bancarias': typeof ConfiguracoesContasBancariasRoute
   '/configuracoes/plano-de-contas': typeof ConfiguracoesPlanoDeContasRoute
   '/configuracoes/usuarios': typeof ConfiguracoesUsuariosRoute
@@ -131,6 +139,7 @@ export interface FileRoutesById {
   '/projecao': typeof ProjecaoRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/api/chat': typeof ApiChatRoute
+  '/api/chat-reports': typeof ApiChatReportsRoute
   '/configuracoes/contas-bancarias': typeof ConfiguracoesContasBancariasRoute
   '/configuracoes/plano-de-contas': typeof ConfiguracoesPlanoDeContasRoute
   '/configuracoes/usuarios': typeof ConfiguracoesUsuariosRoute
@@ -148,6 +157,7 @@ export interface FileRouteTypes {
     | '/projecao'
     | '/sitemap.xml'
     | '/api/chat'
+    | '/api/chat-reports'
     | '/configuracoes/contas-bancarias'
     | '/configuracoes/plano-de-contas'
     | '/configuracoes/usuarios'
@@ -163,6 +173,7 @@ export interface FileRouteTypes {
     | '/projecao'
     | '/sitemap.xml'
     | '/api/chat'
+    | '/api/chat-reports'
     | '/configuracoes/contas-bancarias'
     | '/configuracoes/plano-de-contas'
     | '/configuracoes/usuarios'
@@ -178,6 +189,7 @@ export interface FileRouteTypes {
     | '/projecao'
     | '/sitemap.xml'
     | '/api/chat'
+    | '/api/chat-reports'
     | '/configuracoes/contas-bancarias'
     | '/configuracoes/plano-de-contas'
     | '/configuracoes/usuarios'
@@ -194,6 +206,7 @@ export interface RootRouteChildren {
   ProjecaoRoute: typeof ProjecaoRoute
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
   ApiChatRoute: typeof ApiChatRoute
+  ApiChatReportsRoute: typeof ApiChatReportsRoute
   LancamentosNovoRoute: typeof LancamentosNovoRoute
   LancamentosIndexRoute: typeof LancamentosIndexRoute
 }
@@ -284,6 +297,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ConfiguracoesContasBancariasRouteImport
       parentRoute: typeof ConfiguracoesRoute
     }
+    '/api/chat-reports': {
+      id: '/api/chat-reports'
+      path: '/api/chat-reports'
+      fullPath: '/api/chat-reports'
+      preLoaderRoute: typeof ApiChatReportsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/chat': {
       id: '/api/chat'
       path: '/api/chat'
@@ -319,9 +339,20 @@ const rootRouteChildren: RootRouteChildren = {
   ProjecaoRoute: ProjecaoRoute,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
   ApiChatRoute: ApiChatRoute,
+  ApiChatReportsRoute: ApiChatReportsRoute,
   LancamentosNovoRoute: LancamentosNovoRoute,
   LancamentosIndexRoute: LancamentosIndexRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}

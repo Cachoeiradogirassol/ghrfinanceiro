@@ -5,7 +5,18 @@ import { useEffect } from "react";
 import { Settings } from "lucide-react";
 
 export const Route = createFileRoute("/configuracoes")({
-  head: () => ({ meta: [{ title: "Configurações — CONTROLE.GHR" }] }),
+  head: () => ({
+    meta: [
+      { title: "Configurações — CONTROLE.GHR" },
+      {
+        name: "description",
+        content:
+          "Área administrativa do CONTROLE.GHR para gestão de usuários, contas bancárias e plano de contas.",
+      },
+      { name: "robots", content: "noindex, nofollow" },
+    ],
+    links: [{ rel: "canonical", href: "https://ghrfinanceiro.lovable.app/configuracoes" }],
+  }),
   beforeLoad: ({ location }) => {
     if (location.pathname === "/configuracoes") {
       throw redirect({ to: "/configuracoes/usuarios" });

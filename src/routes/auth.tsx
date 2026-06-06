@@ -16,7 +16,6 @@ export const Route = createFileRoute("/auth")({
 });
 
 function AuthPage() {
-  const [mode, setMode] = useState<"signin" | "signup">("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
@@ -32,25 +31,14 @@ function AuthPage() {
     e.preventDefault();
     setBusy(true);
     try {
-      if (mode === "signup") {
-        const { error } = await supabase.auth.signUp({
-          email,
-          password,
-          options: { emailRedirectTo: window.location.origin },
-        });
-        if (error) throw error;
-        toast.success("Conta criada. Faça login.");
-        setMode("signin");
-      } else {
-        const { error } = await supabase.auth.signInWithPassword({
-          email,
-          password,
-        });
-        if (error) throw error;
-        navigate({ to: "/" });
-      }
+      const { error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+      if (error) throw error;
+      navigate({ to: "/" });
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Erro");
+      toast.error(e instanceof Error ? e.message : "Erro ao entrar");
     } finally {
       setBusy(false);
     }
@@ -64,7 +52,7 @@ function AuthPage() {
           <h1 className="text-2xl font-bold">CONTROLE.GHR</h1>
         </div>
         <p className="text-sm text-muted-foreground mb-6">
-          Sistema financeiro restrito
+          Sistema financeiro restrito — acesso apenas para usuários cadastrados.
         </p>
         <form onSubmit={submit} className="space-y-4">
           <div>
@@ -86,24 +74,16 @@ function AuthPage() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
-              minLength={8}
-              autoComplete={
-                mode === "signup" ? "new-password" : "current-password"
-              }
+              autoComplete="current-password"
             />
           </div>
           <Button type="submit" className="w-full" disabled={busy}>
-            {busy ? "..." : mode === "signin" ? "Entrar" : "Criar conta"}
+            {busy ? "..." : "Entrar"}
           </Button>
         </form>
-        <button
-          onClick={() => setMode(mode === "signin" ? "signup" : "signin")}
-          className="mt-4 text-sm text-muted-foreground hover:text-foreground w-full text-center"
-        >
-          {mode === "signin"
-            ? "Primeiro acesso? Criar conta"
-            : "Já tem conta? Entrar"}
-        </button>
+        <p className="mt-6 text-xs text-muted-foreground text-center">
+          Novos operadores são cadastrados pelo Usuário Master em Configurações.
+        </p>
       </Card>
     </div>
   );

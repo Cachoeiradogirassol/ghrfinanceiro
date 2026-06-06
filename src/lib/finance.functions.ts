@@ -177,6 +177,30 @@ export const reconcile = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => ReconcileInput.parse(d))
   .handler(async ({ context, data }) => {
+    const { data: tx, error: txErr } = await context.supabase
+      .from("transactions")
+      .select("id, amount, is_batch")
+      .eq("id", data.transaction_id)
+      .single();
+    if (txErr || !tx) throw new Error("Lançamento não encontrado");
+    const { data: lines, error: linesErr } = await context.supabase
+      .from("bank_statement_lines")
+      .select("id, amount")
+      .in("id", data.statement_line_ids);
+    if (linesErr) throw new Error(linesErr.message);
+    if (!lines || lines.length !== data.statement_line_ids.length) {
+      throw new Error("Linhas de extrato inválidas");
+    }
+    if (data.statement_line_ids.length > 1 && !tx.is_batch) {
+      throw new Error("Múltiplas linhas só podem conciliar lançamentos marcados como lote (is_batch).");
+    }
+    const sumLines = lines.reduce((s, l) => s + Math.abs(Number(l.amount)), 0);
+    const txAmount = Math.abs(Number(tx.amount));
+    if (Math.abs(sumLines - txAmount) > 0.01) {
+      throw new Error(
+        `Inconsistência no lote: soma das linhas (R$ ${sumLines.toFixed(2)}) ≠ valor do lançamento (R$ ${txAmount.toFixed(2)}).`,
+      );
+    }
     await context.supabase
       .from("bank_statement_lines")
       .update({ matched_transaction_id: data.transaction_id, reconciled: true })
@@ -185,7 +209,7 @@ export const reconcile = createServerFn({ method: "POST" })
       .from("transactions")
       .update({ status: "reconciled", paid_at: new Date().toISOString() })
       .eq("id", data.transaction_id);
-    return { ok: true };
+    return { ok: true, sum: sumLines };
   });
 
 // PROJECTION

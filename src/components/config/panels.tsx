@@ -5,7 +5,7 @@ import {
   listUsers,
   createUser,
   setUserActive,
-  resetUserPassword,
+  updateUser,
   updateUser,
   upsertCostCenter,
   upsertAccount,

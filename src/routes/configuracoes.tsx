@@ -13,18 +13,31 @@ import {
   upsertAccount,
   deleteAccount,
   upsertBankAccount,
+  archiveOrDeleteBankAccount,
+  archiveOrDeleteCostCenter,
 } from "@/lib/admin.functions";
-import { listCostCenters, listAccounts, listBankAccounts } from "@/lib/finance.functions";
+import {
+  listCostCenters,
+  listAccounts,
+  listBankAccounts,
+} from "@/lib/finance.functions";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
-import { Settings, Lock, Trash2, Plus } from "lucide-react";
+import { Settings, Lock, Archive, Trash2, Plus } from "lucide-react";
+import { ENTERPRISES, type Enterprise } from "@/lib/enterprises";
 
 export const Route = createFileRoute("/configuracoes")({
   head: () => ({ meta: [{ title: "Configurações — CONTROLE.GHR" }] }),
@@ -41,7 +54,6 @@ function ConfigPage() {
   useEffect(() => {
     if (!loading && !isMaster) nav({ to: "/" });
   }, [loading, isMaster, nav]);
-
   if (!isMaster) return null;
 
   return (
@@ -155,8 +167,15 @@ function BanksTab() {
   const qc = useQueryClient();
   const listFn = useServerFn(listBankAccounts);
   const upsertFn = useServerFn(upsertBankAccount);
+  const archiveFn = useServerFn(archiveOrDeleteBankAccount);
   const q = useQuery({ queryKey: ["admin-banks"], queryFn: () => listFn() });
-  const [form, setForm] = useState({ name: "", bank: "", initial_balance: 0, master_only: false });
+  const [form, setForm] = useState<{
+    name: string;
+    bank: string;
+    initial_balance: number;
+    enterprise: Enterprise["value"];
+    master_only: boolean;
+  }>({ name: "", bank: "", initial_balance: 0, enterprise: "ghr", master_only: false });
 
   return (
     <div className="grid gap-4 md:grid-cols-2">
@@ -165,16 +184,28 @@ function BanksTab() {
         <form onSubmit={async (e) => {
           e.preventDefault();
           try {
-            await upsertFn({ data: { ...form, initial_balance: Number(form.initial_balance) } });
+            await upsertFn({ data: { ...form, initial_balance: Number(form.initial_balance), is_active: true } });
             toast.success("Conta criada");
-            setForm({ name: "", bank: "", initial_balance: 0, master_only: false });
+            setForm({ name: "", bank: "", initial_balance: 0, enterprise: "ghr", master_only: false });
             qc.invalidateQueries({ queryKey: ["admin-banks"] });
+            qc.invalidateQueries({ queryKey: ["banks"] });
           } catch (err) { toast.error(err instanceof Error ? err.message : "Erro"); }
         }} className="space-y-3">
           <div><Label>Nome</Label><Input required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></div>
           <div><Label>Banco</Label><Input value={form.bank} onChange={(e) => setForm({ ...form, bank: e.target.value })} /></div>
+          <div>
+            <Label>Empreendimento</Label>
+            <Select value={form.enterprise} onValueChange={(v) => setForm({ ...form, enterprise: v as Enterprise["value"] })}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {ENTERPRISES.map((e) => (
+                  <SelectItem key={e.value} value={e.value}>{e.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
           <div><Label>Saldo inicial</Label><Input type="number" step="0.01" value={form.initial_balance} onChange={(e) => setForm({ ...form, initial_balance: Number(e.target.value) })} /></div>
-          <div className="flex items-center gap-2"><Switch checked={form.master_only} onCheckedChange={(v) => setForm({ ...form, master_only: v })} /><Label>Apenas Master (GHR)</Label></div>
+          <div className="flex items-center gap-2"><Switch checked={form.master_only} onCheckedChange={(v) => setForm({ ...form, master_only: v })} /><Label>Restrita ao Master</Label></div>
           <Button type="submit">Salvar</Button>
         </form>
       </Card>
@@ -182,7 +213,12 @@ function BanksTab() {
         <h3 className="font-semibold mb-3">Contas existentes</h3>
         <div className="space-y-3">
           {(q.data ?? []).map((b) => (
-            <BankRow key={b.id} bank={b} onSaved={() => qc.invalidateQueries({ queryKey: ["admin-banks"] })} />
+            <BankRow
+              key={b.id}
+              bank={b}
+              onChanged={() => { qc.invalidateQueries({ queryKey: ["admin-banks"] }); qc.invalidateQueries({ queryKey: ["banks"] }); }}
+              archive={archiveFn}
+            />
           ))}
         </div>
       </Card>
@@ -190,21 +226,65 @@ function BanksTab() {
   );
 }
 
-function BankRow({ bank, onSaved }: { bank: { id: string; name: string; bank: string | null; initial_balance: number; master_only: boolean }; onSaved: () => void }) {
+function BankRow({
+  bank,
+  onChanged,
+  archive,
+}: {
+  bank: {
+    id: string;
+    name: string;
+    bank: string | null;
+    initial_balance: number;
+    master_only: boolean;
+    enterprise: Enterprise["value"];
+    is_active?: boolean;
+  };
+  onChanged: () => void;
+  archive: (args: { data: { id: string } }) => Promise<{ archived?: boolean; deleted?: boolean }>;
+}) {
   const upsertFn = useServerFn(upsertBankAccount);
   const [name, setName] = useState(bank.name);
   const [balance, setBalance] = useState(Number(bank.initial_balance));
+  const [enterprise, setEnterprise] = useState<Enterprise["value"]>(bank.enterprise);
+  const inactive = bank.is_active === false;
+
   return (
-    <div className="border-b border-border pb-3 grid grid-cols-1 sm:grid-cols-[1fr_140px_auto] gap-2 items-end">
-      <div><Label className="text-xs">Nome</Label><Input value={name} onChange={(e) => setName(e.target.value)} /></div>
-      <div><Label className="text-xs">Saldo inicial</Label><Input type="number" step="0.01" value={balance} onChange={(e) => setBalance(Number(e.target.value))} /></div>
-      <Button size="sm" onClick={async () => {
-        try {
-          await upsertFn({ data: { id: bank.id, name, bank: bank.bank, initial_balance: balance, master_only: bank.master_only } });
-          toast.success("Atualizado"); onSaved();
-        } catch (e) { toast.error(e instanceof Error ? e.message : "Erro"); }
-      }}>Salvar</Button>
-      {bank.master_only && <Badge variant="destructive" className="col-span-full w-fit"><Lock className="h-3 w-3 mr-1" />GHR</Badge>}
+    <div className={`border-b border-border pb-3 space-y-2 ${inactive ? "opacity-60" : ""}`}>
+      <div className="grid grid-cols-1 sm:grid-cols-[1fr_140px_140px] gap-2 items-end">
+        <div><Label className="text-xs">Nome</Label><Input value={name} onChange={(e) => setName(e.target.value)} /></div>
+        <div>
+          <Label className="text-xs">Empreendimento</Label>
+          <Select value={enterprise} onValueChange={(v) => setEnterprise(v as Enterprise["value"])}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {ENTERPRISES.map((e) => <SelectItem key={e.value} value={e.value}>{e.label}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+        <div><Label className="text-xs">Saldo inicial</Label><Input type="number" step="0.01" value={balance} onChange={(e) => setBalance(Number(e.target.value))} /></div>
+      </div>
+      <div className="flex items-center gap-2">
+        <Button size="sm" onClick={async () => {
+          try {
+            await upsertFn({ data: { id: bank.id, name, bank: bank.bank, initial_balance: balance, enterprise, master_only: bank.master_only, is_active: !inactive } });
+            toast.success("Atualizado"); onChanged();
+          } catch (e) { toast.error(e instanceof Error ? e.message : "Erro"); }
+        }}>Salvar</Button>
+        <Button size="sm" variant="outline" onClick={async () => {
+          if (!confirm("Arquivar ou excluir esta conta?")) return;
+          try {
+            const r = await archive({ data: { id: bank.id } });
+            toast.success(r.deleted ? "Excluída" : "Arquivada (possui histórico)");
+            onChanged();
+          } catch (e) { toast.error(e instanceof Error ? e.message : "Erro"); }
+        }}>
+          {inactive ? <Trash2 className="h-3 w-3 mr-1" /> : <Archive className="h-3 w-3 mr-1" />}
+          {inactive ? "Excluir" : "Arquivar"}
+        </Button>
+        {bank.master_only && <Badge variant="destructive"><Lock className="h-3 w-3 mr-1" />Master</Badge>}
+        {inactive && <Badge variant="secondary">Inativa</Badge>}
+      </div>
     </div>
   );
 }
@@ -217,77 +297,116 @@ function PlanTab() {
   const upsertCC = useServerFn(upsertCostCenter);
   const upsertAcc = useServerFn(upsertAccount);
   const delAcc = useServerFn(deleteAccount);
+  const archiveCC = useServerFn(archiveOrDeleteCostCenter);
   const ccs = useQuery({ queryKey: ["admin-cc"], queryFn: () => ccFn() });
   const accs = useQuery({ queryKey: ["admin-acc"], queryFn: () => accFn() });
   const refresh = () => {
     qc.invalidateQueries({ queryKey: ["admin-cc"] });
     qc.invalidateQueries({ queryKey: ["admin-acc"] });
+    qc.invalidateQueries({ queryKey: ["cc"] });
   };
 
   return (
     <div className="space-y-4">
-      <NewCostCenter onSaved={refresh} upsertCC={upsertCC} />
-      {(ccs.data ?? []).map((cc) => (
-        <Card key={cc.id} className="p-5">
-          <CostCenterHeader cc={cc} upsertCC={upsertCC} onSaved={refresh} />
-          <div className="mt-4 space-y-2">
-            {(accs.data ?? []).filter((a) => a.cost_center_id === cc.id).map((a) => (
-              <div key={a.id} className="flex items-center gap-2">
-                <Input defaultValue={a.name} onBlur={async (e) => {
-                  if (e.target.value === a.name) return;
-                  try { await upsertAcc({ data: { id: a.id, cost_center_id: cc.id, name: e.target.value, kind: a.kind } }); toast.success("Salvo"); refresh(); }
+      <NewCostCenter onSaved={refresh} />
+      {(ccs.data ?? []).map((cc) => {
+        const inactive = cc.is_active === false;
+        return (
+          <Card key={cc.id} className={`p-5 ${inactive ? "opacity-60" : ""}`}>
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-mono text-muted-foreground w-10">{cc.code}</span>
+              <Input
+                defaultValue={cc.name}
+                onBlur={async (e) => {
+                  if (e.target.value === cc.name) return;
+                  try { await upsertCC({ data: { id: cc.id, code: cc.code, name: e.target.value, enterprise: cc.enterprise, master_only: cc.master_only, is_active: !inactive } }); toast.success("Salvo"); refresh(); }
                   catch (err) { toast.error(err instanceof Error ? err.message : "Erro"); }
-                }} />
-                <Badge variant={a.kind === "revenue" ? "default" : "secondary"}>{a.kind === "revenue" ? "Receita" : "Despesa"}</Badge>
-                <Button size="icon" variant="ghost" onClick={async () => {
-                  if (!confirm("Remover subcategoria?")) return;
-                  try { await delAcc({ data: { id: a.id } }); toast.success("Removida"); refresh(); }
-                  catch (err) { toast.error(err instanceof Error ? err.message : "Erro"); }
-                }}><Trash2 className="h-4 w-4" /></Button>
-              </div>
-            ))}
-            <NewAccountRow ccId={cc.id} upsertAcc={upsertAcc} onSaved={refresh} />
-          </div>
-        </Card>
-      ))}
+                }}
+              />
+              <Select value={cc.enterprise} onValueChange={async (v) => {
+                try { await upsertCC({ data: { id: cc.id, code: cc.code, name: cc.name, enterprise: v as Enterprise["value"], master_only: cc.master_only, is_active: !inactive } }); toast.success("Empreendimento atualizado"); refresh(); }
+                catch (e) { toast.error(e instanceof Error ? e.message : "Erro"); }
+              }}>
+                <SelectTrigger className="w-[180px]"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {ENTERPRISES.map((e) => <SelectItem key={e.value} value={e.value}>{e.label}</SelectItem>)}
+                </SelectContent>
+              </Select>
+              <Button size="sm" variant="outline" onClick={async () => {
+                if (!confirm("Arquivar ou excluir este centro de custo?")) return;
+                try {
+                  const r = await archiveCC({ data: { id: cc.id } });
+                  toast.success(r.deleted ? "Excluído" : "Arquivado (possui histórico)");
+                  refresh();
+                } catch (e) { toast.error(e instanceof Error ? e.message : "Erro"); }
+              }}>
+                <Archive className="h-3 w-3 mr-1" />
+                Arquivar
+              </Button>
+              {cc.master_only && <Badge variant="destructive"><Lock className="h-3 w-3 mr-1" />Master</Badge>}
+              {inactive && <Badge variant="secondary">Inativo</Badge>}
+            </div>
+            <div className="mt-4 space-y-2">
+              {(accs.data ?? []).filter((a) => a.cost_center_id === cc.id).map((a) => (
+                <div key={a.id} className={`flex items-center gap-2 ${a.is_active === false ? "opacity-60" : ""}`}>
+                  <Input defaultValue={a.name} onBlur={async (e) => {
+                    if (e.target.value === a.name) return;
+                    try { await upsertAcc({ data: { id: a.id, cost_center_id: cc.id, name: e.target.value, kind: a.kind, is_active: a.is_active !== false } }); toast.success("Salvo"); refresh(); }
+                    catch (err) { toast.error(err instanceof Error ? err.message : "Erro"); }
+                  }} />
+                  <Badge variant={a.kind === "revenue" ? "default" : "secondary"}>{a.kind === "revenue" ? "Receita" : "Despesa"}</Badge>
+                  {a.is_active === false && <Badge variant="outline">Inativa</Badge>}
+                  <Button size="icon" variant="ghost" onClick={async () => {
+                    if (!confirm("Arquivar ou excluir esta subcategoria?")) return;
+                    try {
+                      const r = await delAcc({ data: { id: a.id } });
+                      toast.success(r.deleted ? "Excluída" : "Arquivada (possui histórico)");
+                      refresh();
+                    }
+                    catch (err) { toast.error(err instanceof Error ? err.message : "Erro"); }
+                  }}><Archive className="h-4 w-4" /></Button>
+                </div>
+              ))}
+              <NewAccountRow ccId={cc.id} onSaved={refresh} />
+            </div>
+          </Card>
+        );
+      })}
     </div>
   );
 }
 
-function NewCostCenter({ upsertCC, onSaved }: { upsertCC: (args: { data: { id?: string; code: number; name: string; master_only: boolean } }) => Promise<{ id: string }>; onSaved: () => void }) {
+function NewCostCenter({ onSaved }: { onSaved: () => void }) {
+  const upsertCC = useServerFn(upsertCostCenter);
   const [code, setCode] = useState(10);
   const [name, setName] = useState("");
+  const [enterprise, setEnterprise] = useState<Enterprise["value"]>("ghr");
   const [masterOnly, setMasterOnly] = useState(false);
   return (
     <Card className="p-4 flex flex-wrap items-end gap-2">
-      <div className="w-24"><Label className="text-xs">Código</Label><Input type="number" value={code} onChange={(e) => setCode(Number(e.target.value))} /></div>
+      <div className="w-20"><Label className="text-xs">Código</Label><Input type="number" value={code} onChange={(e) => setCode(Number(e.target.value))} /></div>
       <div className="flex-1 min-w-[200px]"><Label className="text-xs">Novo Centro de Custo</Label><Input value={name} onChange={(e) => setName(e.target.value)} /></div>
-      <div className="flex items-center gap-2"><Switch checked={masterOnly} onCheckedChange={setMasterOnly} /><Label>GHR (Master)</Label></div>
+      <div className="w-44">
+        <Label className="text-xs">Empreendimento</Label>
+        <Select value={enterprise} onValueChange={(v) => setEnterprise(v as Enterprise["value"])}>
+          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectContent>
+            {ENTERPRISES.map((e) => <SelectItem key={e.value} value={e.value}>{e.label}</SelectItem>)}
+          </SelectContent>
+        </Select>
+      </div>
+      <div className="flex items-center gap-2"><Switch checked={masterOnly} onCheckedChange={setMasterOnly} /><Label>Restrito Master</Label></div>
       <Button size="sm" onClick={async () => {
         if (!name) return;
-        try { await upsertCC({ data: { code, name, master_only: masterOnly } }); toast.success("Criado"); setName(""); onSaved(); }
+        try { await upsertCC({ data: { code, name, enterprise, master_only: masterOnly, is_active: true } }); toast.success("Criado"); setName(""); onSaved(); }
         catch (e) { toast.error(e instanceof Error ? e.message : "Erro"); }
       }}><Plus className="h-4 w-4 mr-1" />Adicionar</Button>
     </Card>
   );
 }
 
-function CostCenterHeader({ cc, upsertCC, onSaved }: { cc: { id: string; code: number; name: string; master_only: boolean }; upsertCC: (args: { data: { id?: string; code: number; name: string; master_only: boolean } }) => Promise<{ id: string }>; onSaved: () => void }) {
-  const [name, setName] = useState(cc.name);
-  return (
-    <div className="flex items-center gap-2">
-      <span className="text-sm font-mono text-muted-foreground w-10">{cc.code}</span>
-      <Input value={name} onChange={(e) => setName(e.target.value)} onBlur={async () => {
-        if (name === cc.name) return;
-        try { await upsertCC({ data: { id: cc.id, code: cc.code, name, master_only: cc.master_only } }); toast.success("Salvo"); onSaved(); }
-        catch (e) { toast.error(e instanceof Error ? e.message : "Erro"); }
-      }} />
-      {cc.master_only && <Badge variant="destructive"><Lock className="h-3 w-3 mr-1" />Master</Badge>}
-    </div>
-  );
-}
-
-function NewAccountRow({ ccId, upsertAcc, onSaved }: { ccId: string; upsertAcc: (args: { data: { id?: string; cost_center_id: string; name: string; kind: "expense" | "revenue" } }) => Promise<{ id: string }>; onSaved: () => void }) {
+function NewAccountRow({ ccId, onSaved }: { ccId: string; onSaved: () => void }) {
+  const upsertAcc = useServerFn(upsertAccount);
   const [name, setName] = useState("");
   const [kind, setKind] = useState<"expense" | "revenue">("expense");
   return (
@@ -302,7 +421,7 @@ function NewAccountRow({ ccId, upsertAcc, onSaved }: { ccId: string; upsertAcc: 
       </Select>
       <Button size="sm" variant="outline" onClick={async () => {
         if (!name) return;
-        try { await upsertAcc({ data: { cost_center_id: ccId, name, kind } }); toast.success("Adicionada"); setName(""); onSaved(); }
+        try { await upsertAcc({ data: { cost_center_id: ccId, name, kind, is_active: true } }); toast.success("Adicionada"); setName(""); onSaved(); }
         catch (e) { toast.error(e instanceof Error ? e.message : "Erro"); }
       }}><Plus className="h-4 w-4" /></Button>
     </div>

@@ -2,7 +2,11 @@ import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { z } from "zod";
 
-// LIST cost centers (RLS filters GHR automatically)
+const EnterpriseFilter = z
+  .enum(["all", "turismo", "restaurante", "vinhedo", "ghr", "institucional_fazenda", "impostos"])
+  .default("all");
+
+// ---------- LISTS ----------
 export const listCostCenters = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
@@ -19,7 +23,7 @@ export const listAccounts = createServerFn({ method: "GET" })
   .handler(async ({ context }) => {
     const { data, error } = await context.supabase
       .from("accounts")
-      .select("*, cost_centers(code, name, master_only)")
+      .select("*, cost_centers(code, name, master_only, enterprise)")
       .order("name");
     if (error) throw new Error(error.message);
     return data;
@@ -42,13 +46,20 @@ export const listTransactions = createServerFn({ method: "GET" })
     const { data, error } = await context.supabase
       .from("transactions")
       .select(
-        "*, accounts(name, kind), cost_centers(code, name, master_only), bank_accounts(name), contacts(name, type, document_number)",
+        "*, accounts(name, kind), cost_centers(code, name, master_only, enterprise), bank_accounts(name, enterprise), contacts(name, type, document_number), transaction_allocations(id, cost_center_id, amount, percent, cost_centers(code, name, enterprise))",
       )
       .order("due_date", { ascending: false })
       .limit(500);
     if (error) throw new Error(error.message);
     return data;
   });
+
+// ---------- CREATE TRANSACTION (com rateio) ----------
+const AllocationInput = z.object({
+  cost_center_id: z.string().uuid(),
+  amount: z.number().positive(),
+  percent: z.number().min(0).max(100).optional().nullable(),
+});
 
 const TxInput = z.object({
   cost_center_id: z.string().uuid(),
@@ -63,6 +74,7 @@ const TxInput = z.object({
   is_batch: z.boolean().default(false),
   status: z.enum(["pending", "paid", "reconciled"]).default("pending"),
   payment_method: z.enum(["pix", "boleto", "credit_card", "cash"]).nullable().optional(),
+  allocations: z.array(AllocationInput).optional(),
   schedule: z
     .object({
       kind: z.enum(["single", "installment", "recurring"]).default("single"),
@@ -87,22 +99,48 @@ export const createTransaction = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((data: unknown) => TxInput.parse(data))
   .handler(async ({ context, data }) => {
-    const { schedule, ...base } = data;
+    // Validar rateio
+    const allocations = data.allocations ?? [];
+    if (allocations.length > 0) {
+      const sum = allocations.reduce((s, a) => s + a.amount, 0);
+      if (Math.abs(sum - data.amount) > 0.01) {
+        throw new Error(
+          `Rateio inconsistente: soma das partes (R$ ${sum.toFixed(2)}) ≠ valor total (R$ ${data.amount.toFixed(2)}).`,
+        );
+      }
+    }
+
     const baseRow = {
-      cost_center_id: base.cost_center_id,
-      account_id: base.account_id,
-      bank_account_id: base.bank_account_id ?? null,
-      contact_id: base.contact_id,
-      type: base.type,
-      amount: base.amount,
-      description: base.description ?? null,
-      document_datetime: base.document_datetime ?? null,
-      due_date: base.due_date,
-      is_batch: base.is_batch,
-      status: base.status,
-      payment_method: base.payment_method ?? null,
+      cost_center_id: data.cost_center_id,
+      account_id: data.account_id,
+      bank_account_id: data.bank_account_id ?? null,
+      contact_id: data.contact_id,
+      type: data.type,
+      amount: data.amount,
+      description: data.description ?? null,
+      document_datetime: data.document_datetime ?? null,
+      due_date: data.due_date,
+      is_batch: data.is_batch,
+      status: data.status,
+      payment_method: data.payment_method ?? null,
       created_by: context.userId,
     };
+
+    const schedule = data.schedule;
+
+    async function insertAllocationsFor(txIds: string[]) {
+      if (allocations.length === 0) return;
+      const rows = txIds.flatMap((tid) =>
+        allocations.map((a) => ({
+          transaction_id: tid,
+          cost_center_id: a.cost_center_id,
+          amount: a.amount,
+          percent: a.percent ?? null,
+        })),
+      );
+      const { error } = await context.supabase.from("transaction_allocations").insert(rows);
+      if (error) throw new Error("Falha ao salvar rateio: " + error.message);
+    }
 
     if (schedule.kind === "installment" && schedule.installments) {
       const n = schedule.installments;
@@ -118,8 +156,9 @@ export const createTransaction = createServerFn({ method: "POST" })
       const { data: rs, error } = await context.supabase
         .from("transactions")
         .insert(rows)
-        .select();
+        .select("id");
       if (error) throw new Error(error.message);
+      await insertAllocationsFor((rs ?? []).map((r) => r.id));
       return { created: rs?.length ?? 0, group_id: groupId };
     }
 
@@ -135,21 +174,23 @@ export const createTransaction = createServerFn({ method: "POST" })
       const { data: rs, error } = await context.supabase
         .from("transactions")
         .insert(rows)
-        .select();
+        .select("id");
       if (error) throw new Error(error.message);
+      await insertAllocationsFor((rs ?? []).map((r) => r.id));
       return { created: rs?.length ?? 0, group_id: groupId };
     }
 
     const { data: row, error } = await context.supabase
       .from("transactions")
       .insert(baseRow)
-      .select()
+      .select("id")
       .single();
     if (error) throw new Error(error.message);
+    await insertAllocationsFor([row.id]);
     return row;
   });
 
-// CONTACTS
+// ---------- CONTACTS ----------
 export const listContacts = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
@@ -202,9 +243,7 @@ export const createContact = createServerFn({ method: "POST" })
       .single();
     if (error) {
       if (error.code === "23505") {
-        throw new Error(
-          "Atenção: Este documento já está cadastrado. Use o cadastro existente.",
-        );
+        throw new Error("Atenção: Este documento já está cadastrado. Use o cadastro existente.");
       }
       throw new Error(error.message);
     }
@@ -215,15 +254,12 @@ export const deleteTransaction = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((data: unknown) => z.object({ id: z.string().uuid() }).parse(data))
   .handler(async ({ context, data }) => {
-    const { error } = await context.supabase
-      .from("transactions")
-      .delete()
-      .eq("id", data.id);
+    const { error } = await context.supabase.from("transactions").delete().eq("id", data.id);
     if (error) throw new Error(error.message);
     return { ok: true };
   });
 
-// BANK STATEMENT
+// ---------- BANK STATEMENT ----------
 const StatementLineInput = z.object({
   bank_account_id: z.string().uuid(),
   lines: z
@@ -247,9 +283,7 @@ export const importStatementLines = createServerFn({ method: "POST" })
       amount: l.amount,
       description: l.description ?? null,
     }));
-    const { error } = await context.supabase
-      .from("bank_statement_lines")
-      .insert(rows);
+    const { error } = await context.supabase.from("bank_statement_lines").insert(rows);
     if (error) throw new Error(error.message);
     return { inserted: rows.length };
   });
@@ -266,7 +300,6 @@ export const listStatementLines = createServerFn({ method: "GET" })
     return data;
   });
 
-// AUTO-MATCH: idempotent — sets matched_transaction_id where amount matches and date within 3 days.
 export const autoMatch = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
@@ -285,8 +318,7 @@ export const autoMatch = createServerFn({ method: "POST" })
     for (const line of lines) {
       const lineDate = new Date(line.statement_date).getTime();
       const candidate = txs.find((t) => {
-        if (Math.abs(Number(t.amount) - Math.abs(Number(line.amount))) > 0.01)
-          return false;
+        if (Math.abs(Number(t.amount) - Math.abs(Number(line.amount))) > 0.01) return false;
         const ref = t.document_datetime
           ? new Date(t.document_datetime).getTime()
           : new Date(t.due_date).getTime();
@@ -347,42 +379,215 @@ export const reconcile = createServerFn({ method: "POST" })
     return { ok: true, sum: sumLines };
   });
 
-// PROJECTION
-export const buildProjection = createServerFn({ method: "GET" })
-  .middleware([requireSupabaseAuth])
-  .handler(async ({ context }) => {
-    const { data: banks } = await context.supabase
-      .from("bank_accounts")
-      .select("id, name, initial_balance");
-    const { data: txs } = await context.supabase
+// ---------- DRE + PROJECTION (com filtro de empreendimento) ----------
+type EnterpriseValue =
+  | "turismo"
+  | "restaurante"
+  | "vinhedo"
+  | "ghr"
+  | "institucional_fazenda"
+  | "impostos";
+
+interface AllocRow {
+  amount: number;
+  cc_enterprise: EnterpriseValue;
+}
+
+async function loadFinanceData(supabase: {
+  from: (t: string) => {
+    select: (s: string) => Promise<{ data: unknown; error: { message: string } | null }>;
+  };
+}) {
+  const [{ data: banks }, { data: ccs }, { data: txs }, { data: allocs }] = (await Promise.all([
+    supabase.from("bank_accounts").select("id, name, initial_balance, enterprise"),
+    supabase.from("cost_centers").select("id, enterprise"),
+    supabase
       .from("transactions")
-      .select("type, amount, due_date, status, account_id, accounts(name)")
-      .order("due_date");
+      .select(
+        "id, type, amount, due_date, status, account_id, cost_center_id, bank_account_id, accounts(name)",
+      ),
+    supabase
+      .from("transaction_allocations")
+      .select("transaction_id, cost_center_id, amount"),
+  ])) as unknown as [
+    { data: Array<{ id: string; name: string; initial_balance: number; enterprise: EnterpriseValue }> },
+    { data: Array<{ id: string; enterprise: EnterpriseValue }> },
+    {
+      data: Array<{
+        id: string;
+        type: "payable" | "receivable";
+        amount: number;
+        due_date: string;
+        status: string;
+        account_id: string;
+        cost_center_id: string;
+        bank_account_id: string | null;
+        accounts: { name?: string } | null;
+      }>;
+    },
+    { data: Array<{ transaction_id: string; cost_center_id: string; amount: number }> },
+  ];
+
+  const ccById = new Map(ccs?.map((c) => [c.id, c.enterprise]) ?? []);
+  const bankById = new Map(banks?.map((b) => [b.id, b]) ?? []);
+
+  // Para cada transação, gerar lista de alocações efetivas
+  const allocByTx = new Map<string, AllocRow[]>();
+  for (const a of allocs ?? []) {
+    const e = ccById.get(a.cost_center_id);
+    if (!e) continue;
+    const arr = allocByTx.get(a.transaction_id) ?? [];
+    arr.push({ amount: Number(a.amount), cc_enterprise: e });
+    allocByTx.set(a.transaction_id, arr);
+  }
+
+  return { banks: banks ?? [], txs: txs ?? [], ccById, bankById, allocByTx };
+}
+
+function effectiveAllocs(
+  tx: { id: string; cost_center_id: string; amount: number },
+  ccById: Map<string, EnterpriseValue>,
+  allocByTx: Map<string, AllocRow[]>,
+): AllocRow[] {
+  const a = allocByTx.get(tx.id);
+  if (a && a.length > 0) return a;
+  const e = ccById.get(tx.cost_center_id);
+  if (!e) return [];
+  return [{ amount: Number(tx.amount), cc_enterprise: e }];
+}
+
+export const buildDRE = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) =>
+    z
+      .object({
+        enterprise: EnterpriseFilter,
+        months: z.number().int().min(1).max(24).default(6),
+      })
+      .parse(d ?? {}),
+  )
+  .handler(async ({ context, data }) => {
+    const { txs, ccById, bankById, allocByTx } = await loadFinanceData(
+      context.supabase as never,
+    );
+    const filter = data.enterprise;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const from = new Date(today);
+    from.setMonth(from.getMonth() - data.months);
+
+    // Estrutura por mês (YYYY-MM)
+    type Bucket = {
+      revenue: number;
+      expense: number;
+      aporteRecebido: number;
+      aporteConcedido: number;
+    };
+    const months = new Map<string, Bucket>();
+    const ensure = (k: string) => {
+      let b = months.get(k);
+      if (!b) {
+        b = { revenue: 0, expense: 0, aporteRecebido: 0, aporteConcedido: 0 };
+        months.set(k, b);
+      }
+      return b;
+    };
+
+    for (const tx of txs) {
+      if (tx.status === "pending") continue; // DRE = realizado
+      const d = new Date(tx.due_date);
+      if (d < from || d > today) continue;
+      const key = tx.due_date.slice(0, 7);
+      const bank = tx.bank_account_id ? bankById.get(tx.bank_account_id) : undefined;
+      const bankEnt = bank?.enterprise ?? null;
+      const allocs = effectiveAllocs(tx, ccById, allocByTx);
+      for (const a of allocs) {
+        const include = filter === "all" || a.cc_enterprise === filter;
+        if (include) {
+          const b = ensure(key);
+          if (tx.type === "receivable") b.revenue += a.amount;
+          else b.expense += a.amount;
+        }
+        // Aportes cruzados
+        if (bankEnt && bankEnt !== a.cc_enterprise && tx.type === "payable") {
+          // CC enterprise recebeu aporte de bankEnt
+          if (filter === "all" || a.cc_enterprise === filter) {
+            ensure(key).aporteRecebido += a.amount;
+          }
+          // bankEnt concedeu aporte
+          if (filter === "all" || bankEnt === filter) {
+            ensure(key).aporteConcedido += a.amount;
+          }
+        }
+      }
+    }
+
+    const series = Array.from(months.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([month, b]) => ({
+        month,
+        ...b,
+        net: b.revenue - b.expense,
+      }));
+
+    const totals = series.reduce(
+      (acc, m) => ({
+        revenue: acc.revenue + m.revenue,
+        expense: acc.expense + m.expense,
+        aporteRecebido: acc.aporteRecebido + m.aporteRecebido,
+        aporteConcedido: acc.aporteConcedido + m.aporteConcedido,
+      }),
+      { revenue: 0, expense: 0, aporteRecebido: 0, aporteConcedido: 0 },
+    );
+
+    return { series, totals: { ...totals, net: totals.revenue - totals.expense } };
+  });
+
+export const buildProjection = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) =>
+    z.object({ enterprise: EnterpriseFilter }).parse(d ?? { enterprise: "all" }),
+  )
+  .handler(async ({ context, data }) => {
+    const { banks, txs, ccById, bankById, allocByTx } = await loadFinanceData(
+      context.supabase as never,
+    );
+    const filter = data.enterprise;
 
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const horizon = new Date(today);
     horizon.setDate(horizon.getDate() + 90);
 
-    // current balance: initial + paid/reconciled transactions up to today
-    let balance = (banks ?? []).reduce(
-      (s, b) => s + Number(b.initial_balance),
-      0,
-    );
-    const future: Array<{ date: string; amount: number }> = [];
+    // Saldo: para filtro, conta apenas bancos do empreendimento
+    const filteredBanks =
+      filter === "all" ? banks : banks.filter((b) => b.enterprise === filter);
+    let balance = filteredBanks.reduce((s, b) => s + Number(b.initial_balance), 0);
 
-    (txs ?? []).forEach((t) => {
+    // Função: impacto líquido (saldo do banco) para uma transação dada o filtro
+    // Para projeção de caixa, o que importa é o saldo bancário; allocations não
+    // afetam saldo (afetam DRE). Filtro por enterprise: só contabiliza tx cujo
+    // bank_account.enterprise = filter (ou all).
+    function txAffectsBalance(tx: { bank_account_id: string | null }) {
+      if (filter === "all") return true;
+      if (!tx.bank_account_id) return false;
+      const b = bankById.get(tx.bank_account_id);
+      return b?.enterprise === filter;
+    }
+
+    const future: Array<{ date: string; amount: number }> = [];
+    for (const t of txs) {
+      if (!txAffectsBalance(t)) continue;
       const d = new Date(t.due_date);
-      const amt =
-        t.type === "receivable" ? Number(t.amount) : -Number(t.amount);
+      const amt = t.type === "receivable" ? Number(t.amount) : -Number(t.amount);
       if (d < today) {
         if (t.status === "paid" || t.status === "reconciled") balance += amt;
       } else if (d <= horizon) {
         future.push({ date: t.due_date, amount: amt });
       }
-    });
+    }
 
-    // GHOST projection: recurring expenses from last 3 months by account
+    // GHOST projection
     const threeMonthsAgo = new Date(today);
     threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
     const recurringNames = [
@@ -394,56 +599,42 @@ export const buildProjection = createServerFn({ method: "GET" })
       "GPS",
       "FGTS",
     ];
-
     const ghosts: Array<{ date: string; amount: number; reason: string }> = [];
     for (const name of recurringNames) {
-      const past = (txs ?? []).filter(
+      const past = txs.filter(
         (t) =>
-          (t.accounts as { name?: string } | null)?.name === name &&
+          t.accounts?.name === name &&
           new Date(t.due_date) >= threeMonthsAgo &&
-          new Date(t.due_date) < today,
+          new Date(t.due_date) < today &&
+          txAffectsBalance(t),
       );
       if (past.length === 0) continue;
-      const avg =
-        past.reduce((s, t) => s + Number(t.amount), 0) / past.length;
-      // check next 3 months for missing
+      const avg = past.reduce((s, t) => s + Number(t.amount), 0) / past.length;
       for (let m = 1; m <= 3; m++) {
         const futureDate = new Date(today);
         futureDate.setMonth(futureDate.getMonth() + m);
         const dayStr = futureDate.toISOString().slice(0, 10);
-        const exists = (txs ?? []).some(
+        const exists = txs.some(
           (t) =>
-            (t.accounts as { name?: string } | null)?.name === name &&
-            t.due_date.slice(0, 7) === dayStr.slice(0, 7),
+            t.accounts?.name === name &&
+            t.due_date.slice(0, 7) === dayStr.slice(0, 7) &&
+            txAffectsBalance(t),
         );
         if (!exists) {
-          ghosts.push({
-            date: dayStr,
-            amount: -avg,
-            reason: `Média ${name} últimos 3 meses`,
-          });
+          ghosts.push({ date: dayStr, amount: -avg, reason: `Média ${name} últimos 3 meses` });
         }
       }
     }
 
-    // Build daily series
-    const series: Array<{
-      date: string;
-      real: number;
-      withGhosts: number;
-    }> = [];
+    const series: Array<{ date: string; real: number; withGhosts: number }> = [];
     let running = balance;
     let runningGhost = balance;
     for (let i = 0; i <= 90; i++) {
       const d = new Date(today);
       d.setDate(d.getDate() + i);
       const ds = d.toISOString().slice(0, 10);
-      const dayReal = future
-        .filter((f) => f.date === ds)
-        .reduce((s, x) => s + x.amount, 0);
-      const dayGhost = ghosts
-        .filter((g) => g.date.slice(0, 7) === ds.slice(0, 7) && g.date === ds)
-        .reduce((s, x) => s + x.amount, 0);
+      const dayReal = future.filter((f) => f.date === ds).reduce((s, x) => s + x.amount, 0);
+      const dayGhost = ghosts.filter((g) => g.date === ds).reduce((s, x) => s + x.amount, 0);
       running += dayReal;
       runningGhost += dayReal + dayGhost;
       series.push({
@@ -452,6 +643,10 @@ export const buildProjection = createServerFn({ method: "GET" })
         withGhosts: Math.round(runningGhost * 100) / 100,
       });
     }
+
+    // Suppress unused warning for ccById/allocByTx — kept for parity with DRE loader
+    void ccById;
+    void allocByTx;
 
     return {
       currentBalance: Math.round(balance * 100) / 100,

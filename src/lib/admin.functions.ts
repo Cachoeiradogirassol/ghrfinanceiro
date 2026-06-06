@@ -4,6 +4,15 @@ import { z } from "zod";
 
 const MASTER_EMAIL = "drs.cachoeira@gmail.com";
 
+const EnterpriseEnum = z.enum([
+  "turismo",
+  "restaurante",
+  "vinhedo",
+  "ghr",
+  "institucional_fazenda",
+  "impostos",
+]);
+
 async function assertMaster(context: {
   supabase: { from: (t: string) => { select: (s: string) => { eq: (k: string, v: string) => { eq: (k: string, v: string) => { maybeSingle: () => Promise<{ data: unknown }> } } } } };
   userId: string;
@@ -63,7 +72,6 @@ export const createUser = createServerFn({ method: "POST" })
       user_metadata: { display_name: data.display_name ?? null },
     });
     if (error) throw new Error(error.message);
-    // ensure role row reflects requested role (trigger sets default)
     await supabaseAdmin
       .from("user_roles")
       .upsert(
@@ -114,12 +122,20 @@ export const upsertCostCenter = createServerFn({ method: "POST" })
         id: z.string().uuid().optional(),
         code: z.number().int().min(1).max(999),
         name: z.string().min(1).max(120),
+        enterprise: EnterpriseEnum,
         master_only: z.boolean().default(false),
+        is_active: z.boolean().default(true),
       })
       .parse(d),
   )
   .handler(async ({ context, data }) => {
-    const payload = { code: data.code, name: data.name, master_only: data.master_only };
+    const payload = {
+      code: data.code,
+      name: data.name,
+      enterprise: data.enterprise,
+      master_only: data.master_only,
+      is_active: data.is_active,
+    };
     if (data.id) {
       const { error } = await context.supabase
         .from("cost_centers")
@@ -137,7 +153,36 @@ export const upsertCostCenter = createServerFn({ method: "POST" })
     return { id: row.id };
   });
 
-// ---------- ACCOUNTS (subcategorias) ----------
+export const archiveOrDeleteCostCenter = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({ id: z.string().uuid() }).parse(d))
+  .handler(async ({ context, data }) => {
+    const { count } = await context.supabase
+      .from("transactions")
+      .select("id", { count: "exact", head: true })
+      .eq("cost_center_id", data.id);
+    const { count: allocCount } = await context.supabase
+      .from("transaction_allocations")
+      .select("id", { count: "exact", head: true })
+      .eq("cost_center_id", data.id);
+    if (((count ?? 0) + (allocCount ?? 0)) > 0) {
+      const { error } = await context.supabase
+        .from("cost_centers")
+        .update({ is_active: false })
+        .eq("id", data.id);
+      if (error) throw new Error(error.message);
+      return { archived: true };
+    }
+    await context.supabase.from("accounts").delete().eq("cost_center_id", data.id);
+    const { error } = await context.supabase
+      .from("cost_centers")
+      .delete()
+      .eq("id", data.id);
+    if (error) throw new Error(error.message);
+    return { deleted: true };
+  });
+
+// ---------- ACCOUNTS ----------
 export const upsertAccount = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) =>
@@ -147,6 +192,7 @@ export const upsertAccount = createServerFn({ method: "POST" })
         cost_center_id: z.string().uuid(),
         name: z.string().min(1).max(120),
         kind: z.enum(["expense", "revenue"]).default("expense"),
+        is_active: z.boolean().default(true),
       })
       .parse(d),
   )
@@ -155,6 +201,7 @@ export const upsertAccount = createServerFn({ method: "POST" })
       cost_center_id: data.cost_center_id,
       name: data.name,
       kind: data.kind,
+      is_active: data.is_active,
     };
     if (data.id) {
       const { error } = await context.supabase
@@ -177,12 +224,24 @@ export const deleteAccount = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => z.object({ id: z.string().uuid() }).parse(d))
   .handler(async ({ context, data }) => {
+    const { count } = await context.supabase
+      .from("transactions")
+      .select("id", { count: "exact", head: true })
+      .eq("account_id", data.id);
+    if ((count ?? 0) > 0) {
+      const { error } = await context.supabase
+        .from("accounts")
+        .update({ is_active: false })
+        .eq("id", data.id);
+      if (error) throw new Error(error.message);
+      return { archived: true };
+    }
     const { error } = await context.supabase
       .from("accounts")
       .delete()
       .eq("id", data.id);
     if (error) throw new Error(error.message);
-    return { ok: true };
+    return { deleted: true };
   });
 
 // ---------- BANK ACCOUNTS ----------
@@ -195,7 +254,9 @@ export const upsertBankAccount = createServerFn({ method: "POST" })
         name: z.string().min(1).max(120),
         bank: z.string().max(120).optional().nullable(),
         initial_balance: z.number(),
+        enterprise: EnterpriseEnum,
         master_only: z.boolean().default(false),
+        is_active: z.boolean().default(true),
       })
       .parse(d),
   )
@@ -204,7 +265,9 @@ export const upsertBankAccount = createServerFn({ method: "POST" })
       name: data.name,
       bank: data.bank ?? null,
       initial_balance: data.initial_balance,
+      enterprise: data.enterprise,
       master_only: data.master_only,
+      is_active: data.is_active,
     };
     if (data.id) {
       const { error } = await context.supabase
@@ -221,4 +284,28 @@ export const upsertBankAccount = createServerFn({ method: "POST" })
       .single();
     if (error) throw new Error(error.message);
     return { id: row.id };
+  });
+
+export const archiveOrDeleteBankAccount = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({ id: z.string().uuid() }).parse(d))
+  .handler(async ({ context, data }) => {
+    const { count } = await context.supabase
+      .from("transactions")
+      .select("id", { count: "exact", head: true })
+      .eq("bank_account_id", data.id);
+    if ((count ?? 0) > 0) {
+      const { error } = await context.supabase
+        .from("bank_accounts")
+        .update({ is_active: false })
+        .eq("id", data.id);
+      if (error) throw new Error(error.message);
+      return { archived: true };
+    }
+    const { error } = await context.supabase
+      .from("bank_accounts")
+      .delete()
+      .eq("id", data.id);
+    if (error) throw new Error(error.message);
+    return { deleted: true };
   });

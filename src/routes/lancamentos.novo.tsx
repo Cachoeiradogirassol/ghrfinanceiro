@@ -221,8 +221,17 @@ function Form() {
   });
 
   const mut = useMutation({
-    mutationFn: () =>
-      createFn({
+    mutationFn: () => {
+      const allocations = rateio
+        ? Object.entries(splits)
+            .filter(([, v]) => parseFloat(v) > 0)
+            .map(([cc, v]) => ({
+              cost_center_id: cc,
+              amount: parseFloat(v),
+              percent: totalAmount ? (parseFloat(v) / totalAmount) * 100 : null,
+            }))
+        : undefined;
+      return createFn({
         data: {
           cost_center_id: costCenterId,
           account_id: accountId,
@@ -241,6 +250,7 @@ function Form() {
             | "credit_card"
             | "cash"
             | null,
+          allocations,
           schedule:
             scheduleKind === "installment"
               ? { kind: "installment", installments: parseInt(installments, 10) }
@@ -248,7 +258,8 @@ function Form() {
                 ? { kind: "recurring", recurring_months: parseInt(recurringMonths, 10) }
                 : { kind: "single" },
         },
-      }),
+      });
+    },
     onSuccess: () => {
       toast.success("Lançamento criado");
       nav({ to: "/lancamentos" });
@@ -262,6 +273,7 @@ function Form() {
     contactId &&
     amount &&
     (!docDtRequired || docDt) &&
+    splitOk &&
     !mut.isPending;
 
   return (

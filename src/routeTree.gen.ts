@@ -18,6 +18,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as LancamentosIndexRouteImport } from './routes/lancamentos.index'
 import { Route as LancamentosNovoRouteImport } from './routes/lancamentos.novo'
 import { Route as ConfiguracoesUsuariosRouteImport } from './routes/configuracoes.usuarios'
+import { Route as ConfiguracoesContasBancariasRouteImport } from './routes/configuracoes.contas-bancarias'
 import { Route as ApiChatRouteImport } from './routes/api/chat'
 
 const ProjecaoRoute = ProjecaoRouteImport.update({
@@ -65,6 +66,12 @@ const ConfiguracoesUsuariosRoute = ConfiguracoesUsuariosRouteImport.update({
   path: '/usuarios',
   getParentRoute: () => ConfiguracoesRoute,
 } as any)
+const ConfiguracoesContasBancariasRoute =
+  ConfiguracoesContasBancariasRouteImport.update({
+    id: '/contas-bancarias',
+    path: '/contas-bancarias',
+    getParentRoute: () => ConfiguracoesRoute,
+  } as any)
 const ApiChatRoute = ApiChatRouteImport.update({
   id: '/api/chat',
   path: '/api/chat',
@@ -79,6 +86,7 @@ export interface FileRoutesByFullPath {
   '/contas': typeof ContasRoute
   '/projecao': typeof ProjecaoRoute
   '/api/chat': typeof ApiChatRoute
+  '/configuracoes/contas-bancarias': typeof ConfiguracoesContasBancariasRoute
   '/configuracoes/usuarios': typeof ConfiguracoesUsuariosRoute
   '/lancamentos/novo': typeof LancamentosNovoRoute
   '/lancamentos/': typeof LancamentosIndexRoute
@@ -91,6 +99,7 @@ export interface FileRoutesByTo {
   '/contas': typeof ContasRoute
   '/projecao': typeof ProjecaoRoute
   '/api/chat': typeof ApiChatRoute
+  '/configuracoes/contas-bancarias': typeof ConfiguracoesContasBancariasRoute
   '/configuracoes/usuarios': typeof ConfiguracoesUsuariosRoute
   '/lancamentos/novo': typeof LancamentosNovoRoute
   '/lancamentos': typeof LancamentosIndexRoute
@@ -104,6 +113,7 @@ export interface FileRoutesById {
   '/contas': typeof ContasRoute
   '/projecao': typeof ProjecaoRoute
   '/api/chat': typeof ApiChatRoute
+  '/configuracoes/contas-bancarias': typeof ConfiguracoesContasBancariasRoute
   '/configuracoes/usuarios': typeof ConfiguracoesUsuariosRoute
   '/lancamentos/novo': typeof LancamentosNovoRoute
   '/lancamentos/': typeof LancamentosIndexRoute
@@ -118,6 +128,7 @@ export interface FileRouteTypes {
     | '/contas'
     | '/projecao'
     | '/api/chat'
+    | '/configuracoes/contas-bancarias'
     | '/configuracoes/usuarios'
     | '/lancamentos/novo'
     | '/lancamentos/'
@@ -130,6 +141,7 @@ export interface FileRouteTypes {
     | '/contas'
     | '/projecao'
     | '/api/chat'
+    | '/configuracoes/contas-bancarias'
     | '/configuracoes/usuarios'
     | '/lancamentos/novo'
     | '/lancamentos'
@@ -142,6 +154,7 @@ export interface FileRouteTypes {
     | '/contas'
     | '/projecao'
     | '/api/chat'
+    | '/configuracoes/contas-bancarias'
     | '/configuracoes/usuarios'
     | '/lancamentos/novo'
     | '/lancamentos/'
@@ -224,6 +237,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ConfiguracoesUsuariosRouteImport
       parentRoute: typeof ConfiguracoesRoute
     }
+    '/configuracoes/contas-bancarias': {
+      id: '/configuracoes/contas-bancarias'
+      path: '/contas-bancarias'
+      fullPath: '/configuracoes/contas-bancarias'
+      preLoaderRoute: typeof ConfiguracoesContasBancariasRouteImport
+      parentRoute: typeof ConfiguracoesRoute
+    }
     '/api/chat': {
       id: '/api/chat'
       path: '/api/chat'
@@ -235,10 +255,12 @@ declare module '@tanstack/react-router' {
 }
 
 interface ConfiguracoesRouteChildren {
+  ConfiguracoesContasBancariasRoute: typeof ConfiguracoesContasBancariasRoute
   ConfiguracoesUsuariosRoute: typeof ConfiguracoesUsuariosRoute
 }
 
 const ConfiguracoesRouteChildren: ConfiguracoesRouteChildren = {
+  ConfiguracoesContasBancariasRoute: ConfiguracoesContasBancariasRoute,
   ConfiguracoesUsuariosRoute: ConfiguracoesUsuariosRoute,
 }
 

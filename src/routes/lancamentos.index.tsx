@@ -92,8 +92,10 @@ function List() {
               <TableHead>Tipo</TableHead>
               <TableHead className="text-right">Valor</TableHead>
               <TableHead>Status</TableHead>
+              {isMaster && <TableHead className="text-xs">Auditoria</TableHead>}
               <TableHead></TableHead>
             </TableRow>
+
           </TableHeader>
           <TableBody>
             {isLoading && (

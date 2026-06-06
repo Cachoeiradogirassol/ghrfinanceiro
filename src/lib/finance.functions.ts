@@ -54,6 +54,7 @@ export const listTransactions = createServerFn({ method: "GET" })
     return data;
   });
 
+
 // ---------- CREATE TRANSACTION (com rateio) ----------
 const AllocationInput = z.object({
   cost_center_id: z.string().uuid(),

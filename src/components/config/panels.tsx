@@ -201,7 +201,7 @@ function EditUserDialog({
           </div>
           <div>
             <Label>Redefinir senha (opcional)</Label>
-            <Input type="password" placeholder="Deixe em branco para manter" value={password} onChange={(e) => setPassword(e.target.value)} />
+            <PasswordInput placeholder="Deixe em branco para manter" value={password} onChange={(e) => setPassword(e.target.value)} />
             <p className="text-xs text-muted-foreground mt-1">Mínimo 8 caracteres se for alterar.</p>
           </div>
         </div>

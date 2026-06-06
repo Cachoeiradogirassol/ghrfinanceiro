@@ -17,10 +17,119 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Trash2, Layers, User } from "lucide-react";
+import { Plus, Trash2, Layers, User, Download } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/lib/auth";
 import { useMemo } from "react";
+
+type Tx = {
+  id: string;
+  type: "payable" | "receivable";
+  amount: number | string;
+  due_date: string;
+  document_datetime: string | null;
+  paid_at: string | null;
+  description: string | null;
+  status: string;
+  payment_method: string | null;
+  contacts?: { name?: string | null } | null;
+  cost_centers?: { code?: number | null; name?: string | null } | null;
+  accounts?: { name?: string | null } | null;
+};
+
+const fmtDateBR = (s: string | null | undefined) =>
+  s ? new Date(s).toLocaleDateString("pt-BR") : "";
+const fmtCompetencia = (s: string | null | undefined) => {
+  if (!s) return "";
+  const d = new Date(s);
+  return `${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
+};
+const fmtNum = (n: number) => n.toFixed(2).replace(".", ",");
+const csvField = (v: unknown) => {
+  const s = v == null ? "" : String(v);
+  return /[",\n;]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+};
+const downloadCSV = (filename: string, rows: string[][]) => {
+  const csv = rows.map((r) => r.map(csvField).join(",")).join("\r\n");
+  const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+};
+
+function exportPagar(txs: Tx[]) {
+  const header = [
+    "ID","Fornecedor","Data Emissão","Data Vencimento","Data Liquidação",
+    "Valor documento","Saldo","Situação","Número documento","Categoria",
+    "Histórico","Pago","Competencia","Forma Pagamento","Chave PIX/Código boleto",
+  ];
+  const rows = txs.filter((t) => t.type === "payable").map((t) => {
+    const paid = t.status === "paid" || t.status === "reconciled";
+    const amount = Number(t.amount);
+    const categoria = [
+      t.cost_centers ? `${t.cost_centers.code ?? ""} - ${t.cost_centers.name ?? ""}` : "",
+      t.accounts?.name ?? "",
+    ].filter(Boolean).join(" / ");
+    return [
+      t.id,
+      t.contacts?.name ?? "",
+      fmtDateBR(t.document_datetime),
+      fmtDateBR(t.due_date),
+      fmtDateBR(t.paid_at),
+      fmtNum(amount),
+      fmtNum(paid ? 0 : amount),
+      paid ? "Paga" : "Em aberto",
+      "",
+      categoria,
+      t.description ?? "",
+      paid ? "Sim" : "Não",
+      fmtCompetencia(t.document_datetime ?? t.due_date),
+      t.payment_method ?? "",
+      "",
+    ];
+  });
+  if (!rows.length) { toast.info("Sem contas a pagar para exportar"); return; }
+  downloadCSV(`contas_pagar_${new Date().toISOString().slice(0, 10)}.csv`, [header, ...rows]);
+}
+
+function exportReceber(txs: Tx[]) {
+  const header = [
+    "ID","Cliente","Data Emissão","Data Vencimento","Data Liquidação",
+    "Valor documento","Saldo","Situação","Número documento","Número no banco",
+    "Categoria","Histórico","Forma de recebimento","Meio de recebimento","Taxas","Competência",
+  ];
+  const rows = txs.filter((t) => t.type === "receivable").map((t) => {
+    const paid = t.status === "paid" || t.status === "reconciled";
+    const amount = Number(t.amount);
+    const categoria = [
+      t.cost_centers ? `${t.cost_centers.code ?? ""} - ${t.cost_centers.name ?? ""}` : "",
+      t.accounts?.name ?? "",
+    ].filter(Boolean).join(" / ");
+    return [
+      t.id,
+      t.contacts?.name ?? "",
+      fmtDateBR(t.document_datetime),
+      fmtDateBR(t.due_date),
+      fmtDateBR(t.paid_at),
+      fmtNum(amount),
+      fmtNum(paid ? 0 : amount),
+      paid ? "Paga" : "Em aberto",
+      "",
+      "",
+      categoria,
+      t.description ?? "",
+      t.payment_method ?? "",
+      t.payment_method ?? "",
+      fmtNum(0),
+      fmtCompetencia(t.document_datetime ?? t.due_date),
+    ];
+  });
+  if (!rows.length) { toast.info("Sem contas a receber para exportar"); return; }
+  downloadCSV(`contas_receber_${new Date().toISOString().slice(0, 10)}.csv`, [header, ...rows]);
+}
 
 export const Route = createFileRoute("/lancamentos/")({
   head: () => ({ meta: [{ title: "Lançamentos — CONTROLE.GHR" }] }),
@@ -72,11 +181,27 @@ function List() {
           <h1 className="text-3xl font-bold">Lançamentos</h1>
           <p className="text-muted-foreground">Contas a Pagar e Receber</p>
         </div>
-        <Link to="/lancamentos/novo">
-          <Button>
-            <Plus className="h-4 w-4 mr-2" /> Novo Lançamento
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            onClick={() => exportPagar((data ?? []) as unknown as Tx[])}
+            disabled={isLoading}
+          >
+            <Download className="h-4 w-4 mr-2" /> Exportar Pagar (CSV)
           </Button>
-        </Link>
+          <Button
+            variant="outline"
+            onClick={() => exportReceber((data ?? []) as unknown as Tx[])}
+            disabled={isLoading}
+          >
+            <Download className="h-4 w-4 mr-2" /> Exportar Receber (CSV)
+          </Button>
+          <Link to="/lancamentos/novo">
+            <Button>
+              <Plus className="h-4 w-4 mr-2" /> Novo Lançamento
+            </Button>
+          </Link>
+        </div>
       </div>
 
       <div className="rounded-md border">

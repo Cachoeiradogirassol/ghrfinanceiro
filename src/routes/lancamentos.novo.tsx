@@ -574,7 +574,66 @@ function Form() {
           />
         </div>
 
-        {/* Schedule / Installments / Recurrence */}
+        {/* Aporte cruzado */}
+        {aporteCruzado && (
+          <Alert>
+            <AlertTriangle className="h-4 w-4" />
+            <AlertDescription>
+              <strong>Aporte cruzado detectado:</strong> a conta bancária pertence a um empreendimento diferente do Centro de Custo. O sistema registrará automaticamente este pagamento como Aporte Concedido pelo banco e Aporte Recebido pelo CC nas DREs.
+            </AlertDescription>
+          </Alert>
+        )}
+
+        {/* Rateio */}
+        <div className="space-y-3 p-3 rounded-md border bg-muted/20">
+          <label className="flex items-center gap-3 cursor-pointer">
+            <Checkbox checked={rateio} onCheckedChange={(c) => { setRateio(Boolean(c)); if (!c) setSplits({}); }} />
+            <span className="text-sm font-medium">Ratear esta despesa entre múltiplos centros de custo</span>
+          </label>
+          {rateio && (
+            <div className="space-y-2 pl-7">
+              <p className="text-xs text-muted-foreground">
+                Selecione os centros, defina valores (R$) ou clique em "Dividir por igual".
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {activeCCs.map((cc) => {
+                  const active = splits[cc.id] !== undefined;
+                  return (
+                    <div key={cc.id} className="flex items-center gap-2 p-2 border rounded">
+                      <Checkbox
+                        checked={active}
+                        onCheckedChange={(v) => toggleSplit(cc.id, Boolean(v))}
+                      />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-medium truncate">{cc.code} - {cc.name}</p>
+                      </div>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        className="w-24 h-8 text-xs"
+                        placeholder="R$"
+                        disabled={!active}
+                        value={splits[cc.id] ?? ""}
+                        onChange={(e) => setSplits((p) => ({ ...p, [cc.id]: e.target.value }))}
+                      />
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="flex items-center justify-between gap-2 pt-2 border-t">
+                <Button type="button" size="sm" variant="outline" onClick={distributeEqually}>
+                  Dividir por igual
+                </Button>
+                <div className={`text-xs font-mono ${splitOk ? "text-primary" : "text-destructive"}`}>
+                  Soma: R$ {splitTotal.toFixed(2)} / R$ {totalAmount.toFixed(2)}
+                  {!splitOk && totalAmount > 0 && " — não fecha!"}
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+
         <div className="space-y-3 p-3 rounded-md border bg-muted/20">
           <Label>Conta Parcelada ou Recorrente</Label>
           <RadioGroup

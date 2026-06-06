@@ -151,6 +151,25 @@ function List() {
                     {t.status}
                   </Badge>
                 </TableCell>
+                {isMaster && (
+                  <TableCell className="text-[11px] text-muted-foreground">
+                    <div className="flex items-center gap-1">
+                      <User className="h-3 w-3" />
+                      <span className="truncate max-w-[140px]">
+                        {(t as { created_by?: string }).created_by
+                          ? (userMap.get((t as { created_by: string }).created_by) ?? "—")
+                          : "—"}
+                      </span>
+                    </div>
+                    {(t as { updated_by?: string }).updated_by &&
+                      (t as { updated_by?: string }).updated_by !==
+                        (t as { created_by?: string }).created_by && (
+                        <div className="text-[10px] opacity-70 truncate max-w-[140px]">
+                          edit: {userMap.get((t as { updated_by: string }).updated_by) ?? "—"}
+                        </div>
+                      )}
+                  </TableCell>
+                )}
                 <TableCell>
                   <Button
                     size="icon"
@@ -160,6 +179,7 @@ function List() {
                     <Trash2 className="h-4 w-4" />
                   </Button>
                 </TableCell>
+
               </TableRow>
             ))}
             {!isLoading && (data?.length ?? 0) === 0 && (

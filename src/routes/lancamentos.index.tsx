@@ -100,7 +100,7 @@ function List() {
           <TableBody>
             {isLoading && (
               <TableRow>
-                <TableCell colSpan={10} className="text-center text-muted-foreground py-8">
+                <TableCell colSpan={isMaster ? 11 : 10} className="text-center text-muted-foreground py-8">
                   Carregando...
                 </TableCell>
               </TableRow>
@@ -184,7 +184,7 @@ function List() {
             ))}
             {!isLoading && (data?.length ?? 0) === 0 && (
               <TableRow>
-                <TableCell colSpan={10} className="text-center text-muted-foreground py-8">
+                <TableCell colSpan={isMaster ? 11 : 10} className="text-center text-muted-foreground py-8">
                   Nenhum lançamento. Crie o primeiro.
                 </TableCell>
               </TableRow>

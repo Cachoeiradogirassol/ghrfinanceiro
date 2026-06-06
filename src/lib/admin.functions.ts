@@ -44,10 +44,42 @@ export const listUsers = createServerFn({ method: "GET" })
     return data.users.map((u) => ({
       id: u.id,
       email: u.email,
+      display_name: (u.user_metadata as { display_name?: string } | null)?.display_name ?? "",
       banned_until: (u as { banned_until?: string }).banned_until ?? null,
       created_at: u.created_at,
       role: roles?.find((r) => r.user_id === u.id)?.role ?? "user",
     }));
+  });
+
+export const updateUser = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) =>
+    z
+      .object({
+        user_id: z.string().uuid(),
+        email: z.string().email(),
+        display_name: z.string().max(100).optional(),
+        role: z.enum(["user", "master"]),
+        password: z.string().min(8).max(72).optional().or(z.literal("")),
+      })
+      .parse(d),
+  )
+  .handler(async ({ context, data }) => {
+    await assertMaster(context as never);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const updates: { email: string; user_metadata: { display_name: string | null }; password?: string } = {
+      email: data.email,
+      user_metadata: { display_name: data.display_name ?? null },
+    };
+    if (data.password && data.password.length >= 8) updates.password = data.password;
+    const { error } = await supabaseAdmin.auth.admin.updateUserById(data.user_id, updates);
+    if (error) throw new Error(error.message);
+    // sync role: remove other roles, ensure desired role
+    await supabaseAdmin.from("user_roles").delete().eq("user_id", data.user_id);
+    await supabaseAdmin
+      .from("user_roles")
+      .upsert({ user_id: data.user_id, role: data.role }, { onConflict: "user_id,role" });
+    return { ok: true };
   });
 
 export const createUser = createServerFn({ method: "POST" })

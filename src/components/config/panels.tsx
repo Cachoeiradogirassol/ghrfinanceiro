@@ -1,11 +1,11 @@
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   listUsers,
   createUser,
   setUserActive,
-  resetUserPassword,
+  updateUser,
   upsertCostCenter,
   upsertAccount,
   deleteAccount,
@@ -32,27 +32,38 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
-import { Lock, Archive, Trash2, Plus } from "lucide-react";
+import { Lock, Archive, Trash2, Plus, Pencil } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ENTERPRISES, type Enterprise } from "@/lib/enterprises";
 
 // ---------------- USERS ----------------
+type AdminUser = {
+  id: string;
+  email: string | undefined;
+  display_name?: string;
+  banned_until: string | null;
+  role: string;
+};
+
 export function UsersTab() {
   const qc = useQueryClient();
   const listFn = useServerFn(listUsers);
   const createFn = useServerFn(createUser);
   const activeFn = useServerFn(setUserActive);
-  const resetFn = useServerFn(resetUserPassword);
+  const updateFn = useServerFn(updateUser);
   const q = useQuery({ queryKey: ["admin-users"], queryFn: () => listFn() });
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [role, setRole] = useState<"user" | "master">("user");
+  const [editing, setEditing] = useState<AdminUser | null>(null);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
       await createFn({ data: { email, password, display_name: displayName, role } });
-      toast.success("Usuário criado");
+      toast.success("Usuário criado com sucesso!");
       setEmail(""); setPassword(""); setDisplayName(""); setRole("user");
       qc.invalidateQueries({ queryKey: ["admin-users"] });
     } catch (err) {
@@ -61,10 +72,10 @@ export function UsersTab() {
   };
 
   return (
-    <div className="grid gap-4 md:grid-cols-2">
+    <div className="space-y-4" translate="no">
       <Card className="p-5">
         <h3 className="font-semibold mb-3 flex items-center gap-2"><Plus className="h-4 w-4" /> Novo operador</h3>
-        <form onSubmit={submit} className="space-y-3">
+        <form onSubmit={submit} className="grid gap-3 md:grid-cols-2">
           <div><Label>Nome</Label><Input value={displayName} onChange={(e) => setDisplayName(e.target.value)} /></div>
           <div><Label>E-mail</Label><Input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} /></div>
           <div><Label>Senha inicial</Label><Input type="password" required minLength={8} value={password} onChange={(e) => setPassword(e.target.value)} /></div>
@@ -73,49 +84,145 @@ export function UsersTab() {
             <Select value={role} onValueChange={(v) => setRole(v as "user" | "master")}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="user">Operador</SelectItem>
-                <SelectItem value="master">Master</SelectItem>
+                <SelectItem value="user"><span translate="no">Operador</span></SelectItem>
+                <SelectItem value="master"><span translate="no">Master</span></SelectItem>
               </SelectContent>
             </Select>
           </div>
-          <Button type="submit">Criar usuário</Button>
+          <div className="md:col-span-2"><Button type="submit">Criar usuário</Button></div>
         </form>
       </Card>
+
       <Card className="p-5">
         <h3 className="font-semibold mb-3">Usuários cadastrados</h3>
-        <div className="space-y-2">
-          {(q.data ?? []).map((u) => (
-            <div key={u.id} className="flex items-center justify-between border-b border-border pb-2 gap-2">
-              <div className="min-w-0">
-                <p className="text-sm font-medium truncate">{u.email}</p>
-                <p className="text-xs text-muted-foreground">
-                  {u.role === "master" ? <Badge variant="destructive"><Lock className="h-3 w-3 mr-1" />Master</Badge> : <Badge variant="secondary">Operador</Badge>}
-                  {u.banned_until && <span className="ml-2 text-destructive">desativado</span>}
-                </p>
-              </div>
-              <div className="flex gap-1">
-                <Button size="sm" variant="outline" onClick={async () => {
-                  const pw = prompt("Nova senha (mín 8 caracteres):");
-                  if (!pw || pw.length < 8) return;
-                  try { await resetFn({ data: { user_id: u.id, password: pw } }); toast.success("Senha atualizada"); }
-                  catch (e) { toast.error(e instanceof Error ? e.message : "Erro"); }
-                }}>Senha</Button>
-                <Button size="sm" variant={u.banned_until ? "default" : "outline"} onClick={async () => {
-                  try {
-                    await activeFn({ data: { user_id: u.id, active: !!u.banned_until } });
-                    toast.success(u.banned_until ? "Reativado" : "Desativado");
-                    qc.invalidateQueries({ queryKey: ["admin-users"] });
-                  } catch (e) { toast.error(e instanceof Error ? e.message : "Erro"); }
-                }}>{u.banned_until ? "Reativar" : "Desativar"}</Button>
-              </div>
-            </div>
-          ))}
-          {!q.data?.length && <p className="text-sm text-muted-foreground">Nenhum usuário.</p>}
+        <div className="overflow-x-auto">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Nome</TableHead>
+                <TableHead>E-mail</TableHead>
+                <TableHead>Nível</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead className="text-right">Ações</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {(q.data ?? []).map((u) => (
+                <TableRow key={u.id}>
+                  <TableCell className="font-medium">{u.display_name || "—"}</TableCell>
+                  <TableCell className="text-sm">{u.email}</TableCell>
+                  <TableCell>
+                    {u.role === "master"
+                      ? <Badge variant="destructive" translate="no"><Lock className="h-3 w-3 mr-1" />Master</Badge>
+                      : <Badge variant="secondary" translate="no">Operador</Badge>}
+                  </TableCell>
+                  <TableCell>
+                    {u.banned_until ? <Badge variant="outline">Desativado</Badge> : <Badge>Ativo</Badge>}
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <div className="flex justify-end gap-1">
+                      <Button size="sm" variant="outline" onClick={() => setEditing(u as AdminUser)}>
+                        <Pencil className="h-3 w-3 mr-1" />Editar
+                      </Button>
+                      <Button size="sm" variant={u.banned_until ? "default" : "outline"} onClick={async () => {
+                        try {
+                          await activeFn({ data: { user_id: u.id, active: !!u.banned_until } });
+                          toast.success(u.banned_until ? "Usuário reativado" : "Usuário desativado");
+                          qc.invalidateQueries({ queryKey: ["admin-users"] });
+                        } catch (e) { toast.error(e instanceof Error ? e.message : "Erro"); }
+                      }}>{u.banned_until ? "Reativar" : "Desativar"}</Button>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))}
+              {!q.data?.length && (
+                <TableRow><TableCell colSpan={5} className="text-center text-sm text-muted-foreground">Nenhum usuário cadastrado.</TableCell></TableRow>
+              )}
+            </TableBody>
+          </Table>
         </div>
       </Card>
+
+      <EditUserDialog
+        user={editing}
+        onClose={() => setEditing(null)}
+        onSave={async (payload) => {
+          try {
+            await updateFn({ data: payload });
+            toast.success("Usuário atualizado com sucesso!");
+            setEditing(null);
+            qc.invalidateQueries({ queryKey: ["admin-users"] });
+          } catch (e) { toast.error(e instanceof Error ? e.message : "Erro"); }
+        }}
+      />
     </div>
   );
 }
+
+function EditUserDialog({
+  user,
+  onClose,
+  onSave,
+}: {
+  user: AdminUser | null;
+  onClose: () => void;
+  onSave: (data: { user_id: string; email: string; display_name: string; role: "user" | "master"; password?: string }) => Promise<void>;
+}) {
+  const [displayName, setDisplayName] = useState("");
+  const [email, setEmail] = useState("");
+  const [role, setRole] = useState<"user" | "master">("user");
+  const [password, setPassword] = useState("");
+
+  useEffect(() => {
+    if (!user) return;
+    setDisplayName(user.display_name ?? "");
+    setEmail(user.email ?? "");
+    setRole((user.role as "user" | "master") ?? "user");
+    setPassword("");
+  }, [user]);
+
+  return (
+    <Dialog open={!!user} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent translate="no">
+        <DialogHeader><DialogTitle>Editar usuário</DialogTitle></DialogHeader>
+        <div className="space-y-3">
+          <div><Label>Nome completo</Label><Input value={displayName} onChange={(e) => setDisplayName(e.target.value)} /></div>
+          <div><Label>E-mail</Label><Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} /></div>
+          <div>
+            <Label>Nível de acesso</Label>
+            <Select value={role} onValueChange={(v) => setRole(v as "user" | "master")}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="user"><span translate="no">Operador</span></SelectItem>
+                <SelectItem value="master"><span translate="no">Master</span></SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label>Redefinir senha (opcional)</Label>
+            <Input type="password" placeholder="Deixe em branco para manter" value={password} onChange={(e) => setPassword(e.target.value)} />
+            <p className="text-xs text-muted-foreground mt-1">Mínimo 8 caracteres se for alterar.</p>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>Cancelar</Button>
+          <Button onClick={() => {
+            if (!user) return;
+            if (password && password.length < 8) { toast.error("A senha deve ter pelo menos 8 caracteres."); return; }
+            onSave({
+              user_id: user.id,
+              email,
+              display_name: displayName,
+              role,
+              password: password || undefined,
+            });
+          }}>Salvar alterações</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 
 // ---------------- BANKS ----------------
 export function BanksTab() {

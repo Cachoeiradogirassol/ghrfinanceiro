@@ -22,6 +22,7 @@ import { Route as LancamentosNovoRouteImport } from './routes/lancamentos.novo'
 import { Route as ConfiguracoesUsuariosRouteImport } from './routes/configuracoes.usuarios'
 import { Route as ConfiguracoesPlanoDeContasRouteImport } from './routes/configuracoes.plano-de-contas'
 import { Route as ConfiguracoesContasBancariasRouteImport } from './routes/configuracoes.contas-bancarias'
+import { Route as AuthRedefinirSenhaRouteImport } from './routes/auth.redefinir-senha'
 import { Route as ApiChatReportsRouteImport } from './routes/api/chat-reports'
 import { Route as ApiChatRouteImport } from './routes/api/chat'
 
@@ -92,6 +93,11 @@ const ConfiguracoesContasBancariasRoute =
     path: '/contas-bancarias',
     getParentRoute: () => ConfiguracoesRoute,
   } as any)
+const AuthRedefinirSenhaRoute = AuthRedefinirSenhaRouteImport.update({
+  id: '/redefinir-senha',
+  path: '/redefinir-senha',
+  getParentRoute: () => AuthRoute,
+} as any)
 const ApiChatReportsRoute = ApiChatReportsRouteImport.update({
   id: '/api/chat-reports',
   path: '/api/chat-reports',
@@ -105,7 +111,7 @@ const ApiChatRoute = ApiChatRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/auth': typeof AuthRoute
+  '/auth': typeof AuthRouteWithChildren
   '/conciliacao': typeof ConciliacaoRoute
   '/configuracoes': typeof ConfiguracoesRouteWithChildren
   '/contas': typeof ContasRoute
@@ -114,6 +120,7 @@ export interface FileRoutesByFullPath {
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/api/chat': typeof ApiChatRoute
   '/api/chat-reports': typeof ApiChatReportsRoute
+  '/auth/redefinir-senha': typeof AuthRedefinirSenhaRoute
   '/configuracoes/contas-bancarias': typeof ConfiguracoesContasBancariasRoute
   '/configuracoes/plano-de-contas': typeof ConfiguracoesPlanoDeContasRoute
   '/configuracoes/usuarios': typeof ConfiguracoesUsuariosRoute
@@ -122,7 +129,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/auth': typeof AuthRoute
+  '/auth': typeof AuthRouteWithChildren
   '/conciliacao': typeof ConciliacaoRoute
   '/configuracoes': typeof ConfiguracoesRouteWithChildren
   '/contas': typeof ContasRoute
@@ -131,6 +138,7 @@ export interface FileRoutesByTo {
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/api/chat': typeof ApiChatRoute
   '/api/chat-reports': typeof ApiChatReportsRoute
+  '/auth/redefinir-senha': typeof AuthRedefinirSenhaRoute
   '/configuracoes/contas-bancarias': typeof ConfiguracoesContasBancariasRoute
   '/configuracoes/plano-de-contas': typeof ConfiguracoesPlanoDeContasRoute
   '/configuracoes/usuarios': typeof ConfiguracoesUsuariosRoute
@@ -140,7 +148,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
-  '/auth': typeof AuthRoute
+  '/auth': typeof AuthRouteWithChildren
   '/conciliacao': typeof ConciliacaoRoute
   '/configuracoes': typeof ConfiguracoesRouteWithChildren
   '/contas': typeof ContasRoute
@@ -149,6 +157,7 @@ export interface FileRoutesById {
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/api/chat': typeof ApiChatRoute
   '/api/chat-reports': typeof ApiChatReportsRoute
+  '/auth/redefinir-senha': typeof AuthRedefinirSenhaRoute
   '/configuracoes/contas-bancarias': typeof ConfiguracoesContasBancariasRoute
   '/configuracoes/plano-de-contas': typeof ConfiguracoesPlanoDeContasRoute
   '/configuracoes/usuarios': typeof ConfiguracoesUsuariosRoute
@@ -168,6 +177,7 @@ export interface FileRouteTypes {
     | '/sitemap.xml'
     | '/api/chat'
     | '/api/chat-reports'
+    | '/auth/redefinir-senha'
     | '/configuracoes/contas-bancarias'
     | '/configuracoes/plano-de-contas'
     | '/configuracoes/usuarios'
@@ -185,6 +195,7 @@ export interface FileRouteTypes {
     | '/sitemap.xml'
     | '/api/chat'
     | '/api/chat-reports'
+    | '/auth/redefinir-senha'
     | '/configuracoes/contas-bancarias'
     | '/configuracoes/plano-de-contas'
     | '/configuracoes/usuarios'
@@ -202,6 +213,7 @@ export interface FileRouteTypes {
     | '/sitemap.xml'
     | '/api/chat'
     | '/api/chat-reports'
+    | '/auth/redefinir-senha'
     | '/configuracoes/contas-bancarias'
     | '/configuracoes/plano-de-contas'
     | '/configuracoes/usuarios'
@@ -211,7 +223,7 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  AuthRoute: typeof AuthRoute
+  AuthRoute: typeof AuthRouteWithChildren
   ConciliacaoRoute: typeof ConciliacaoRoute
   ConfiguracoesRoute: typeof ConfiguracoesRouteWithChildren
   ContasRoute: typeof ContasRoute
@@ -317,6 +329,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ConfiguracoesContasBancariasRouteImport
       parentRoute: typeof ConfiguracoesRoute
     }
+    '/auth/redefinir-senha': {
+      id: '/auth/redefinir-senha'
+      path: '/redefinir-senha'
+      fullPath: '/auth/redefinir-senha'
+      preLoaderRoute: typeof AuthRedefinirSenhaRouteImport
+      parentRoute: typeof AuthRoute
+    }
     '/api/chat-reports': {
       id: '/api/chat-reports'
       path: '/api/chat-reports'
@@ -333,6 +352,16 @@ declare module '@tanstack/react-router' {
     }
   }
 }
+
+interface AuthRouteChildren {
+  AuthRedefinirSenhaRoute: typeof AuthRedefinirSenhaRoute
+}
+
+const AuthRouteChildren: AuthRouteChildren = {
+  AuthRedefinirSenhaRoute: AuthRedefinirSenhaRoute,
+}
+
+const AuthRouteWithChildren = AuthRoute._addFileChildren(AuthRouteChildren)
 
 interface ConfiguracoesRouteChildren {
   ConfiguracoesContasBancariasRoute: typeof ConfiguracoesContasBancariasRoute
@@ -352,7 +381,7 @@ const ConfiguracoesRouteWithChildren = ConfiguracoesRoute._addFileChildren(
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  AuthRoute: AuthRoute,
+  AuthRoute: AuthRouteWithChildren,
   ConciliacaoRoute: ConciliacaoRoute,
   ConfiguracoesRoute: ConfiguracoesRouteWithChildren,
   ContasRoute: ContasRoute,
@@ -367,3 +396,13 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}

@@ -502,9 +502,12 @@ export const buildDRE = createServerFn({ method: "POST" })
 
     for (const tx of txs) {
       if (tx.status === "pending") continue; // DRE = realizado
-      const d = new Date(tx.due_date);
+      // Data de competência: prioriza document_datetime (data do fato/nota)
+      const competenceIso = (tx as { document_datetime?: string | null }).document_datetime ?? tx.due_date;
+      const d = new Date(competenceIso);
       if (d < from || d > today) continue;
-      const key = tx.due_date.slice(0, 7);
+      const key = competenceIso.slice(0, 7);
+
       const bank = tx.bank_account_id ? bankById.get(tx.bank_account_id) : undefined;
       const bankEnt = bank?.enterprise ?? null;
       const allocs = effectiveAllocs(tx, ccById, allocByTx);

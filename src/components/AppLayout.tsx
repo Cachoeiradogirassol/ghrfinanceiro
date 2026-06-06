@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
-export function AppLayout() {
+export function AppLayout(_props: { children?: React.ReactNode }) {
   const { user, isMaster, loading } = useAuth();
   const navigate = useNavigate();
   const router = useRouter();

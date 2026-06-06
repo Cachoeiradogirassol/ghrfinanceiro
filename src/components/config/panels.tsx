@@ -21,6 +21,7 @@ import {
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -78,7 +79,7 @@ export function UsersTab() {
         <form onSubmit={submit} className="grid gap-3 md:grid-cols-2">
           <div><Label>Nome</Label><Input value={displayName} onChange={(e) => setDisplayName(e.target.value)} /></div>
           <div><Label>E-mail</Label><Input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} /></div>
-          <div><Label>Senha inicial</Label><Input type="password" required minLength={8} value={password} onChange={(e) => setPassword(e.target.value)} /></div>
+          <div><Label>Senha inicial</Label><PasswordInput required minLength={8} value={password} onChange={(e) => setPassword(e.target.value)} /></div>
           <div>
             <Label>Nível de acesso</Label>
             <Select value={role} onValueChange={(v) => setRole(v as "user" | "master")}>
@@ -200,7 +201,7 @@ function EditUserDialog({
           </div>
           <div>
             <Label>Redefinir senha (opcional)</Label>
-            <Input type="password" placeholder="Deixe em branco para manter" value={password} onChange={(e) => setPassword(e.target.value)} />
+            <PasswordInput placeholder="Deixe em branco para manter" value={password} onChange={(e) => setPassword(e.target.value)} />
             <p className="text-xs text-muted-foreground mt-1">Mínimo 8 caracteres se for alterar.</p>
           </div>
         </div>

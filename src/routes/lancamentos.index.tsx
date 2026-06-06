@@ -181,11 +181,27 @@ function List() {
           <h1 className="text-3xl font-bold">Lançamentos</h1>
           <p className="text-muted-foreground">Contas a Pagar e Receber</p>
         </div>
-        <Link to="/lancamentos/novo">
-          <Button>
-            <Plus className="h-4 w-4 mr-2" /> Novo Lançamento
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            onClick={() => exportPagar((data ?? []) as unknown as Tx[])}
+            disabled={isLoading}
+          >
+            <Download className="h-4 w-4 mr-2" /> Exportar Pagar (CSV)
           </Button>
-        </Link>
+          <Button
+            variant="outline"
+            onClick={() => exportReceber((data ?? []) as unknown as Tx[])}
+            disabled={isLoading}
+          >
+            <Download className="h-4 w-4 mr-2" /> Exportar Receber (CSV)
+          </Button>
+          <Link to="/lancamentos/novo">
+            <Button>
+              <Plus className="h-4 w-4 mr-2" /> Novo Lançamento
+            </Button>
+          </Link>
+        </div>
       </div>
 
       <div className="rounded-md border">

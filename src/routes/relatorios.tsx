@@ -26,9 +26,11 @@ import {
   FileDown,
   Bot,
   Send,
+  BarChart3,
 } from "lucide-react";
 import { exportDREPdf } from "@/lib/pdf-export";
 import { enterpriseLabel } from "@/lib/enterprises";
+import { CostsByEnterpriseTab } from "@/components/reports/CostsByEnterpriseTab";
 
 export const Route = createFileRoute("/relatorios")({
   head: () => ({

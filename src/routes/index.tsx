@@ -47,7 +47,23 @@ import { ENTERPRISES, type EnterpriseValue } from "@/lib/enterprises";
 import { useAuth } from "@/lib/auth";
 
 export const Route = createFileRoute("/")({
-  head: () => ({ meta: [{ title: "Dashboard — CONTROLE.GHR" }] }),
+  head: () => ({
+    meta: [
+      { title: "Dashboard — CONTROLE.GHR" },
+      {
+        name: "description",
+        content:
+          "Painel financeiro do Grupo GHR com indicadores em tempo real, saldos por conta, DRE dinâmico e alertas operacionais.",
+      },
+      { property: "og:title", content: "Dashboard — CONTROLE.GHR" },
+      {
+        property: "og:description",
+        content:
+          "Painel financeiro do Grupo GHR com indicadores em tempo real, saldos por conta, DRE dinâmico e alertas operacionais.",
+      },
+    ],
+    links: [{ rel: "canonical", href: "https://ghrfinanceiro.lovable.app/" }],
+  }),
   component: () => (
     <AppLayout>
       <Dashboard />

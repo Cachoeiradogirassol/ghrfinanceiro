@@ -10,7 +10,21 @@ import { Lock } from "lucide-react";
 
 export const Route = createFileRoute("/auth")({
   head: () => ({
-    meta: [{ title: "Login — CONTROLE.GHR" }],
+    meta: [
+      { title: "Login — CONTROLE.GHR" },
+      {
+        name: "description",
+        content:
+          "Acesse o CONTROLE.GHR para gerenciar lançamentos, conciliação bancária e relatórios financeiros do Grupo GHR.",
+      },
+      { property: "og:title", content: "Login — CONTROLE.GHR" },
+      {
+        property: "og:description",
+        content:
+          "Acesse o CONTROLE.GHR para gerenciar lançamentos, conciliação bancária e relatórios financeiros do Grupo GHR.",
+      },
+    ],
+    links: [{ rel: "canonical", href: "https://ghrfinanceiro.lovable.app/auth" }],
   }),
   component: AuthPage,
 });

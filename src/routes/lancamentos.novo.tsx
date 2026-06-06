@@ -33,7 +33,23 @@ import { toast } from "sonner";
 import { Layers, AlertTriangle, Search, UserPlus } from "lucide-react";
 
 export const Route = createFileRoute("/lancamentos/novo")({
-  head: () => ({ meta: [{ title: "Novo Lançamento — CONTROLE.GHR" }] }),
+  head: () => ({
+    meta: [
+      { title: "Novo Lançamento — CONTROLE.GHR" },
+      {
+        name: "description",
+        content:
+          "Registre novos lançamentos financeiros com rateio entre empreendimentos, anexos e categorização do plano de contas.",
+      },
+      { property: "og:title", content: "Novo Lançamento — CONTROLE.GHR" },
+      {
+        property: "og:description",
+        content:
+          "Registre novos lançamentos financeiros com rateio entre empreendimentos, anexos e categorização do plano de contas.",
+      },
+    ],
+    links: [{ rel: "canonical", href: "https://ghrfinanceiro.lovable.app/lancamentos/novo" }],
+  }),
   component: () => (
     <AppLayout>
       <Form />

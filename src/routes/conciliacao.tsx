@@ -42,7 +42,23 @@ import {
 import { useAuth } from "@/lib/auth";
 
 export const Route = createFileRoute("/conciliacao")({
-  head: () => ({ meta: [{ title: "Conciliação — CONTROLE.GHR" }] }),
+  head: () => ({
+    meta: [
+      { title: "Conciliação Bancária — CONTROLE.GHR" },
+      {
+        name: "description",
+        content:
+          "Concilie extratos bancários com lançamentos do CONTROLE.GHR usando sugestões automáticas de correspondência por data e valor.",
+      },
+      { property: "og:title", content: "Conciliação Bancária — CONTROLE.GHR" },
+      {
+        property: "og:description",
+        content:
+          "Concilie extratos bancários com lançamentos do CONTROLE.GHR usando sugestões automáticas de correspondência por data e valor.",
+      },
+    ],
+    links: [{ rel: "canonical", href: "https://ghrfinanceiro.lovable.app/conciliacao" }],
+  }),
   component: () => (
     <AppLayout>
       <Conc />

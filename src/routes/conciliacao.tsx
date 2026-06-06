@@ -56,6 +56,7 @@ export const Route = createFileRoute("/conciliacao")({
         content:
           "Concilie extratos bancários com lançamentos do CONTROLE.GHR usando sugestões automáticas de correspondência por data e valor.",
       },
+      { property: "og:url", content: "https://ghrfinanceiro.lovable.app/conciliacao" },
     ],
     links: [{ rel: "canonical", href: "https://ghrfinanceiro.lovable.app/conciliacao" }],
   }),

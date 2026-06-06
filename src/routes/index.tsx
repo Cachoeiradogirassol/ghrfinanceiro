@@ -61,6 +61,7 @@ export const Route = createFileRoute("/")({
         content:
           "Painel financeiro do Grupo GHR com indicadores em tempo real, saldos por conta, DRE dinâmico e alertas operacionais.",
       },
+      { property: "og:url", content: "https://ghrfinanceiro.lovable.app/" },
     ],
     links: [{ rel: "canonical", href: "https://ghrfinanceiro.lovable.app/" }],
   }),

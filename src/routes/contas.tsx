@@ -24,6 +24,7 @@ export const Route = createFileRoute("/contas")({
         content:
           "Gerencie o plano de contas hierárquico do CONTROLE.GHR com categorias de receita, despesa e centros de custo.",
       },
+      { property: "og:url", content: "https://ghrfinanceiro.lovable.app/contas" },
     ],
     links: [{ rel: "canonical", href: "https://ghrfinanceiro.lovable.app/contas" }],
   }),

@@ -172,3 +172,131 @@ export const buildComparativeDRE = createServerFn({ method: "POST" })
 
     return { months, enterprises, series };
   });
+
+// ---------- COST ANALYTICS (per enterprise / account) ----------
+
+const EnterpriseFilter = z
+  .enum([
+    "all",
+    "turismo",
+    "restaurante",
+    "vinhedo",
+    "ghr",
+    "institucional_fazenda",
+    "impostos",
+  ])
+  .default("all");
+
+export const buildCostAnalytics = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) =>
+    z
+      .object({
+        from: z.string().optional(),
+        to: z.string().optional(),
+        enterprise: EnterpriseFilter,
+        accountId: z.string().uuid().optional(),
+      })
+      .parse(d ?? {}),
+  )
+  .handler(async ({ context, data }) => {
+    const to = data.to ?? new Date().toISOString().slice(0, 10);
+    const fromDate = new Date();
+    fromDate.setMonth(fromDate.getMonth() - 12);
+    const from = data.from ?? fromDate.toISOString().slice(0, 10);
+
+    // Pull transactions with allocations within the period; filter realised only
+    let q = context.supabase
+      .from("transactions")
+      .select(
+        "id, amount, type, status, due_date, document_datetime, account_id, accounts(name, kind), cost_centers(enterprise), transaction_allocations(amount, cost_centers(enterprise))",
+      )
+      .gte("due_date", from)
+      .lte("due_date", to)
+      .limit(8000);
+    if (data.accountId) q = q.eq("account_id", data.accountId);
+    const { data: txs, error } = await q;
+    if (error) throw new Error(error.message);
+
+    const realised = (txs ?? []).filter((t) => t.status !== "pending");
+
+    // Split-by-enterprise (use allocations when present, else fall back to tx cost_center.enterprise)
+    const byEnt = new Map<string, number>();
+    let totalAmount = 0;
+    const monthly = new Map<string, number>();
+    let revenueForEnterprise = 0;
+    let expenseForEnterprise = 0;
+
+    for (const t of realised) {
+      const amt = Number(t.amount);
+      const allocs =
+        (t.transaction_allocations as
+          | { amount: number; cost_centers: { enterprise?: string } | null }[]
+          | null) ?? [];
+      if (t.type === "payable") {
+        if (allocs.length > 0) {
+          for (const a of allocs) {
+            const ent = a.cost_centers?.enterprise ?? "—";
+            if (data.enterprise !== "all" && ent !== data.enterprise) continue;
+            const v = Number(a.amount);
+            byEnt.set(ent, (byEnt.get(ent) ?? 0) + v);
+            totalAmount += v;
+          }
+        } else {
+          const ent =
+            (t.cost_centers as { enterprise?: string } | null)?.enterprise ?? "—";
+          if (data.enterprise === "all" || ent === data.enterprise) {
+            byEnt.set(ent, (byEnt.get(ent) ?? 0) + amt);
+            totalAmount += amt;
+          }
+        }
+      }
+
+      // monthly time series of the filtered account (expenses only when payable)
+      if (t.type === "payable") {
+        const iso =
+          (t.document_datetime as string | null) ?? (t.due_date as string);
+        const key = iso.slice(0, 7);
+        monthly.set(key, (monthly.get(key) ?? 0) + amt);
+      }
+
+      // enterprise revenue/expense for impact percent
+      if (data.enterprise !== "all") {
+        const ent =
+          (t.cost_centers as { enterprise?: string } | null)?.enterprise ?? "—";
+        if (ent === data.enterprise) {
+          if (t.type === "receivable") revenueForEnterprise += amt;
+          else expenseForEnterprise += amt;
+        }
+      }
+    }
+
+    const distribution = Array.from(byEnt.entries())
+      .map(([enterprise, amount]) => ({ enterprise, amount }))
+      .sort((a, b) => b.amount - a.amount);
+
+    const timeline = Array.from(monthly.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([month, amount]) => ({ month, amount }));
+
+    const monthsCount = Math.max(1, timeline.length);
+    const monthlyAvg = totalAmount / monthsCount;
+    const impactPct =
+      data.enterprise !== "all" && expenseForEnterprise > 0
+        ? (totalAmount / expenseForEnterprise) * 100
+        : 0;
+
+    return {
+      distribution,
+      timeline,
+      kpis: {
+        total: totalAmount,
+        monthlyAvg,
+        impactPct,
+        enterpriseRevenue: revenueForEnterprise,
+        enterpriseExpense: expenseForEnterprise,
+      },
+      period: { from, to },
+    };
+  });
+

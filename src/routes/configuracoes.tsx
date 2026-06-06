@@ -254,7 +254,7 @@ function PlanTab() {
   );
 }
 
-function NewCostCenter({ upsertCC, onSaved }: { upsertCC: ReturnType<typeof useServerFn<typeof upsertCostCenter>>; onSaved: () => void }) {
+function NewCostCenter({ upsertCC, onSaved }: { upsertCC: (args: { data: { id?: string; code: number; name: string; master_only: boolean } }) => Promise<{ id: string }>; onSaved: () => void }) {
   const [code, setCode] = useState(10);
   const [name, setName] = useState("");
   const [masterOnly, setMasterOnly] = useState(false);
@@ -272,7 +272,7 @@ function NewCostCenter({ upsertCC, onSaved }: { upsertCC: ReturnType<typeof useS
   );
 }
 
-function CostCenterHeader({ cc, upsertCC, onSaved }: { cc: { id: string; code: number; name: string; master_only: boolean }; upsertCC: ReturnType<typeof useServerFn<typeof upsertCostCenter>>; onSaved: () => void }) {
+function CostCenterHeader({ cc, upsertCC, onSaved }: { cc: { id: string; code: number; name: string; master_only: boolean }; upsertCC: (args: { data: { id?: string; code: number; name: string; master_only: boolean } }) => Promise<{ id: string }>; onSaved: () => void }) {
   const [name, setName] = useState(cc.name);
   return (
     <div className="flex items-center gap-2">
@@ -287,7 +287,7 @@ function CostCenterHeader({ cc, upsertCC, onSaved }: { cc: { id: string; code: n
   );
 }
 
-function NewAccountRow({ ccId, upsertAcc, onSaved }: { ccId: string; upsertAcc: ReturnType<typeof useServerFn<typeof upsertAccount>>; onSaved: () => void }) {
+function NewAccountRow({ ccId, upsertAcc, onSaved }: { ccId: string; upsertAcc: (args: { data: { id?: string; cost_center_id: string; name: string; kind: "expense" | "revenue" } }) => Promise<{ id: string }>; onSaved: () => void }) {
   const [name, setName] = useState("");
   const [kind, setKind] = useState<"expense" | "revenue">("expense");
   return (

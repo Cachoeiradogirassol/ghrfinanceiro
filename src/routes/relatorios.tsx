@@ -88,6 +88,9 @@ function RelatoriosPage() {
           <TabsTrigger value="comparative">
             <FileBarChart className="h-4 w-4 mr-2" /> DRE Comparativa
           </TabsTrigger>
+          <TabsTrigger value="costs">
+            <BarChart3 className="h-4 w-4 mr-2" /> Custos por Empreendimento
+          </TabsTrigger>
           <TabsTrigger value="ia">
             <Sparkles className="h-4 w-4 mr-2" /> Insights de IA
           </TabsTrigger>
@@ -98,6 +101,9 @@ function RelatoriosPage() {
         </TabsContent>
         <TabsContent value="comparative" className="mt-4">
           <ComparativeTab />
+        </TabsContent>
+        <TabsContent value="costs" className="mt-4">
+          <CostsByEnterpriseTab />
         </TabsContent>
         <TabsContent value="ia" className="mt-4">
           <IATab />

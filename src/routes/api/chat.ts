@@ -32,7 +32,7 @@ export const Route = createFileRoute("/api/chat")({
           system: `Você é o Copilot do CONTROLE.GHR, um sistema financeiro multi-empresa (Cachoeira do Girassol, Restaurante, Vinhedo, Fazenda, Impostos, GHR Empreendimentos).
 Responda sempre em português brasileiro, com tom direto e analítico.
 Quando o usuário perguntar sobre viabilidade de gastos/investimentos, use a ferramenta simulate_investment.${ctxSummary}`,
-          messages: convertToModelMessages(body.messages),
+          messages: await convertToModelMessages(body.messages),
           tools: {
             simulate_investment: tool({
               description:

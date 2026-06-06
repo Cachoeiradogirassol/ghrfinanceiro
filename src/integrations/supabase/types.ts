@@ -87,31 +87,43 @@ export type Database = {
           amount: number
           bank_account_id: string
           created_at: string
+          created_by: string | null
           description: string | null
           id: string
+          matched_at: string | null
+          matched_by: string | null
           matched_transaction_id: string | null
           reconciled: boolean
           statement_date: string
+          updated_by: string | null
         }
         Insert: {
           amount: number
           bank_account_id: string
           created_at?: string
+          created_by?: string | null
           description?: string | null
           id?: string
+          matched_at?: string | null
+          matched_by?: string | null
           matched_transaction_id?: string | null
           reconciled?: boolean
           statement_date: string
+          updated_by?: string | null
         }
         Update: {
           amount?: number
           bank_account_id?: string
           created_at?: string
+          created_by?: string | null
           description?: string | null
           id?: string
+          matched_at?: string | null
+          matched_by?: string | null
           matched_transaction_id?: string | null
           reconciled?: boolean
           statement_date?: string
+          updated_by?: string | null
         }
         Relationships: [
           {
@@ -193,6 +205,42 @@ export type Database = {
         }
         Relationships: []
       }
+      reconciliation_periods: {
+        Row: {
+          closed_at: string | null
+          closed_by: string | null
+          created_at: string
+          created_by: string | null
+          end_date: string
+          id: string
+          start_date: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          closed_at?: string | null
+          closed_by?: string | null
+          created_at?: string
+          created_by?: string | null
+          end_date: string
+          id?: string
+          start_date: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          closed_at?: string | null
+          closed_by?: string | null
+          created_at?: string
+          created_by?: string | null
+          end_date?: string
+          id?: string
+          start_date?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       transaction_allocations: {
         Row: {
           amount: number
@@ -259,6 +307,7 @@ export type Database = {
           status: Database["public"]["Enums"]["transaction_status"]
           type: Database["public"]["Enums"]["transaction_type"]
           updated_at: string
+          updated_by: string | null
         }
         Insert: {
           account_id: string
@@ -283,6 +332,7 @@ export type Database = {
           status?: Database["public"]["Enums"]["transaction_status"]
           type: Database["public"]["Enums"]["transaction_type"]
           updated_at?: string
+          updated_by?: string | null
         }
         Update: {
           account_id?: string
@@ -307,6 +357,7 @@ export type Database = {
           status?: Database["public"]["Enums"]["transaction_status"]
           type?: Database["public"]["Enums"]["transaction_type"]
           updated_at?: string
+          updated_by?: string | null
         }
         Relationships: [
           {
@@ -379,6 +430,7 @@ export type Database = {
         }
         Returns: boolean
       }
+      is_date_locked: { Args: { _date: string }; Returns: boolean }
       is_master: { Args: never; Returns: boolean }
     }
     Enums: {

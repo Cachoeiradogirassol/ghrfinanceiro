@@ -5,6 +5,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   listTransactions,
   deleteTransaction,
+  listAuditUsers,
 } from "@/lib/finance.functions";
 import { Button } from "@/components/ui/button";
 import {
@@ -16,8 +17,10 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Trash2, Layers } from "lucide-react";
+import { Plus, Trash2, Layers, User } from "lucide-react";
 import { toast } from "sonner";
+import { useAuth } from "@/lib/auth";
+import { useMemo } from "react";
 
 export const Route = createFileRoute("/lancamentos/")({
   head: () => ({ meta: [{ title: "Lançamentos — CONTROLE.GHR" }] }),
@@ -35,11 +38,23 @@ function fmt(n: number) {
 function List() {
   const fn = useServerFn(listTransactions);
   const del = useServerFn(deleteTransaction);
+  const usersFn = useServerFn(listAuditUsers);
+  const { isMaster } = useAuth();
   const qc = useQueryClient();
   const { data, isLoading } = useQuery({
     queryKey: ["txs"],
     queryFn: () => fn(),
   });
+  const usersQ = useQuery({
+    queryKey: ["audit-users"],
+    queryFn: () => usersFn(),
+    enabled: isMaster,
+  });
+  const userMap = useMemo(() => {
+    const m = new Map<string, string>();
+    (usersQ.data ?? []).forEach((u) => m.set(u.id, u.email));
+    return m;
+  }, [usersQ.data]);
   const mut = useMutation({
     mutationFn: (id: string) => del({ data: { id } }),
     onSuccess: () => {
@@ -48,6 +63,7 @@ function List() {
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : "Erro"),
   });
+
 
   return (
     <div className="p-8 space-y-6">
@@ -76,13 +92,15 @@ function List() {
               <TableHead>Tipo</TableHead>
               <TableHead className="text-right">Valor</TableHead>
               <TableHead>Status</TableHead>
+              {isMaster && <TableHead className="text-xs">Auditoria</TableHead>}
               <TableHead></TableHead>
             </TableRow>
+
           </TableHeader>
           <TableBody>
             {isLoading && (
               <TableRow>
-                <TableCell colSpan={10} className="text-center text-muted-foreground py-8">
+                <TableCell colSpan={isMaster ? 11 : 10} className="text-center text-muted-foreground py-8">
                   Carregando...
                 </TableCell>
               </TableRow>
@@ -133,6 +151,25 @@ function List() {
                     {t.status}
                   </Badge>
                 </TableCell>
+                {isMaster && (
+                  <TableCell className="text-[11px] text-muted-foreground">
+                    <div className="flex items-center gap-1">
+                      <User className="h-3 w-3" />
+                      <span className="truncate max-w-[140px]">
+                        {(t as { created_by?: string }).created_by
+                          ? (userMap.get((t as { created_by: string }).created_by) ?? "—")
+                          : "—"}
+                      </span>
+                    </div>
+                    {(t as { updated_by?: string }).updated_by &&
+                      (t as { updated_by?: string }).updated_by !==
+                        (t as { created_by?: string }).created_by && (
+                        <div className="text-[10px] opacity-70 truncate max-w-[140px]">
+                          edit: {userMap.get((t as { updated_by: string }).updated_by) ?? "—"}
+                        </div>
+                      )}
+                  </TableCell>
+                )}
                 <TableCell>
                   <Button
                     size="icon"
@@ -142,11 +179,12 @@ function List() {
                     <Trash2 className="h-4 w-4" />
                   </Button>
                 </TableCell>
+
               </TableRow>
             ))}
             {!isLoading && (data?.length ?? 0) === 0 && (
               <TableRow>
-                <TableCell colSpan={10} className="text-center text-muted-foreground py-8">
+                <TableCell colSpan={isMaster ? 11 : 10} className="text-center text-muted-foreground py-8">
                   Nenhum lançamento. Crie o primeiro.
                 </TableCell>
               </TableRow>

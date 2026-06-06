@@ -9,11 +9,17 @@ import {
   importStatementLines,
   autoMatch,
   reconcile,
+  listReconciliationPeriods,
+  createReconciliationPeriod,
+  closeReconciliationPeriod,
+  reopenReconciliationPeriod,
+  listAuditUsers,
 } from "@/lib/finance.functions";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -21,9 +27,19 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Sparkles, Upload, Link2, Layers } from "lucide-react";
+import {
+  Sparkles,
+  Upload,
+  Link2,
+  Layers,
+  Lock,
+  Unlock,
+  CalendarRange,
+  User,
+} from "lucide-react";
+import { useAuth } from "@/lib/auth";
 
 export const Route = createFileRoute("/conciliacao")({
   head: () => ({ meta: [{ title: "Conciliação — CONTROLE.GHR" }] }),
@@ -45,18 +61,59 @@ function Conc() {
   const importFn = useServerFn(importStatementLines);
   const matchFn = useServerFn(autoMatch);
   const recFn = useServerFn(reconcile);
+  const periodsFn = useServerFn(listReconciliationPeriods);
+  const createPeriodFn = useServerFn(createReconciliationPeriod);
+  const closePeriodFn = useServerFn(closeReconciliationPeriod);
+  const reopenPeriodFn = useServerFn(reopenReconciliationPeriod);
+  const usersFn = useServerFn(listAuditUsers);
+  const { isMaster } = useAuth();
   const qc = useQueryClient();
 
   const banks = useQuery({ queryKey: ["banks"], queryFn: () => banksFn() });
-  const lines = useQuery({
-    queryKey: ["lines"],
-    queryFn: () => linesFn(),
-  });
+  const lines = useQuery({ queryKey: ["lines"], queryFn: () => linesFn() });
   const txs = useQuery({ queryKey: ["txs"], queryFn: () => txFn() });
+  const periods = useQuery({
+    queryKey: ["periods"],
+    queryFn: () => periodsFn(),
+  });
+  const usersQ = useQuery({
+    queryKey: ["audit-users"],
+    queryFn: () => usersFn(),
+    enabled: isMaster,
+  });
+  const userMap = useMemo(() => {
+    const m = new Map<string, string>();
+    (usersQ.data ?? []).forEach((u) => m.set(u.id, u.email));
+    return m;
+  }, [usersQ.data]);
+  const userLabel = (id?: string | null) =>
+    id ? (userMap.get(id) ?? id.slice(0, 8)) : "—";
 
   const [importBankId, setImportBankId] = useState("");
   const [selectedTx, setSelectedTx] = useState<string | null>(null);
   const [selectedLines, setSelectedLines] = useState<Set<string>>(new Set());
+
+  // Filtro de período
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const monthAgoIso = (() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 30);
+    return d.toISOString().slice(0, 10);
+  })();
+  const [rangeStart, setRangeStart] = useState(monthAgoIso);
+  const [rangeEnd, setRangeEnd] = useState(todayIso);
+
+  const inRange = (iso: string) => iso >= rangeStart && iso <= rangeEnd;
+
+  const filteredLines = (lines.data ?? []).filter((l) =>
+    inRange(l.statement_date as string),
+  );
+  const filteredTxs = (txs.data ?? []).filter((t) => {
+    const d =
+      (t as { document_datetime?: string | null }).document_datetime?.slice(0, 10) ??
+      (t.due_date as string);
+    return inRange(d);
+  });
 
   const handleCSV = async (file: File) => {
     if (!importBankId) {
@@ -78,7 +135,6 @@ function Conc() {
         };
       })
       .filter((r) => !isNaN(r.amount) && r.statement_date);
-
     try {
       const res = await importFn({
         data: { bank_account_id: importBankId, lines: rows },
@@ -122,9 +178,38 @@ function Conc() {
     }
   };
 
-  const selectedTxObj = (txs.data ?? []).find((t) => t.id === selectedTx);
+  const closePeriod = useMutation({
+    mutationFn: async () => {
+      const created = await createPeriodFn({
+        data: { start_date: rangeStart, end_date: rangeEnd },
+      });
+      await closePeriodFn({ data: { id: (created as { id: string }).id } });
+    },
+    onSuccess: () => {
+      toast.success("Período encerrado. Lançamentos no intervalo estão bloqueados.");
+      qc.invalidateQueries({ queryKey: ["periods"] });
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Erro"),
+  });
+
+  const reopenPeriod = useMutation({
+    mutationFn: (id: string) => reopenPeriodFn({ data: { id } }),
+    onSuccess: () => {
+      toast.success("Período reaberto");
+      qc.invalidateQueries({ queryKey: ["periods"] });
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Erro"),
+  });
+
+  const rangeLocked = (periods.data ?? []).some(
+    (p) =>
+      p.status === "CLOSED" &&
+      !((p.end_date as string) < rangeStart || (p.start_date as string) > rangeEnd),
+  );
+
+  const selectedTxObj = filteredTxs.find((t) => t.id === selectedTx);
   const selectedSum = Array.from(selectedLines).reduce((s, id) => {
-    const l = (lines.data ?? []).find((x) => x.id === id);
+    const l = filteredLines.find((x) => x.id === id);
     return s + (l ? Math.abs(Number(l.amount)) : 0);
   }, 0);
   const sumMatches = selectedTxObj
@@ -144,6 +229,105 @@ function Conc() {
           <Sparkles className="h-4 w-4 mr-2" /> Sugerir Matches
         </Button>
       </div>
+
+      {/* Filtro de período + encerramento */}
+      <Card className="p-4 flex flex-wrap items-end gap-3">
+        <div className="flex items-center gap-2">
+          <CalendarRange className="h-4 w-4 text-muted-foreground" />
+          <div className="flex flex-col">
+            <label className="text-xs text-muted-foreground">De</label>
+            <Input
+              type="date"
+              value={rangeStart}
+              onChange={(e) => setRangeStart(e.target.value)}
+              className="w-40"
+            />
+          </div>
+          <div className="flex flex-col">
+            <label className="text-xs text-muted-foreground">Até</label>
+            <Input
+              type="date"
+              value={rangeEnd}
+              onChange={(e) => setRangeEnd(e.target.value)}
+              className="w-40"
+            />
+          </div>
+        </div>
+        <div className="flex-1" />
+        {rangeLocked ? (
+          <Badge variant="destructive" className="gap-1">
+            <Lock className="h-3 w-3" /> Período fechado
+          </Badge>
+        ) : (
+          <Badge variant="outline" className="gap-1">
+            <Unlock className="h-3 w-3" /> Aberto
+          </Badge>
+        )}
+        {isMaster && !rangeLocked && (
+          <Button
+            variant="destructive"
+            size="sm"
+            onClick={() => {
+              if (
+                confirm(
+                  `Encerrar período de ${rangeStart} a ${rangeEnd}? Lançamentos no intervalo ficarão BLOQUEADOS para edição.`,
+                )
+              )
+                closePeriod.mutate();
+            }}
+            disabled={closePeriod.isPending}
+          >
+            <Lock className="h-4 w-4 mr-1" /> Encerrar Período
+          </Button>
+        )}
+      </Card>
+
+      {/* Períodos existentes */}
+      {(periods.data?.length ?? 0) > 0 && (
+        <Card className="p-4">
+          <h2 className="font-semibold text-sm mb-2">Períodos</h2>
+          <div className="space-y-1">
+            {(periods.data ?? []).map((p) => (
+              <div
+                key={p.id}
+                className="flex items-center gap-2 text-xs border rounded px-2 py-1"
+              >
+                <Badge
+                  variant={p.status === "CLOSED" ? "destructive" : "outline"}
+                >
+                  {p.status === "CLOSED" ? (
+                    <Lock className="h-3 w-3 mr-1" />
+                  ) : (
+                    <Unlock className="h-3 w-3 mr-1" />
+                  )}
+                  {p.status}
+                </Badge>
+                <span className="font-mono">
+                  {p.start_date} → {p.end_date}
+                </span>
+                {p.status === "CLOSED" && (
+                  <span className="text-muted-foreground">
+                    fechado por {userLabel(p.closed_by as string)} em{" "}
+                    {p.closed_at
+                      ? new Date(p.closed_at as string).toLocaleDateString("pt-BR")
+                      : "—"}
+                  </span>
+                )}
+                <div className="flex-1" />
+                {isMaster && p.status === "CLOSED" && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => reopenPeriod.mutate(p.id as string)}
+                  >
+                    <Unlock className="h-3 w-3 mr-1" /> Reabrir
+                  </Button>
+                )}
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
 
       <Card className="p-4 flex flex-wrap items-center gap-3">
         <Upload className="h-4 w-4 text-muted-foreground" />
@@ -183,19 +367,14 @@ function Conc() {
                 {fmt(Number(selectedTxObj?.amount ?? 0))}
               </p>
               <p className="text-xs text-muted-foreground">
-                Selecionado: {fmt(selectedSum)} •{" "}
-                {selectedLines.size} linha(s){" "}
+                Selecionado: {fmt(selectedSum)} • {selectedLines.size} linha(s){" "}
                 {sumMatches && (
                   <span className="text-primary font-medium">✓ Soma confere</span>
                 )}
               </p>
             </div>
             <div className="flex gap-2">
-              <Button
-                size="sm"
-                onClick={doReconcile}
-                disabled={!sumMatches}
-              >
+              <Button size="sm" onClick={doReconcile} disabled={!sumMatches}>
                 <Link2 className="h-4 w-4 mr-1" /> Conciliar
               </Button>
               <Button
@@ -215,14 +394,19 @@ function Conc() {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <Card className="p-4">
-          <h2 className="font-semibold mb-3">Extrato Bancário</h2>
+          <h2 className="font-semibold mb-3">
+            Extrato Bancário{" "}
+            <span className="text-xs text-muted-foreground font-normal">
+              ({filteredLines.length})
+            </span>
+          </h2>
           <div className="space-y-1 max-h-[600px] overflow-y-auto">
-            {(lines.data ?? []).map((l) => (
+            {filteredLines.map((l) => (
               <label
                 key={l.id}
                 className={`flex items-center gap-3 p-2 rounded-md border text-sm cursor-pointer transition ${
                   l.reconciled
-                    ? "opacity-50 bg-muted/30"
+                    ? "opacity-60 bg-muted/30"
                     : selectedLines.has(l.id)
                       ? "bg-primary/10 border-primary"
                       : "hover:bg-accent border-border"
@@ -234,65 +418,86 @@ function Conc() {
                   onCheckedChange={() => toggleLine(l.id)}
                 />
                 <span className="font-mono text-xs w-24">
-                  {new Date(l.statement_date).toLocaleDateString("pt-BR")}
+                  {new Date(l.statement_date as string).toLocaleDateString("pt-BR")}
                 </span>
-                <span className="flex-1 truncate text-xs">
-                  {l.description}
-                </span>
+                <span className="flex-1 truncate text-xs">{l.description}</span>
                 <span
                   className={`font-mono text-xs ${Number(l.amount) < 0 ? "text-destructive" : "text-primary"}`}
                 >
                   {fmt(Number(l.amount))}
                 </span>
                 {l.reconciled && <Badge variant="outline">conciliado</Badge>}
+                {isMaster &&
+                  (l as { matched_by?: string }).matched_by && (
+                    <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
+                      <User className="h-3 w-3" />
+                      {userLabel((l as { matched_by: string }).matched_by)}
+                    </span>
+                  )}
               </label>
             ))}
-            {(lines.data?.length ?? 0) === 0 && (
+            {filteredLines.length === 0 && (
               <p className="text-muted-foreground text-sm p-4 text-center">
-                Importe um extrato CSV/OFX.
+                Nenhuma linha no período.
               </p>
             )}
           </div>
         </Card>
 
         <Card className="p-4">
-          <h2 className="font-semibold mb-3">Lançamentos do Sistema</h2>
+          <h2 className="font-semibold mb-3">
+            Lançamentos do Sistema{" "}
+            <span className="text-xs text-muted-foreground font-normal">
+              ({filteredTxs.length})
+            </span>
+          </h2>
           <div className="space-y-1 max-h-[600px] overflow-y-auto">
-            {(txs.data ?? [])
+            {filteredTxs
               .filter((t) => t.status !== "reconciled")
-              .map((t) => (
-                <button
-                  key={t.id}
-                  onClick={() => {
-                    setSelectedTx(t.id);
-                    setSelectedLines(new Set());
-                  }}
-                  className={`w-full text-left flex items-center gap-3 p-2 rounded-md border text-sm transition ${
-                    selectedTx === t.id
-                      ? "bg-primary/10 border-primary"
-                      : "hover:bg-accent border-border"
-                  }`}
-                >
-                  <span className="font-mono text-xs w-24">
-                    {new Date(t.due_date).toLocaleDateString("pt-BR")}
-                  </span>
-                  <span className="flex-1 truncate text-xs">
-                    {t.description ?? t.accounts?.name}
-                    {t.is_batch && (
-                      <Layers className="h-3 w-3 inline ml-1 text-primary" />
-                    )}
-                  </span>
-                  <span
-                    className={`font-mono text-xs ${
-                      t.type === "receivable"
-                        ? "text-primary"
-                        : "text-destructive"
+              .map((t) => {
+                const competence =
+                  (t as { document_datetime?: string | null }).document_datetime ??
+                  (t.due_date as string);
+                return (
+                  <button
+                    key={t.id}
+                    onClick={() => {
+                      setSelectedTx(t.id);
+                      setSelectedLines(new Set());
+                    }}
+                    className={`w-full text-left flex items-center gap-3 p-2 rounded-md border text-sm transition ${
+                      selectedTx === t.id
+                        ? "bg-primary/10 border-primary"
+                        : "hover:bg-accent border-border"
                     }`}
                   >
-                    {fmt(Number(t.amount))}
-                  </span>
-                </button>
-              ))}
+                    <span className="font-mono text-xs w-24">
+                      {new Date(competence).toLocaleDateString("pt-BR")}
+                    </span>
+                    <span className="flex-1 truncate text-xs">
+                      {t.description ?? t.accounts?.name}
+                      {t.is_batch && (
+                        <Layers className="h-3 w-3 inline ml-1 text-primary" />
+                      )}
+                    </span>
+                    <span
+                      className={`font-mono text-xs ${
+                        t.type === "receivable"
+                          ? "text-primary"
+                          : "text-destructive"
+                      }`}
+                    >
+                      {fmt(Number(t.amount))}
+                    </span>
+                    {isMaster && (
+                      <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
+                        <User className="h-3 w-3" />
+                        {userLabel((t as { created_by?: string }).created_by)}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
           </div>
         </Card>
       </div>

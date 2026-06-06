@@ -54,6 +54,7 @@ export const listTransactions = createServerFn({ method: "GET" })
     return data;
   });
 
+
 // ---------- CREATE TRANSACTION (com rateio) ----------
 const AllocationInput = z.object({
   cost_center_id: z.string().uuid(),
@@ -370,7 +371,12 @@ export const reconcile = createServerFn({ method: "POST" })
     }
     await context.supabase
       .from("bank_statement_lines")
-      .update({ matched_transaction_id: data.transaction_id, reconciled: true })
+      .update({
+        matched_transaction_id: data.transaction_id,
+        reconciled: true,
+        matched_by: context.userId,
+        matched_at: new Date().toISOString(),
+      })
       .in("id", data.statement_line_ids);
     await context.supabase
       .from("transactions")
@@ -378,6 +384,7 @@ export const reconcile = createServerFn({ method: "POST" })
       .eq("id", data.transaction_id);
     return { ok: true, sum: sumLines };
   });
+
 
 // ---------- DRE + PROJECTION (com filtro de empreendimento) ----------
 type EnterpriseValue =
@@ -404,7 +411,7 @@ async function loadFinanceData(supabase: {
     supabase
       .from("transactions")
       .select(
-        "id, type, amount, due_date, status, account_id, cost_center_id, bank_account_id, accounts(name)",
+        "id, type, amount, due_date, document_datetime, status, account_id, cost_center_id, bank_account_id, accounts(name)",
       ),
     supabase
       .from("transaction_allocations")
@@ -418,9 +425,11 @@ async function loadFinanceData(supabase: {
         type: "payable" | "receivable";
         amount: number;
         due_date: string;
+        document_datetime: string | null;
         status: string;
         account_id: string;
         cost_center_id: string;
+
         bank_account_id: string | null;
         accounts: { name?: string } | null;
       }>;
@@ -495,9 +504,12 @@ export const buildDRE = createServerFn({ method: "POST" })
 
     for (const tx of txs) {
       if (tx.status === "pending") continue; // DRE = realizado
-      const d = new Date(tx.due_date);
+      // Data de competência: prioriza document_datetime (data do fato/nota)
+      const competenceIso = (tx as { document_datetime?: string | null }).document_datetime ?? tx.due_date;
+      const d = new Date(competenceIso);
       if (d < from || d > today) continue;
-      const key = tx.due_date.slice(0, 7);
+      const key = competenceIso.slice(0, 7);
+
       const bank = tx.bank_account_id ? bankById.get(tx.bank_account_id) : undefined;
       const bankEnt = bank?.enterprise ?? null;
       const allocs = effectiveAllocs(tx, ccById, allocByTx);
@@ -653,4 +665,86 @@ export const buildProjection = createServerFn({ method: "POST" })
       series,
       ghosts,
     };
+  });
+
+// ---------- RECONCILIATION PERIODS ----------
+export const listReconciliationPeriods = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { data, error } = await context.supabase
+      .from("reconciliation_periods")
+      .select("*")
+      .order("start_date", { ascending: false });
+    if (error) throw new Error(error.message);
+    return data;
+  });
+
+export const createReconciliationPeriod = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) =>
+    z.object({ start_date: z.string(), end_date: z.string() }).parse(d),
+  )
+  .handler(async ({ context, data }) => {
+    if (data.end_date < data.start_date) throw new Error("Intervalo inválido.");
+    const { data: row, error } = await context.supabase
+      .from("reconciliation_periods")
+      .insert({
+        start_date: data.start_date,
+        end_date: data.end_date,
+        status: "OPEN",
+        created_by: context.userId,
+      })
+      .select()
+      .single();
+    if (error) throw new Error(error.message);
+    return row;
+  });
+
+export const closeReconciliationPeriod = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({ id: z.string().uuid() }).parse(d))
+  .handler(async ({ context, data }) => {
+    const { error } = await context.supabase
+      .from("reconciliation_periods")
+      .update({
+        status: "CLOSED",
+        closed_by: context.userId,
+        closed_at: new Date().toISOString(),
+      })
+      .eq("id", data.id);
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
+export const reopenReconciliationPeriod = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({ id: z.string().uuid() }).parse(d))
+  .handler(async ({ context, data }) => {
+    const { error } = await context.supabase
+      .from("reconciliation_periods")
+      .update({ status: "OPEN", closed_by: null, closed_at: null })
+      .eq("id", data.id);
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
+// ---------- AUDIT USERS MAP (master only) ----------
+const MASTER_EMAIL_AUDIT = "drs.cachoeira@gmail.com";
+export const listAuditUsers = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const isMaster = context.claims?.email === MASTER_EMAIL_AUDIT;
+    if (!isMaster) {
+      const { data: roleRow } = await context.supabase
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", context.userId)
+        .eq("role", "master")
+        .maybeSingle();
+      if (!roleRow) return [] as Array<{ id: string; email: string }>;
+    }
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data, error } = await supabaseAdmin.auth.admin.listUsers({ perPage: 200 });
+    if (error) throw new Error(error.message);
+    return data.users.map((u) => ({ id: u.id, email: u.email ?? "" }));
   });

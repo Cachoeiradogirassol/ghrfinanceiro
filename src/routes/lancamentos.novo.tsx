@@ -47,6 +47,7 @@ export const Route = createFileRoute("/lancamentos/novo")({
         content:
           "Registre novos lançamentos financeiros com rateio entre empreendimentos, anexos e categorização do plano de contas.",
       },
+      { property: "og:url", content: "https://ghrfinanceiro.lovable.app/lancamentos/novo" },
     ],
     links: [{ rel: "canonical", href: "https://ghrfinanceiro.lovable.app/lancamentos/novo" }],
   }),

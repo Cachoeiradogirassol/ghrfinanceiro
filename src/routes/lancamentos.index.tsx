@@ -146,6 +146,7 @@ export const Route = createFileRoute("/lancamentos/")({
         content:
           "Liste, filtre e exporte contas a pagar e a receber do Grupo GHR com controle de competência, status e centros de custo.",
       },
+      { property: "og:url", content: "https://ghrfinanceiro.lovable.app/lancamentos" },
     ],
     links: [{ rel: "canonical", href: "https://ghrfinanceiro.lovable.app/lancamentos" }],
   }),
@@ -315,6 +316,7 @@ function List() {
                   <Button
                     size="icon"
                     variant="ghost"
+                    aria-label="Excluir lançamento"
                     onClick={() => mut.mutate(t.id)}
                   >
                     <Trash2 className="h-4 w-4" />

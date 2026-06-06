@@ -9,6 +9,7 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
 import { Route as ProjecaoRouteImport } from './routes/projecao'
 import { Route as ContasRouteImport } from './routes/contas'
 import { Route as ConfiguracoesRouteImport } from './routes/configuracoes'
@@ -22,6 +23,11 @@ import { Route as ConfiguracoesPlanoDeContasRouteImport } from './routes/configu
 import { Route as ConfiguracoesContasBancariasRouteImport } from './routes/configuracoes.contas-bancarias'
 import { Route as ApiChatRouteImport } from './routes/api/chat'
 
+const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
+  id: '/sitemap.xml',
+  path: '/sitemap.xml',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ProjecaoRoute = ProjecaoRouteImport.update({
   id: '/projecao',
   path: '/projecao',
@@ -92,6 +98,7 @@ export interface FileRoutesByFullPath {
   '/configuracoes': typeof ConfiguracoesRouteWithChildren
   '/contas': typeof ContasRoute
   '/projecao': typeof ProjecaoRoute
+  '/sitemap.xml': typeof SitemapDotxmlRoute
   '/api/chat': typeof ApiChatRoute
   '/configuracoes/contas-bancarias': typeof ConfiguracoesContasBancariasRoute
   '/configuracoes/plano-de-contas': typeof ConfiguracoesPlanoDeContasRoute
@@ -106,6 +113,7 @@ export interface FileRoutesByTo {
   '/configuracoes': typeof ConfiguracoesRouteWithChildren
   '/contas': typeof ContasRoute
   '/projecao': typeof ProjecaoRoute
+  '/sitemap.xml': typeof SitemapDotxmlRoute
   '/api/chat': typeof ApiChatRoute
   '/configuracoes/contas-bancarias': typeof ConfiguracoesContasBancariasRoute
   '/configuracoes/plano-de-contas': typeof ConfiguracoesPlanoDeContasRoute
@@ -121,6 +129,7 @@ export interface FileRoutesById {
   '/configuracoes': typeof ConfiguracoesRouteWithChildren
   '/contas': typeof ContasRoute
   '/projecao': typeof ProjecaoRoute
+  '/sitemap.xml': typeof SitemapDotxmlRoute
   '/api/chat': typeof ApiChatRoute
   '/configuracoes/contas-bancarias': typeof ConfiguracoesContasBancariasRoute
   '/configuracoes/plano-de-contas': typeof ConfiguracoesPlanoDeContasRoute
@@ -137,6 +146,7 @@ export interface FileRouteTypes {
     | '/configuracoes'
     | '/contas'
     | '/projecao'
+    | '/sitemap.xml'
     | '/api/chat'
     | '/configuracoes/contas-bancarias'
     | '/configuracoes/plano-de-contas'
@@ -151,6 +161,7 @@ export interface FileRouteTypes {
     | '/configuracoes'
     | '/contas'
     | '/projecao'
+    | '/sitemap.xml'
     | '/api/chat'
     | '/configuracoes/contas-bancarias'
     | '/configuracoes/plano-de-contas'
@@ -165,6 +176,7 @@ export interface FileRouteTypes {
     | '/configuracoes'
     | '/contas'
     | '/projecao'
+    | '/sitemap.xml'
     | '/api/chat'
     | '/configuracoes/contas-bancarias'
     | '/configuracoes/plano-de-contas'
@@ -180,6 +192,7 @@ export interface RootRouteChildren {
   ConfiguracoesRoute: typeof ConfiguracoesRouteWithChildren
   ContasRoute: typeof ContasRoute
   ProjecaoRoute: typeof ProjecaoRoute
+  SitemapDotxmlRoute: typeof SitemapDotxmlRoute
   ApiChatRoute: typeof ApiChatRoute
   LancamentosNovoRoute: typeof LancamentosNovoRoute
   LancamentosIndexRoute: typeof LancamentosIndexRoute
@@ -187,6 +200,13 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/sitemap.xml': {
+      id: '/sitemap.xml'
+      path: '/sitemap.xml'
+      fullPath: '/sitemap.xml'
+      preLoaderRoute: typeof SitemapDotxmlRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/projecao': {
       id: '/projecao'
       path: '/projecao'
@@ -297,6 +317,7 @@ const rootRouteChildren: RootRouteChildren = {
   ConfiguracoesRoute: ConfiguracoesRouteWithChildren,
   ContasRoute: ContasRoute,
   ProjecaoRoute: ProjecaoRoute,
+  SitemapDotxmlRoute: SitemapDotxmlRoute,
   ApiChatRoute: ApiChatRoute,
   LancamentosNovoRoute: LancamentosNovoRoute,
   LancamentosIndexRoute: LancamentosIndexRoute,

@@ -1,0 +1,6 @@
+User-agent: *
+Allow: /
+Disallow: /configuracoes
+Disallow: /auth
+
+Sitemap: https://ghrfinanceiro.lovable.app/sitemap.xml

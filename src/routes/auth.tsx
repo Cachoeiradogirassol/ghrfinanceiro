@@ -23,6 +23,7 @@ export const Route = createFileRoute("/auth")({
         content:
           "Acesse o CONTROLE.GHR para gerenciar lançamentos, conciliação bancária e relatórios financeiros do Grupo GHR.",
       },
+      { property: "og:url", content: "https://ghrfinanceiro.lovable.app/auth" },
     ],
     links: [{ rel: "canonical", href: "https://ghrfinanceiro.lovable.app/auth" }],
   }),

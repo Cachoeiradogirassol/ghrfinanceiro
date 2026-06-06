@@ -311,7 +311,7 @@ export function PlanTab() {
                   }} />
                   <Badge variant={a.kind === "revenue" ? "default" : "secondary"}>{a.kind === "revenue" ? "Receita" : "Despesa"}</Badge>
                   {a.is_active === false && <Badge variant="outline">Inativa</Badge>}
-                  <Button size="icon" variant="ghost" onClick={async () => {
+                  <Button size="icon" variant="ghost" aria-label="Arquivar ou excluir" onClick={async () => {
                     if (!confirm("Arquivar ou excluir esta subcategoria?")) return;
                     try {
                       const r = await delAcc({ data: { id: a.id } });

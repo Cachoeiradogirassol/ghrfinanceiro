@@ -1,0 +1,7 @@
+# CONTROLE.GHR
+
+> Plataforma de gestão financeira do Grupo GHR (Turismo, Restaurante, Vinhedo, GHR, Institucional Fazenda e Impostos), com lançamentos, conciliação bancária, DRE dinâmico e projeções com IA preditiva.
+
+## Pages
+
+- [Login](/auth): Acesso ao sistema CONTROLE.GHR.

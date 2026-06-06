@@ -411,7 +411,7 @@ async function loadFinanceData(supabase: {
     supabase
       .from("transactions")
       .select(
-        "id, type, amount, due_date, status, account_id, cost_center_id, bank_account_id, accounts(name)",
+        "id, type, amount, due_date, document_datetime, status, account_id, cost_center_id, bank_account_id, accounts(name)",
       ),
     supabase
       .from("transaction_allocations")
@@ -425,9 +425,11 @@ async function loadFinanceData(supabase: {
         type: "payable" | "receivable";
         amount: number;
         due_date: string;
+        document_datetime: string | null;
         status: string;
         account_id: string;
         cost_center_id: string;
+
         bank_account_id: string | null;
         accounts: { name?: string } | null;
       }>;

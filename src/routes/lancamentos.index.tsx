@@ -5,6 +5,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   listTransactions,
   deleteTransaction,
+  listAuditUsers,
 } from "@/lib/finance.functions";
 import { Button } from "@/components/ui/button";
 import {
@@ -16,8 +17,10 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Trash2, Layers } from "lucide-react";
+import { Plus, Trash2, Layers, User } from "lucide-react";
 import { toast } from "sonner";
+import { useAuth } from "@/lib/auth";
+import { useMemo } from "react";
 
 export const Route = createFileRoute("/lancamentos/")({
   head: () => ({ meta: [{ title: "Lançamentos — CONTROLE.GHR" }] }),
@@ -35,11 +38,23 @@ function fmt(n: number) {
 function List() {
   const fn = useServerFn(listTransactions);
   const del = useServerFn(deleteTransaction);
+  const usersFn = useServerFn(listAuditUsers);
+  const { isMaster } = useAuth();
   const qc = useQueryClient();
   const { data, isLoading } = useQuery({
     queryKey: ["txs"],
     queryFn: () => fn(),
   });
+  const usersQ = useQuery({
+    queryKey: ["audit-users"],
+    queryFn: () => usersFn(),
+    enabled: isMaster,
+  });
+  const userMap = useMemo(() => {
+    const m = new Map<string, string>();
+    (usersQ.data ?? []).forEach((u) => m.set(u.id, u.email));
+    return m;
+  }, [usersQ.data]);
   const mut = useMutation({
     mutationFn: (id: string) => del({ data: { id } }),
     onSuccess: () => {
@@ -48,6 +63,7 @@ function List() {
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : "Erro"),
   });
+
 
   return (
     <div className="p-8 space-y-6">

@@ -10,7 +10,23 @@ import { useEffect } from "react";
 import { Lock } from "lucide-react";
 
 export const Route = createFileRoute("/contas")({
-  head: () => ({ meta: [{ title: "Plano de Contas — CONTROLE.GHR" }] }),
+  head: () => ({
+    meta: [
+      { title: "Plano de Contas — CONTROLE.GHR" },
+      {
+        name: "description",
+        content:
+          "Gerencie o plano de contas hierárquico do CONTROLE.GHR com categorias de receita, despesa e centros de custo.",
+      },
+      { property: "og:title", content: "Plano de Contas — CONTROLE.GHR" },
+      {
+        property: "og:description",
+        content:
+          "Gerencie o plano de contas hierárquico do CONTROLE.GHR com categorias de receita, despesa e centros de custo.",
+      },
+    ],
+    links: [{ rel: "canonical", href: "https://ghrfinanceiro.lovable.app/contas" }],
+  }),
   component: () => (
     <AppLayout>
       <Plan />

@@ -18,6 +18,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as LancamentosIndexRouteImport } from './routes/lancamentos.index'
 import { Route as LancamentosNovoRouteImport } from './routes/lancamentos.novo'
 import { Route as ConfiguracoesUsuariosRouteImport } from './routes/configuracoes.usuarios'
+import { Route as ConfiguracoesPlanoDeContasRouteImport } from './routes/configuracoes.plano-de-contas'
 import { Route as ConfiguracoesContasBancariasRouteImport } from './routes/configuracoes.contas-bancarias'
 import { Route as ApiChatRouteImport } from './routes/api/chat'
 
@@ -66,6 +67,12 @@ const ConfiguracoesUsuariosRoute = ConfiguracoesUsuariosRouteImport.update({
   path: '/usuarios',
   getParentRoute: () => ConfiguracoesRoute,
 } as any)
+const ConfiguracoesPlanoDeContasRoute =
+  ConfiguracoesPlanoDeContasRouteImport.update({
+    id: '/plano-de-contas',
+    path: '/plano-de-contas',
+    getParentRoute: () => ConfiguracoesRoute,
+  } as any)
 const ConfiguracoesContasBancariasRoute =
   ConfiguracoesContasBancariasRouteImport.update({
     id: '/contas-bancarias',
@@ -87,6 +94,7 @@ export interface FileRoutesByFullPath {
   '/projecao': typeof ProjecaoRoute
   '/api/chat': typeof ApiChatRoute
   '/configuracoes/contas-bancarias': typeof ConfiguracoesContasBancariasRoute
+  '/configuracoes/plano-de-contas': typeof ConfiguracoesPlanoDeContasRoute
   '/configuracoes/usuarios': typeof ConfiguracoesUsuariosRoute
   '/lancamentos/novo': typeof LancamentosNovoRoute
   '/lancamentos/': typeof LancamentosIndexRoute
@@ -100,6 +108,7 @@ export interface FileRoutesByTo {
   '/projecao': typeof ProjecaoRoute
   '/api/chat': typeof ApiChatRoute
   '/configuracoes/contas-bancarias': typeof ConfiguracoesContasBancariasRoute
+  '/configuracoes/plano-de-contas': typeof ConfiguracoesPlanoDeContasRoute
   '/configuracoes/usuarios': typeof ConfiguracoesUsuariosRoute
   '/lancamentos/novo': typeof LancamentosNovoRoute
   '/lancamentos': typeof LancamentosIndexRoute
@@ -114,6 +123,7 @@ export interface FileRoutesById {
   '/projecao': typeof ProjecaoRoute
   '/api/chat': typeof ApiChatRoute
   '/configuracoes/contas-bancarias': typeof ConfiguracoesContasBancariasRoute
+  '/configuracoes/plano-de-contas': typeof ConfiguracoesPlanoDeContasRoute
   '/configuracoes/usuarios': typeof ConfiguracoesUsuariosRoute
   '/lancamentos/novo': typeof LancamentosNovoRoute
   '/lancamentos/': typeof LancamentosIndexRoute
@@ -129,6 +139,7 @@ export interface FileRouteTypes {
     | '/projecao'
     | '/api/chat'
     | '/configuracoes/contas-bancarias'
+    | '/configuracoes/plano-de-contas'
     | '/configuracoes/usuarios'
     | '/lancamentos/novo'
     | '/lancamentos/'
@@ -142,6 +153,7 @@ export interface FileRouteTypes {
     | '/projecao'
     | '/api/chat'
     | '/configuracoes/contas-bancarias'
+    | '/configuracoes/plano-de-contas'
     | '/configuracoes/usuarios'
     | '/lancamentos/novo'
     | '/lancamentos'
@@ -155,6 +167,7 @@ export interface FileRouteTypes {
     | '/projecao'
     | '/api/chat'
     | '/configuracoes/contas-bancarias'
+    | '/configuracoes/plano-de-contas'
     | '/configuracoes/usuarios'
     | '/lancamentos/novo'
     | '/lancamentos/'
@@ -237,6 +250,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ConfiguracoesUsuariosRouteImport
       parentRoute: typeof ConfiguracoesRoute
     }
+    '/configuracoes/plano-de-contas': {
+      id: '/configuracoes/plano-de-contas'
+      path: '/plano-de-contas'
+      fullPath: '/configuracoes/plano-de-contas'
+      preLoaderRoute: typeof ConfiguracoesPlanoDeContasRouteImport
+      parentRoute: typeof ConfiguracoesRoute
+    }
     '/configuracoes/contas-bancarias': {
       id: '/configuracoes/contas-bancarias'
       path: '/contas-bancarias'
@@ -256,11 +276,13 @@ declare module '@tanstack/react-router' {
 
 interface ConfiguracoesRouteChildren {
   ConfiguracoesContasBancariasRoute: typeof ConfiguracoesContasBancariasRoute
+  ConfiguracoesPlanoDeContasRoute: typeof ConfiguracoesPlanoDeContasRoute
   ConfiguracoesUsuariosRoute: typeof ConfiguracoesUsuariosRoute
 }
 
 const ConfiguracoesRouteChildren: ConfiguracoesRouteChildren = {
   ConfiguracoesContasBancariasRoute: ConfiguracoesContasBancariasRoute,
+  ConfiguracoesPlanoDeContasRoute: ConfiguracoesPlanoDeContasRoute,
   ConfiguracoesUsuariosRoute: ConfiguracoesUsuariosRoute,
 }
 

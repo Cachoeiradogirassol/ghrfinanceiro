@@ -70,7 +70,9 @@ function List() {
               <TableHead>Vencimento</TableHead>
               <TableHead>Bloco</TableHead>
               <TableHead>Conta</TableHead>
+              <TableHead>Beneficiário</TableHead>
               <TableHead>Descrição</TableHead>
+              <TableHead>Pgto</TableHead>
               <TableHead>Tipo</TableHead>
               <TableHead className="text-right">Valor</TableHead>
               <TableHead>Status</TableHead>
@@ -80,7 +82,7 @@ function List() {
           <TableBody>
             {isLoading && (
               <TableRow>
-                <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
+                <TableCell colSpan={10} className="text-center text-muted-foreground py-8">
                   Carregando...
                 </TableCell>
               </TableRow>
@@ -94,6 +96,9 @@ function List() {
                   {t.cost_centers?.code} - {t.cost_centers?.name}
                 </TableCell>
                 <TableCell className="text-xs">{t.accounts?.name}</TableCell>
+                <TableCell className="text-xs">
+                  {t.contacts?.name ?? "—"}
+                </TableCell>
                 <TableCell className="text-xs max-w-xs truncate">
                   {t.description}
                   {t.is_batch && (
@@ -101,6 +106,9 @@ function List() {
                       <Layers className="h-3 w-3 mr-1" /> Lote
                     </Badge>
                   )}
+                </TableCell>
+                <TableCell className="text-xs capitalize">
+                  {t.payment_method?.replace("_", " ") ?? "—"}
                 </TableCell>
                 <TableCell>
                   <Badge

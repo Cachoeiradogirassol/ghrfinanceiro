@@ -1,6 +1,6 @@
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   listUsers,
   createUser,
@@ -174,15 +174,13 @@ function EditUserDialog({
   const [role, setRole] = useState<"user" | "master">("user");
   const [password, setPassword] = useState("");
 
-  // sync when user changes
-  const userId = user?.id ?? null;
-  // initialize fields when dialog opens for a new user
-  useStateSync(userId, () => {
-    setDisplayName(user?.display_name ?? "");
-    setEmail(user?.email ?? "");
-    setRole((user?.role as "user" | "master") ?? "user");
+  useEffect(() => {
+    if (!user) return;
+    setDisplayName(user.display_name ?? "");
+    setEmail(user.email ?? "");
+    setRole((user.role as "user" | "master") ?? "user");
     setPassword("");
-  });
+  }, [user]);
 
   return (
     <Dialog open={!!user} onOpenChange={(o) => !o && onClose()}>
@@ -226,14 +224,6 @@ function EditUserDialog({
   );
 }
 
-// runs callback whenever `key` changes (including becoming non-null)
-function useStateSync(key: string | null, fn: () => void) {
-  const ref = useState<string | null>(null);
-  if (ref[0] !== key) {
-    ref[1](key);
-    fn();
-  }
-}
 
 // ---------------- BANKS ----------------
 export function BanksTab() {

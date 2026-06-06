@@ -132,7 +132,23 @@ function exportReceber(txs: Tx[]) {
 }
 
 export const Route = createFileRoute("/lancamentos/")({
-  head: () => ({ meta: [{ title: "Lançamentos — CONTROLE.GHR" }] }),
+  head: () => ({
+    meta: [
+      { title: "Lançamentos — CONTROLE.GHR" },
+      {
+        name: "description",
+        content:
+          "Liste, filtre e exporte contas a pagar e a receber do Grupo GHR com controle de competência, status e centros de custo.",
+      },
+      { property: "og:title", content: "Lançamentos — CONTROLE.GHR" },
+      {
+        property: "og:description",
+        content:
+          "Liste, filtre e exporte contas a pagar e a receber do Grupo GHR com controle de competência, status e centros de custo.",
+      },
+    ],
+    links: [{ rel: "canonical", href: "https://ghrfinanceiro.lovable.app/lancamentos" }],
+  }),
   component: () => (
     <AppLayout>
       <List />

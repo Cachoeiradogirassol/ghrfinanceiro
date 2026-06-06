@@ -19,6 +19,7 @@ export type Database = {
           cost_center_id: string
           created_at: string
           id: string
+          is_active: boolean
           kind: string
           name: string
         }
@@ -26,6 +27,7 @@ export type Database = {
           cost_center_id: string
           created_at?: string
           id?: string
+          is_active?: boolean
           kind?: string
           name: string
         }
@@ -33,6 +35,7 @@ export type Database = {
           cost_center_id?: string
           created_at?: string
           id?: string
+          is_active?: boolean
           kind?: string
           name?: string
         }
@@ -50,24 +53,30 @@ export type Database = {
         Row: {
           bank: string | null
           created_at: string
+          enterprise: Database["public"]["Enums"]["enterprise_type"]
           id: string
           initial_balance: number
+          is_active: boolean
           master_only: boolean
           name: string
         }
         Insert: {
           bank?: string | null
           created_at?: string
+          enterprise: Database["public"]["Enums"]["enterprise_type"]
           id?: string
           initial_balance?: number
+          is_active?: boolean
           master_only?: boolean
           name: string
         }
         Update: {
           bank?: string | null
           created_at?: string
+          enterprise?: Database["public"]["Enums"]["enterprise_type"]
           id?: string
           initial_balance?: number
+          is_active?: boolean
           master_only?: boolean
           name?: string
         }
@@ -158,25 +167,73 @@ export type Database = {
         Row: {
           code: number
           created_at: string
+          enterprise: Database["public"]["Enums"]["enterprise_type"]
           id: string
+          is_active: boolean
           master_only: boolean
           name: string
         }
         Insert: {
           code: number
           created_at?: string
+          enterprise: Database["public"]["Enums"]["enterprise_type"]
           id?: string
+          is_active?: boolean
           master_only?: boolean
           name: string
         }
         Update: {
           code?: number
           created_at?: string
+          enterprise?: Database["public"]["Enums"]["enterprise_type"]
           id?: string
+          is_active?: boolean
           master_only?: boolean
           name?: string
         }
         Relationships: []
+      }
+      transaction_allocations: {
+        Row: {
+          amount: number
+          cost_center_id: string
+          created_at: string
+          id: string
+          percent: number | null
+          transaction_id: string
+        }
+        Insert: {
+          amount: number
+          cost_center_id: string
+          created_at?: string
+          id?: string
+          percent?: number | null
+          transaction_id: string
+        }
+        Update: {
+          amount?: number
+          cost_center_id?: string
+          created_at?: string
+          id?: string
+          percent?: number | null
+          transaction_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "transaction_allocations_cost_center_id_fkey"
+            columns: ["cost_center_id"]
+            isOneToOne: false
+            referencedRelation: "cost_centers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "transaction_allocations_transaction_id_fkey"
+            columns: ["transaction_id"]
+            isOneToOne: false
+            referencedRelation: "transactions"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       transactions: {
         Row: {
@@ -326,6 +383,13 @@ export type Database = {
     }
     Enums: {
       app_role: "master" | "user"
+      enterprise_type:
+        | "turismo"
+        | "restaurante"
+        | "vinhedo"
+        | "ghr"
+        | "institucional_fazenda"
+        | "impostos"
       transaction_status: "pending" | "paid" | "reconciled"
       transaction_type: "payable" | "receivable"
     }
@@ -456,6 +520,14 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["master", "user"],
+      enterprise_type: [
+        "turismo",
+        "restaurante",
+        "vinhedo",
+        "ghr",
+        "institucional_fazenda",
+        "impostos",
+      ],
       transaction_status: ["pending", "paid", "reconciled"],
       transaction_type: ["payable", "receivable"],
     },

@@ -14,6 +14,8 @@ import {
   Users,
   Landmark,
   FileBarChart,
+  BarChart3,
+
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -67,6 +69,7 @@ export function AppLayout({ children }: { children?: React.ReactNode }) {
       masterOnly: true,
       items: [
         { to: "/contas", label: "Plano de Contas", icon: FolderTree },
+        { to: "/relatorios", label: "Relatórios Avançados", icon: BarChart3 },
         {
           to: "/configuracoes",
           label: "Configurações",

@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
+import { Route as RelatoriosRouteImport } from './routes/relatorios'
 import { Route as ProjecaoRouteImport } from './routes/projecao'
 import { Route as ContasRouteImport } from './routes/contas'
 import { Route as ConfiguracoesRouteImport } from './routes/configuracoes'
@@ -21,11 +22,17 @@ import { Route as LancamentosNovoRouteImport } from './routes/lancamentos.novo'
 import { Route as ConfiguracoesUsuariosRouteImport } from './routes/configuracoes.usuarios'
 import { Route as ConfiguracoesPlanoDeContasRouteImport } from './routes/configuracoes.plano-de-contas'
 import { Route as ConfiguracoesContasBancariasRouteImport } from './routes/configuracoes.contas-bancarias'
+import { Route as ApiChatReportsRouteImport } from './routes/api/chat-reports'
 import { Route as ApiChatRouteImport } from './routes/api/chat'
 
 const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
   id: '/sitemap.xml',
   path: '/sitemap.xml',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RelatoriosRoute = RelatoriosRouteImport.update({
+  id: '/relatorios',
+  path: '/relatorios',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ProjecaoRoute = ProjecaoRouteImport.update({
@@ -85,6 +92,11 @@ const ConfiguracoesContasBancariasRoute =
     path: '/contas-bancarias',
     getParentRoute: () => ConfiguracoesRoute,
   } as any)
+const ApiChatReportsRoute = ApiChatReportsRouteImport.update({
+  id: '/api/chat-reports',
+  path: '/api/chat-reports',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiChatRoute = ApiChatRouteImport.update({
   id: '/api/chat',
   path: '/api/chat',
@@ -98,8 +110,10 @@ export interface FileRoutesByFullPath {
   '/configuracoes': typeof ConfiguracoesRouteWithChildren
   '/contas': typeof ContasRoute
   '/projecao': typeof ProjecaoRoute
+  '/relatorios': typeof RelatoriosRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/api/chat': typeof ApiChatRoute
+  '/api/chat-reports': typeof ApiChatReportsRoute
   '/configuracoes/contas-bancarias': typeof ConfiguracoesContasBancariasRoute
   '/configuracoes/plano-de-contas': typeof ConfiguracoesPlanoDeContasRoute
   '/configuracoes/usuarios': typeof ConfiguracoesUsuariosRoute
@@ -113,8 +127,10 @@ export interface FileRoutesByTo {
   '/configuracoes': typeof ConfiguracoesRouteWithChildren
   '/contas': typeof ContasRoute
   '/projecao': typeof ProjecaoRoute
+  '/relatorios': typeof RelatoriosRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/api/chat': typeof ApiChatRoute
+  '/api/chat-reports': typeof ApiChatReportsRoute
   '/configuracoes/contas-bancarias': typeof ConfiguracoesContasBancariasRoute
   '/configuracoes/plano-de-contas': typeof ConfiguracoesPlanoDeContasRoute
   '/configuracoes/usuarios': typeof ConfiguracoesUsuariosRoute
@@ -129,8 +145,10 @@ export interface FileRoutesById {
   '/configuracoes': typeof ConfiguracoesRouteWithChildren
   '/contas': typeof ContasRoute
   '/projecao': typeof ProjecaoRoute
+  '/relatorios': typeof RelatoriosRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/api/chat': typeof ApiChatRoute
+  '/api/chat-reports': typeof ApiChatReportsRoute
   '/configuracoes/contas-bancarias': typeof ConfiguracoesContasBancariasRoute
   '/configuracoes/plano-de-contas': typeof ConfiguracoesPlanoDeContasRoute
   '/configuracoes/usuarios': typeof ConfiguracoesUsuariosRoute
@@ -146,8 +164,10 @@ export interface FileRouteTypes {
     | '/configuracoes'
     | '/contas'
     | '/projecao'
+    | '/relatorios'
     | '/sitemap.xml'
     | '/api/chat'
+    | '/api/chat-reports'
     | '/configuracoes/contas-bancarias'
     | '/configuracoes/plano-de-contas'
     | '/configuracoes/usuarios'
@@ -161,8 +181,10 @@ export interface FileRouteTypes {
     | '/configuracoes'
     | '/contas'
     | '/projecao'
+    | '/relatorios'
     | '/sitemap.xml'
     | '/api/chat'
+    | '/api/chat-reports'
     | '/configuracoes/contas-bancarias'
     | '/configuracoes/plano-de-contas'
     | '/configuracoes/usuarios'
@@ -176,8 +198,10 @@ export interface FileRouteTypes {
     | '/configuracoes'
     | '/contas'
     | '/projecao'
+    | '/relatorios'
     | '/sitemap.xml'
     | '/api/chat'
+    | '/api/chat-reports'
     | '/configuracoes/contas-bancarias'
     | '/configuracoes/plano-de-contas'
     | '/configuracoes/usuarios'
@@ -192,8 +216,10 @@ export interface RootRouteChildren {
   ConfiguracoesRoute: typeof ConfiguracoesRouteWithChildren
   ContasRoute: typeof ContasRoute
   ProjecaoRoute: typeof ProjecaoRoute
+  RelatoriosRoute: typeof RelatoriosRoute
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
   ApiChatRoute: typeof ApiChatRoute
+  ApiChatReportsRoute: typeof ApiChatReportsRoute
   LancamentosNovoRoute: typeof LancamentosNovoRoute
   LancamentosIndexRoute: typeof LancamentosIndexRoute
 }
@@ -205,6 +231,13 @@ declare module '@tanstack/react-router' {
       path: '/sitemap.xml'
       fullPath: '/sitemap.xml'
       preLoaderRoute: typeof SitemapDotxmlRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/relatorios': {
+      id: '/relatorios'
+      path: '/relatorios'
+      fullPath: '/relatorios'
+      preLoaderRoute: typeof RelatoriosRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/projecao': {
@@ -284,6 +317,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ConfiguracoesContasBancariasRouteImport
       parentRoute: typeof ConfiguracoesRoute
     }
+    '/api/chat-reports': {
+      id: '/api/chat-reports'
+      path: '/api/chat-reports'
+      fullPath: '/api/chat-reports'
+      preLoaderRoute: typeof ApiChatReportsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/chat': {
       id: '/api/chat'
       path: '/api/chat'
@@ -317,8 +357,10 @@ const rootRouteChildren: RootRouteChildren = {
   ConfiguracoesRoute: ConfiguracoesRouteWithChildren,
   ContasRoute: ContasRoute,
   ProjecaoRoute: ProjecaoRoute,
+  RelatoriosRoute: RelatoriosRoute,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
   ApiChatRoute: ApiChatRoute,
+  ApiChatReportsRoute: ApiChatReportsRoute,
   LancamentosNovoRoute: LancamentosNovoRoute,
   LancamentosIndexRoute: LancamentosIndexRoute,
 }

@@ -42,9 +42,11 @@ import {
   ArrowDownLeft,
   ArrowUpRight,
   Filter,
+  FileDown,
 } from "lucide-react";
-import { ENTERPRISES, type EnterpriseValue } from "@/lib/enterprises";
+import { ENTERPRISES, type EnterpriseValue, enterpriseLabel } from "@/lib/enterprises";
 import { useAuth } from "@/lib/auth";
+import { exportDREPdf } from "@/lib/pdf-export";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -185,11 +187,32 @@ function Dashboard() {
 
         {/* DRE Dinâmica */}
         <Card className="p-5">
-          <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
             <h2 className="font-semibold">DRE Dinâmica — últimos 6 meses (realizado)</h2>
-            <span className="text-xs text-muted-foreground">
-              {enterprise === "all" ? "Consolidado" : ENTERPRISES.find((e) => e.value === enterprise)?.label}
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-muted-foreground">
+                {enterprise === "all" ? "Consolidado" : ENTERPRISES.find((e) => e.value === enterprise)?.label}
+              </span>
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={!dre.data}
+                onClick={() => {
+                  if (!dre.data) return;
+                  const scope =
+                    enterprise === "all"
+                      ? "Consolidado (todos)"
+                      : enterpriseLabel(enterprise);
+                  exportDREPdf(dre.data, {
+                    title: "DRE Dinâmica — últimos 6 meses",
+                    scope,
+                    fileName: `DRE_${enterprise === "all" ? "Consolidada" : enterprise}_GHR_${new Date().toISOString().slice(0, 10)}.pdf`,
+                  });
+                }}
+              >
+                <FileDown className="h-4 w-4 mr-2" /> Exportar PDF Oficial
+              </Button>
+            </div>
           </div>
           <DRETable data={dre.data} />
         </Card>

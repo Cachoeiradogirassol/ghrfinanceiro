@@ -5,8 +5,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
+import { PasswordInput } from "@/components/ui/password-input";
 import { toast } from "sonner";
-import { Lock } from "lucide-react";
+import { Lock, ArrowLeft } from "lucide-react";
 
 export const Route = createFileRoute("/auth")({
   head: () => ({
@@ -31,6 +32,7 @@ export const Route = createFileRoute("/auth")({
 });
 
 function AuthPage() {
+  const [mode, setMode] = useState<"login" | "forgot">("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
@@ -42,18 +44,32 @@ function AuthPage() {
     });
   }, [navigate]);
 
-  const submit = async (e: React.FormEvent) => {
+  const submitLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setBusy(true);
     try {
-      const { error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) throw error;
       navigate({ to: "/" });
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Erro ao entrar");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const submitForgot = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setBusy(true);
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/auth/redefinir-senha`,
+      });
+      if (error) throw error;
+      toast.success("Enviamos um link de redefinição para o seu e-mail.");
+      setMode("login");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erro ao enviar e-mail");
     } finally {
       setBusy(false);
     }
@@ -67,35 +83,66 @@ function AuthPage() {
           <h1 className="text-2xl font-bold">CONTROLE.GHR</h1>
         </div>
         <p className="text-sm text-muted-foreground mb-6">
-          Sistema financeiro restrito — acesso apenas para usuários cadastrados.
+          {mode === "login"
+            ? "Sistema financeiro restrito — acesso apenas para usuários cadastrados."
+            : "Informe seu e-mail para receber o link de redefinição de senha."}
         </p>
-        <form onSubmit={submit} className="space-y-4">
-          <div>
-            <Label htmlFor="email">E-mail</Label>
-            <Input
-              id="email"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              autoComplete="email"
-            />
-          </div>
-          <div>
-            <Label htmlFor="password">Senha</Label>
-            <Input
-              id="password"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              autoComplete="current-password"
-            />
-          </div>
-          <Button type="submit" className="w-full" disabled={busy}>
-            {busy ? "..." : "Entrar"}
-          </Button>
-        </form>
+
+        {mode === "login" ? (
+          <form onSubmit={submitLogin} className="space-y-4">
+            <div>
+              <Label htmlFor="email">E-mail</Label>
+              <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required autoComplete="email" />
+            </div>
+            <div>
+              <div className="flex items-center justify-between">
+                <Label htmlFor="password">Senha</Label>
+                <button
+                  type="button"
+                  onClick={() => setMode("forgot")}
+                  className="text-xs text-primary hover:underline"
+                >
+                  Esqueceu sua senha?
+                </button>
+              </div>
+              <PasswordInput
+                id="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                autoComplete="current-password"
+              />
+            </div>
+            <Button type="submit" className="w-full" disabled={busy}>
+              {busy ? "..." : "Entrar"}
+            </Button>
+          </form>
+        ) : (
+          <form onSubmit={submitForgot} className="space-y-4">
+            <div>
+              <Label htmlFor="recovery-email">E-mail cadastrado</Label>
+              <Input
+                id="recovery-email"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+                autoComplete="email"
+              />
+            </div>
+            <Button type="submit" className="w-full" disabled={busy}>
+              {busy ? "..." : "Enviar link de redefinição"}
+            </Button>
+            <button
+              type="button"
+              onClick={() => setMode("login")}
+              className="w-full text-xs text-muted-foreground hover:text-foreground flex items-center justify-center gap-1"
+            >
+              <ArrowLeft className="h-3 w-3" /> Voltar ao login
+            </button>
+          </form>
+        )}
+
         <p className="mt-6 text-xs text-muted-foreground text-center">
           Novos operadores são cadastrados pelo Usuário Master em Configurações.
         </p>

@@ -54,6 +54,7 @@ const TxInput = z.object({
   cost_center_id: z.string().uuid(),
   account_id: z.string().uuid(),
   bank_account_id: z.string().uuid().nullable().optional(),
+  contact_id: z.string().uuid(),
   type: z.enum(["payable", "receivable"]),
   amount: z.number().positive(),
   description: z.string().max(500).optional().nullable(),
@@ -61,18 +62,152 @@ const TxInput = z.object({
   due_date: z.string(),
   is_batch: z.boolean().default(false),
   status: z.enum(["pending", "paid", "reconciled"]).default("pending"),
+  payment_method: z.enum(["pix", "boleto", "credit_card", "cash"]).nullable().optional(),
+  schedule: z
+    .object({
+      kind: z.enum(["single", "installment", "recurring"]).default("single"),
+      installments: z.number().int().min(2).max(120).optional(),
+      recurring_months: z.number().int().min(1).max(36).default(12).optional(),
+    })
+    .default({ kind: "single" }),
 });
+
+function addDays(iso: string, days: number) {
+  const d = new Date(iso + "T00:00:00");
+  d.setDate(d.getDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+function addMonths(iso: string, months: number) {
+  const d = new Date(iso + "T00:00:00");
+  d.setMonth(d.getMonth() + months);
+  return d.toISOString().slice(0, 10);
+}
 
 export const createTransaction = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((data: unknown) => TxInput.parse(data))
   .handler(async ({ context, data }) => {
+    const { schedule, ...base } = data;
+    const baseRow = {
+      cost_center_id: base.cost_center_id,
+      account_id: base.account_id,
+      bank_account_id: base.bank_account_id ?? null,
+      contact_id: base.contact_id,
+      type: base.type,
+      amount: base.amount,
+      description: base.description ?? null,
+      document_datetime: base.document_datetime ?? null,
+      due_date: base.due_date,
+      is_batch: base.is_batch,
+      status: base.status,
+      payment_method: base.payment_method ?? null,
+      created_by: context.userId,
+    };
+
+    if (schedule.kind === "installment" && schedule.installments) {
+      const n = schedule.installments;
+      const groupId = crypto.randomUUID();
+      const rows = Array.from({ length: n }, (_, i) => ({
+        ...baseRow,
+        description: `${baseRow.description ?? ""} - Parc ${i + 1}/${n}`.trim(),
+        due_date: addDays(baseRow.due_date, 30 * i),
+        installment_number: i + 1,
+        installment_total: n,
+        recurrence_group_id: groupId,
+      }));
+      const { data: rs, error } = await context.supabase
+        .from("transactions")
+        .insert(rows)
+        .select();
+      if (error) throw new Error(error.message);
+      return { created: rs?.length ?? 0, group_id: groupId };
+    }
+
+    if (schedule.kind === "recurring") {
+      const months = schedule.recurring_months ?? 12;
+      const groupId = crypto.randomUUID();
+      const rows = Array.from({ length: months }, (_, i) => ({
+        ...baseRow,
+        due_date: addMonths(baseRow.due_date, i),
+        is_recurring: true,
+        recurrence_group_id: groupId,
+      }));
+      const { data: rs, error } = await context.supabase
+        .from("transactions")
+        .insert(rows)
+        .select();
+      if (error) throw new Error(error.message);
+      return { created: rs?.length ?? 0, group_id: groupId };
+    }
+
     const { data: row, error } = await context.supabase
       .from("transactions")
-      .insert({ ...data, created_by: context.userId })
+      .insert(baseRow)
       .select()
       .single();
     if (error) throw new Error(error.message);
+    return row;
+  });
+
+// CONTACTS
+export const listContacts = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { data, error } = await context.supabase
+      .from("contacts")
+      .select("*")
+      .order("name");
+    if (error) throw new Error(error.message);
+    return data;
+  });
+
+const ContactInput = z.object({
+  name: z.string().trim().min(1).max(200),
+  type: z.enum(["FORNECEDOR", "COLABORADOR"]),
+  document_type: z.enum(["PF", "PJ"]),
+  document_number: z
+    .string()
+    .trim()
+    .min(11)
+    .max(20)
+    .regex(/^[0-9./-]+$/, "Documento inválido"),
+  master_only: z.boolean().default(false),
+});
+
+export const createContact = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => ContactInput.parse(d))
+  .handler(async ({ context, data }) => {
+    const digits = data.document_number.replace(/\D/g, "");
+    if (data.document_type === "PF" && digits.length !== 11) {
+      throw new Error("CPF deve ter 11 dígitos");
+    }
+    if (data.document_type === "PJ" && digits.length !== 14) {
+      throw new Error("CNPJ deve ter 14 dígitos");
+    }
+    const { data: existing } = await context.supabase
+      .from("contacts")
+      .select("id, name")
+      .eq("document_number", digits)
+      .maybeSingle();
+    if (existing) {
+      throw new Error(
+        `Atenção: Este documento já está cadastrado para o contato "${existing.name}". Use o cadastro existente.`,
+      );
+    }
+    const { data: row, error } = await context.supabase
+      .from("contacts")
+      .insert({ ...data, document_number: digits })
+      .select()
+      .single();
+    if (error) {
+      if (error.code === "23505") {
+        throw new Error(
+          "Atenção: Este documento já está cadastrado. Use o cadastro existente.",
+        );
+      }
+      throw new Error(error.message);
+    }
     return row;
   });
 

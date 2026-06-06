@@ -42,7 +42,7 @@ export const listTransactions = createServerFn({ method: "GET" })
     const { data, error } = await context.supabase
       .from("transactions")
       .select(
-        "*, accounts(name, kind), cost_centers(code, name, master_only), bank_accounts(name)",
+        "*, accounts(name, kind), cost_centers(code, name, master_only), bank_accounts(name), contacts(name, type, document_number)",
       )
       .order("due_date", { ascending: false })
       .limit(500);

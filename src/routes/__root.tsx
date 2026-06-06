@@ -96,6 +96,13 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { property: "og:type", content: "website" },
       { property: "og:site_name", content: "CONTROLE.GHR" },
       { name: "twitter:card", content: "summary" },
+      { property: "og:title", content: "CONTROLE.GHR — Sistema de Gestão Financeira e IA Preditiva" },
+      { name: "twitter:title", content: "CONTROLE.GHR — Sistema de Gestão Financeira e IA Preditiva" },
+      { name: "description", content: "A financial management system for tracking accounts, costs, and bank reconciliation." },
+      { property: "og:description", content: "A financial management system for tracking accounts, costs, and bank reconciliation." },
+      { name: "twitter:description", content: "A financial management system for tracking accounts, costs, and bank reconciliation." },
+      { property: "og:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/30a224aa-973d-4303-8e92-23233315d9e5/id-preview-05067786--8cb8c0ab-346e-4e4c-b16a-a8aecb44f63e.lovable.app-1780768570579.png" },
+      { name: "twitter:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/30a224aa-973d-4303-8e92-23233315d9e5/id-preview-05067786--8cb8c0ab-346e-4e4c-b16a-a8aecb44f63e.lovable.app-1780768570579.png" },
     ],
     links: [
       {

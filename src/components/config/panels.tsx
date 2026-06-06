@@ -6,6 +6,7 @@ import {
   createUser,
   setUserActive,
   resetUserPassword,
+  updateUser,
   upsertCostCenter,
   upsertAccount,
   deleteAccount,

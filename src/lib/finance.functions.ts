@@ -371,7 +371,12 @@ export const reconcile = createServerFn({ method: "POST" })
     }
     await context.supabase
       .from("bank_statement_lines")
-      .update({ matched_transaction_id: data.transaction_id, reconciled: true })
+      .update({
+        matched_transaction_id: data.transaction_id,
+        reconciled: true,
+        matched_by: context.userId,
+        matched_at: new Date().toISOString(),
+      })
       .in("id", data.statement_line_ids);
     await context.supabase
       .from("transactions")
@@ -379,6 +384,7 @@ export const reconcile = createServerFn({ method: "POST" })
       .eq("id", data.transaction_id);
     return { ok: true, sum: sumLines };
   });
+
 
 // ---------- DRE + PROJECTION (com filtro de empreendimento) ----------
 type EnterpriseValue =

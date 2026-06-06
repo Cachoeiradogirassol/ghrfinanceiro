@@ -31,7 +31,15 @@ function ConfigLayout() {
   useEffect(() => {
     if (!loading && !isMaster) nav({ to: "/" });
   }, [loading, isMaster, nav]);
+  if (loading) {
+    return (
+      <div className="flex h-screen items-center justify-center text-muted-foreground">
+        Carregando...
+      </div>
+    );
+  }
   if (!isMaster) return null;
+
 
   return (
     <AppLayout>

@@ -173,7 +173,7 @@ function Dashboard() {
                     {ENTERPRISE_GROUPS.map((g) => {
                       const children = visibleEnterprises.filter((e) => e.group === g.key);
                       return (
-                        <div key={g.key}>
+                        <Fragment key={g.key}>
                           <SelectItem value={g.key} className="font-semibold">
                             {g.label}
                           </SelectItem>
@@ -182,7 +182,7 @@ function Dashboard() {
                               — {e.label}
                             </SelectItem>
                           ))}
-                        </div>
+                        </Fragment>
                       );
                     })}
                   </SelectContent>

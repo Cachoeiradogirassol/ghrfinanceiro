@@ -442,6 +442,8 @@ export type Database = {
         | "ghr"
         | "institucional_fazenda"
         | "impostos"
+        | "ghr_aldeia"
+        | "ghr_jk"
       transaction_status: "pending" | "paid" | "reconciled"
       transaction_type: "payable" | "receivable"
     }
@@ -579,6 +581,8 @@ export const Constants = {
         "ghr",
         "institucional_fazenda",
         "impostos",
+        "ghr_aldeia",
+        "ghr_jk",
       ],
       transaction_status: ["pending", "paid", "reconciled"],
       transaction_type: ["payable", "receivable"],

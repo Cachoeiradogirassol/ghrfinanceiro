@@ -584,7 +584,8 @@ function Copilot({
               </div>
             )}
           </div>
-        ))}
+          );
+        })}
         {isLoading && <div className="text-xs text-muted-foreground italic">Paulo está pensando…</div>}
       </div>
       <div className="p-2 border-t border-border space-y-2">

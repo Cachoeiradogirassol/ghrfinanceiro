@@ -108,7 +108,12 @@ export const createUser = createServerFn({ method: "POST" })
       email_confirm: true,
       user_metadata: { display_name: data.display_name ?? null },
     });
-    if (error) throw new Error(error.message);
+    if (error) {
+      const msg = /weak|pwned|known to be weak/i.test(error.message)
+        ? "Senha muito fraca ou vazada em banco público (HIBP). Escolha uma senha mais forte e única."
+        : error.message;
+      throw new Error(msg);
+    }
     await supabaseAdmin
       .from("user_roles")
       .upsert(

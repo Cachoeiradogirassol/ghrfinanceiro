@@ -635,26 +635,23 @@ export const buildProjection = createServerFn({ method: "POST" })
       context.supabase as never,
     );
     const filter = data.enterprise;
+    const set = enterpriseSet(filter);
 
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const horizon = new Date(today);
     horizon.setDate(horizon.getDate() + 90);
 
-    // Saldo: para filtro, conta apenas bancos do empreendimento
-    const filteredBanks =
-      filter === "all" ? banks : banks.filter((b) => b.enterprise === filter);
+    // Saldo: para filtro, conta apenas bancos cujo enterprise pertence ao grupo
+    const filteredBanks = set ? banks.filter((b) => set.has(b.enterprise)) : banks;
     let balance = filteredBanks.reduce((s, b) => s + Number(b.initial_balance), 0);
 
-    // Função: impacto líquido (saldo do banco) para uma transação dada o filtro
-    // Para projeção de caixa, o que importa é o saldo bancário; allocations não
-    // afetam saldo (afetam DRE). Filtro por enterprise: só contabiliza tx cujo
-    // bank_account.enterprise = filter (ou all).
+    // Filtro por enterprise via banco da transação
     function txAffectsBalance(tx: { bank_account_id: string | null }) {
-      if (filter === "all") return true;
+      if (!set) return true;
       if (!tx.bank_account_id) return false;
       const b = bankById.get(tx.bank_account_id);
-      return b?.enterprise === filter;
+      return !!b && set.has(b.enterprise);
     }
 
     const future: Array<{ date: string; amount: number }> = [];

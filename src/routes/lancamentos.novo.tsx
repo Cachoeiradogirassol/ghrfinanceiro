@@ -324,24 +324,37 @@ function Form() {
             <Select value={costCenterId} onValueChange={setCostCenterId}>
               <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
               <SelectContent>
-                {(ccs.data ?? []).map((c) => {
-                  // Centros de custo macro/holding não são selecionáveis — apenas agrupadores visuais.
-                  const SELECTABLE = ["turismo", "restaurante", "vinhedo", "ghr_aldeia", "ghr_jk"];
-                  const selectable = SELECTABLE.includes(c.enterprise ?? "");
-                  return (
-                    <SelectItem
-                      key={c.id}
-                      value={c.id}
-                      disabled={!selectable}
-                      className={!selectable ? "opacity-60 font-semibold uppercase text-xs" : ""}
-                    >
-                      {selectable
-                        ? `${c.code} - ${c.name}`
-                        : `— ${c.code} ${c.name} (agrupador) —`}
-                      {c.master_only && selectable && " 🔒"}
+                {/* Bloco A: FAZENDA SERRA DOS PIRENEUS — header desabilitado + filhos selecionáveis */}
+                <SelectItem
+                  value="__hdr_fazenda"
+                  disabled
+                  className="opacity-70 font-bold uppercase text-xs text-muted-foreground tracking-wide"
+                >
+                  FAZENDA SERRA DOS PIRENEUS
+                </SelectItem>
+                {(ccs.data ?? [])
+                  .filter((c) => ["turismo", "restaurante", "vinhedo"].includes(c.enterprise ?? "") && c.is_active !== false)
+                  .map((c) => (
+                    <SelectItem key={c.id} value={c.id} className="pl-6">
+                      {c.code} - {c.name}
                     </SelectItem>
-                  );
-                })}
+                  ))}
+
+                {/* Bloco B: GHR EMPREENDIMENTOS */}
+                <SelectItem
+                  value="__hdr_ghr"
+                  disabled
+                  className="opacity-70 font-bold uppercase text-xs text-muted-foreground tracking-wide mt-1"
+                >
+                  GHR EMPREENDIMENTOS
+                </SelectItem>
+                {(ccs.data ?? [])
+                  .filter((c) => ["ghr_aldeia", "ghr_jk"].includes(c.enterprise ?? "") && c.is_active !== false)
+                  .map((c) => (
+                    <SelectItem key={c.id} value={c.id} className="pl-6">
+                      {c.code} - {c.name}
+                    </SelectItem>
+                  ))}
               </SelectContent>
             </Select>
           </div>

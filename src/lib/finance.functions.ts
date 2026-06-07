@@ -3,8 +3,35 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { z } from "zod";
 
 const EnterpriseFilter = z
-  .enum(["all", "turismo", "restaurante", "vinhedo", "ghr", "institucional_fazenda", "impostos"])
+  .enum([
+    "all",
+    // Grupos macro
+    "fazenda",
+    "ghr_grupo",
+    // Finalísticos
+    "turismo",
+    "restaurante",
+    "vinhedo",
+    "ghr_aldeia",
+    "ghr_jk",
+    // Legados (mantidos por compatibilidade)
+    "ghr",
+    "institucional_fazenda",
+    "impostos",
+  ])
   .default("all");
+
+// Expande "fazenda" → {turismo, restaurante, vinhedo}; "ghr_grupo" → {ghr_aldeia, ghr_jk}.
+// Retorna null para "all".
+function enterpriseSet(filter: string): Set<string> | null {
+  if (filter === "all") return null;
+  if (filter === "fazenda") return new Set(["turismo", "restaurante", "vinhedo"]);
+  if (filter === "ghr_grupo") return new Set(["ghr_aldeia", "ghr_jk"]);
+  return new Set([filter]);
+}
+function matchesFilter(set: Set<string> | null, value: string | null | undefined) {
+  return !set || (value != null && set.has(value));
+}
 
 // ---------- LISTS ----------
 export const listCostCenters = createServerFn({ method: "GET" })
@@ -543,6 +570,8 @@ export const buildDRE = createServerFn({ method: "POST" })
       return b;
     };
 
+    const set = enterpriseSet(filter);
+
     for (const tx of txs) {
       if (tx.status === "pending") continue; // DRE = realizado
       // Data de competência: prioriza document_datetime (data do fato/nota)
@@ -555,7 +584,7 @@ export const buildDRE = createServerFn({ method: "POST" })
       const bankEnt = bank?.enterprise ?? null;
       const allocs = effectiveAllocs(tx, ccById, allocByTx);
       for (const a of allocs) {
-        const include = filter === "all" || a.cc_enterprise === filter;
+        const include = matchesFilter(set, a.cc_enterprise);
         if (include) {
           const b = ensure(key);
           if (tx.type === "receivable") b.revenue += a.amount;
@@ -564,11 +593,11 @@ export const buildDRE = createServerFn({ method: "POST" })
         // Aportes cruzados
         if (bankEnt && bankEnt !== a.cc_enterprise && tx.type === "payable") {
           // CC enterprise recebeu aporte de bankEnt
-          if (filter === "all" || a.cc_enterprise === filter) {
+          if (matchesFilter(set, a.cc_enterprise)) {
             ensure(key).aporteRecebido += a.amount;
           }
           // bankEnt concedeu aporte
-          if (filter === "all" || bankEnt === filter) {
+          if (matchesFilter(set, bankEnt)) {
             ensure(key).aporteConcedido += a.amount;
           }
         }
@@ -606,26 +635,23 @@ export const buildProjection = createServerFn({ method: "POST" })
       context.supabase as never,
     );
     const filter = data.enterprise;
+    const set = enterpriseSet(filter);
 
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const horizon = new Date(today);
     horizon.setDate(horizon.getDate() + 90);
 
-    // Saldo: para filtro, conta apenas bancos do empreendimento
-    const filteredBanks =
-      filter === "all" ? banks : banks.filter((b) => b.enterprise === filter);
+    // Saldo: para filtro, conta apenas bancos cujo enterprise pertence ao grupo
+    const filteredBanks = set ? banks.filter((b) => set.has(b.enterprise)) : banks;
     let balance = filteredBanks.reduce((s, b) => s + Number(b.initial_balance), 0);
 
-    // Função: impacto líquido (saldo do banco) para uma transação dada o filtro
-    // Para projeção de caixa, o que importa é o saldo bancário; allocations não
-    // afetam saldo (afetam DRE). Filtro por enterprise: só contabiliza tx cujo
-    // bank_account.enterprise = filter (ou all).
+    // Filtro por enterprise via banco da transação
     function txAffectsBalance(tx: { bank_account_id: string | null }) {
-      if (filter === "all") return true;
+      if (!set) return true;
       if (!tx.bank_account_id) return false;
       const b = bankById.get(tx.bank_account_id);
-      return b?.enterprise === filter;
+      return !!b && set.has(b.enterprise);
     }
 
     const future: Array<{ date: string; amount: number }> = [];

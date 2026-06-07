@@ -29,7 +29,7 @@ import {
 } from "recharts";
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport } from "ai";
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useMemo, useRef, Fragment } from "react";
 import { Textarea } from "@/components/ui/textarea";
 import {
   TrendingUp,
@@ -45,7 +45,13 @@ import {
   CheckCircle2,
   XCircle,
 } from "lucide-react";
-import { ENTERPRISES, type EnterpriseValue, enterpriseLabel } from "@/lib/enterprises";
+import {
+  ENTERPRISES,
+  ENTERPRISE_GROUPS,
+  type EnterpriseFilterValue,
+  enterpriseLabel,
+  expandEnterpriseFilter,
+} from "@/lib/enterprises";
 import { useAuth } from "@/lib/auth";
 import { useMyRestriction } from "@/lib/use-restriction";
 import { exportDREPdf } from "@/lib/pdf-export";
@@ -81,7 +87,7 @@ export const Route = createFileRoute("/")({
   ),
 });
 
-type EnterpriseFilter = "all" | EnterpriseValue;
+type EnterpriseFilter = EnterpriseFilterValue;
 
 function fmt(n: number) {
   return n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -114,10 +120,11 @@ function Dashboard() {
 
   const today = new Date().toISOString().slice(0, 10);
   const visibleEnterprises = ENTERPRISES.filter((e) => isMaster || !e.masterOnly);
+  const enterpriseSet = expandEnterpriseFilter(enterprise);
 
   // pendências (filtradas por enterprise via cost_center)
   const filterTx = (t: { cost_centers: { enterprise?: string } | null }) =>
-    enterprise === "all" || t.cost_centers?.enterprise === enterprise;
+    !enterpriseSet || (t.cost_centers?.enterprise != null && enterpriseSet.has(t.cost_centers.enterprise));
   const allTxs = (txs.data ?? []).filter(filterTx);
   const pendingPay = allTxs.filter(
     (t) => t.type === "payable" && t.status === "pending" && t.due_date >= today,
@@ -131,7 +138,7 @@ function Dashboard() {
   const totalRec = pendingRec.reduce((s, t) => s + Number(t.amount), 0);
 
   const filteredBanks = (banks.data ?? []).filter(
-    (b) => enterprise === "all" || b.enterprise === enterprise,
+    (b) => !enterpriseSet || enterpriseSet.has(b.enterprise),
   );
 
   return (
@@ -157,16 +164,26 @@ function Dashboard() {
               <>
                 <Filter className="h-4 w-4 text-muted-foreground" />
                 <Select value={enterprise} onValueChange={(v) => setEnterprise(v as EnterpriseFilter)}>
-                  <SelectTrigger className="w-[220px]">
+                  <SelectTrigger className="w-[260px]">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">Consolidado (todos)</SelectItem>
-                    {visibleEnterprises.map((e) => (
-                      <SelectItem key={e.value} value={e.value}>
-                        {e.label}
-                      </SelectItem>
-                    ))}
+                    {ENTERPRISE_GROUPS.map((g) => {
+                      const children = visibleEnterprises.filter((e) => e.group === g.key);
+                      return (
+                        <Fragment key={g.key}>
+                          <SelectItem value={g.key} className="font-semibold">
+                            {g.label}
+                          </SelectItem>
+                          {children.map((e) => (
+                            <SelectItem key={e.value} value={e.value} className="pl-8 text-sm">
+                              — {e.label}
+                            </SelectItem>
+                          ))}
+                        </Fragment>
+                      );
+                    })}
                   </SelectContent>
                 </Select>
               </>

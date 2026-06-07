@@ -17,10 +17,11 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Trash2, Layers, User, Download } from "lucide-react";
+import { Plus, Trash2, Layers, User, Download, Pencil } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/lib/auth";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
+import { EditTransactionDialog } from "@/components/EditTransactionDialog";
 
 type Tx = {
   id: string;
@@ -189,6 +190,7 @@ function List() {
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : "Erro"),
   });
+  const [editing, setEditing] = useState<null | Record<string, unknown>>(null);
 
 
   return (
@@ -313,14 +315,24 @@ function List() {
                   </TableCell>
                 )}
                 <TableCell>
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    aria-label="Excluir lançamento"
-                    onClick={() => mut.mutate(t.id)}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
+                  <div className="flex gap-1">
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      aria-label="Editar lançamento"
+                      onClick={() => setEditing(t as unknown as Record<string, unknown>)}
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      aria-label="Excluir lançamento"
+                      onClick={() => mut.mutate(t.id)}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </TableCell>
 
               </TableRow>
@@ -335,6 +347,11 @@ function List() {
           </TableBody>
         </Table>
       </div>
+      <EditTransactionDialog
+        tx={editing as never}
+        open={!!editing}
+        onOpenChange={(v) => { if (!v) setEditing(null); }}
+      />
     </div>
   );
 }

@@ -31,7 +31,10 @@ export const Route = createFileRoute("/api/chat")({
           model: gateway("google/gemini-3-flash-preview"),
           system: `Você é o Copilot do CONTROLE.GHR, um sistema financeiro multi-empresa (Cachoeira do Girassol, Restaurante, Vinhedo, Fazenda, Impostos, GHR Empreendimentos).
 Responda sempre em português brasileiro, com tom direto e analítico.
-Quando o usuário perguntar sobre viabilidade de gastos/investimentos, use a ferramenta simulate_investment.${ctxSummary}`,
+Quando o usuário perguntar sobre viabilidade de gastos/investimentos, use a ferramenta simulate_investment.
+
+REGRA CONTÁBIL IMPORTANTE — CATEGORIAS COMPARTILHADAS DESATIVADAS:
+Categorias genéricas de contas compartilhadas (ex.: "Conta Compartilhada VG-CG") foram desativadas no plano de contas. Sempre que um operador perguntar como lançar uma despesa de uso comum entre empreendimentos, oriente-o assim: "Toda despesa de uso comum deve ser lançada sob sua natureza real (Ex: Logística, Manutenção, Materiais de Consumo) e o desmembramento entre os empreendimentos deve ser feito utilizando exclusivamente o checkbox nativo 'Ratear esta despesa' no formulário de Novo Lançamento." Nunca sugira recriar ou reativar categorias genéricas de rateio.${ctxSummary}`,
           messages: await convertToModelMessages(body.messages),
           tools: {
             simulate_investment: tool({

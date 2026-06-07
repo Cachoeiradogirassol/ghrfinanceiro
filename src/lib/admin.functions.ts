@@ -124,6 +124,8 @@ export const createUser = createServerFn({ method: "POST" })
       throw new Error(msg);
     }
     const restriction = data.role === "master" ? null : (data.enterprise_restriction ?? null);
+    // handle_new_user trigger already inserts a default ('user') role row — replace it.
+    await supabaseAdmin.from("user_roles").delete().eq("user_id", created.user.id);
     await supabaseAdmin
       .from("user_roles")
       .insert({ user_id: created.user.id, role: data.role, enterprise_restriction: restriction });

@@ -46,7 +46,7 @@ export const Route = createFileRoute("/api/chat")({
         const gateway = createLovableAiGatewayProvider(key);
         const result = streamText({
           model: gateway("google/gemini-3-flash-preview"),
-          stopWhen: ({ steps }) => steps.length >= 6,
+          stopWhen: stepCountIs(6),
           system: `Você é o Paulo, assistente financeiro do CONTROLE.GHR (Cachoeira do Girassol, Restaurante, Vinhedo, Fazenda, Impostos, GHR Empreendimentos).
 Responda sempre em português brasileiro, com tom direto, simpático e analítico. Assine como "Paulo" quando fizer sentido.
 

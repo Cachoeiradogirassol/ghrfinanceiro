@@ -45,7 +45,14 @@ import {
   CheckCircle2,
   XCircle,
 } from "lucide-react";
-import { ENTERPRISES, type EnterpriseValue, enterpriseLabel } from "@/lib/enterprises";
+import {
+  ENTERPRISES,
+  ENTERPRISE_GROUPS,
+  type EnterpriseValue,
+  type EnterpriseFilterValue,
+  enterpriseLabel,
+  expandEnterpriseFilter,
+} from "@/lib/enterprises";
 import { useAuth } from "@/lib/auth";
 import { useMyRestriction } from "@/lib/use-restriction";
 import { exportDREPdf } from "@/lib/pdf-export";

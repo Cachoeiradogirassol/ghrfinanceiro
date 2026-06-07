@@ -73,7 +73,12 @@ export const updateUser = createServerFn({ method: "POST" })
     };
     if (data.password && data.password.length >= 8) updates.password = data.password;
     const { error } = await supabaseAdmin.auth.admin.updateUserById(data.user_id, updates);
-    if (error) throw new Error(error.message);
+    if (error) {
+      const msg = /weak|pwned|known to be weak/i.test(error.message)
+        ? "Senha muito fraca ou vazada em banco público (HIBP). Escolha uma senha mais forte e única."
+        : error.message;
+      throw new Error(msg);
+    }
     // sync role: remove other roles, ensure desired role
     await supabaseAdmin.from("user_roles").delete().eq("user_id", data.user_id);
     await supabaseAdmin

@@ -469,48 +469,80 @@ function Copilot({
   const isLoading = status === "submitted" || status === "streaming";
 
   return (
-    <Card className="p-0 flex flex-col h-[calc(100vh-3rem)] sticky top-6 overflow-hidden">
-      <div className="p-3 border-b border-border bg-primary text-primary-foreground flex items-center gap-2">
-        <img
-          src={PAULO_AVATAR}
-          alt="Paulo, assistente financeiro"
-          className="h-8 w-8 rounded-full object-cover bg-white"
-        />
-        <div>
-          <h2 className="font-semibold text-sm leading-tight">Paulo</h2>
-          <p className="text-[10px] opacity-80 leading-tight">Assistente Financeiro</p>
+    <Card className="p-0 flex flex-col h-[calc(100vh-3rem)] sticky top-6 overflow-hidden border-2 border-amber-500/40 shadow-2xl shadow-amber-500/10">
+      <div className="p-4 border-b-2 border-amber-500/40 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800 text-white flex items-center gap-3 relative overflow-hidden">
+        <div className="absolute inset-0 opacity-25 bg-[radial-gradient(circle_at_top_left,#f59e0b,transparent_60%)] pointer-events-none" />
+        <div className="relative shrink-0">
+          <div className="absolute -inset-1 rounded-full bg-gradient-to-tr from-amber-400 via-yellow-500 to-amber-600 blur-sm animate-pulse" />
+          <img
+            src={PAULO_AVATAR}
+            alt="Paulo, economista austríaco"
+            className="relative h-14 w-14 rounded-full object-cover bg-white ring-2 ring-amber-400 shadow-lg shadow-amber-500/40"
+          />
+        </div>
+        <div className="relative flex-1 min-w-0">
+          <h2 className="font-bold text-base leading-tight tracking-tight">
+            Paulo <span className="opacity-50 font-normal">|</span>{" "}
+            <span className="text-amber-300">Inteligência de Mercado</span>
+          </h2>
+          <div className="inline-flex items-center gap-1.5 mt-1.5 px-2 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-400/40">
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+            </span>
+            <span className="text-[10px] font-bold tracking-wider text-emerald-300 uppercase">
+              Online · Escola Austríaca
+            </span>
+          </div>
         </div>
       </div>
-      <div ref={scrollRef} className="flex-1 overflow-y-auto p-3 space-y-3">
+      <div ref={scrollRef} className="flex-1 overflow-y-auto p-3 space-y-3 bg-gradient-to-b from-background to-muted/40">
         {messages.length === 0 && (
-          <div className="text-xs text-muted-foreground space-y-2">
-            <p>Olá! Sou o Paulo. Posso analisar caixa, simular cenários e lançar despesas para você.</p>
+          <div className="text-xs space-y-2">
+            <p className="text-foreground/80 leading-relaxed">
+              <span className="text-amber-600 dark:text-amber-400 font-semibold italic">"Imposto é roubo."</span>{" "}
+              Sou o Paulo — guerreiro de mercado a serviço do seu capital. Analiso caixa, simulo cenários e lanço despesas direto na base.
+            </p>
             <button
-              className="block text-left p-2 rounded bg-muted hover:bg-accent w-full"
+              className="block text-left p-2 rounded bg-muted hover:bg-accent w-full text-muted-foreground"
               onClick={() => setInput("Paulo, paguei 150 de gás no Restaurante pelo PagBank hoje")}
             >
               "Paguei 150 de gás no Restaurante pelo PagBank hoje"
             </button>
             <button
-              className="block text-left p-2 rounded bg-muted hover:bg-accent w-full"
+              className="block text-left p-2 rounded bg-muted hover:bg-accent w-full text-muted-foreground"
               onClick={() => setInput("Posso investir R$ 8.000 em reforma nos próximos 3 meses?")}
             >
               "Posso investir R$ 8.000 em reforma nos próximos 3 meses?"
             </button>
           </div>
         )}
-        {messages.map((m) => (
+        {messages.map((m) => {
+          const createdOk =
+            m.role === "assistant" &&
+            m.parts.some(
+              (p) =>
+                p.type === "tool-create_transaction" &&
+                (p as { output?: { ok?: boolean } }).output?.ok,
+            );
+          return (
           <div key={m.id} className={`flex gap-2 ${m.role === "user" ? "justify-end" : ""}`}>
             {m.role === "assistant" && (
               <img
                 src={PAULO_AVATAR}
                 alt="Paulo"
-                className="h-7 w-7 rounded-full object-cover shrink-0 bg-white border border-border"
+                className="h-8 w-8 rounded-full object-cover shrink-0 bg-white ring-2 ring-amber-500/60"
               />
             )}
             <div
-              className={`rounded-lg px-3 py-2 text-sm max-w-[85%] space-y-2 ${
-                m.role === "user" ? "bg-primary text-primary-foreground" : "bg-muted"
+              className={`rounded-lg px-3 py-2 text-sm max-w-[85%] space-y-2 shadow-md ${
+                m.role === "user"
+                  ? "bg-primary text-primary-foreground"
+                  : `bg-gradient-to-br from-slate-900 to-slate-800 text-slate-100 border ${
+                      createdOk
+                        ? "border-emerald-400 shadow-emerald-500/30 ring-1 ring-emerald-400/50"
+                        : "border-slate-700/80"
+                    }`
               }`}
             >
               {m.parts.map((p, i) => {
@@ -552,7 +584,8 @@ function Copilot({
               </div>
             )}
           </div>
-        ))}
+          );
+        })}
         {isLoading && <div className="text-xs text-muted-foreground italic">Paulo está pensando…</div>}
       </div>
       <div className="p-2 border-t border-border space-y-2">

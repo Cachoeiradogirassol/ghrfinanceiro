@@ -45,6 +45,7 @@ type AdminUser = {
   display_name?: string;
   banned_until: string | null;
   role: string;
+  enterprise_restriction?: string | null;
 };
 
 export function UsersTab() {
@@ -58,14 +59,18 @@ export function UsersTab() {
   const [password, setPassword] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [role, setRole] = useState<"user" | "master">("user");
+  const [restriction, setRestriction] = useState<string>("none");
   const [editing, setEditing] = useState<AdminUser | null>(null);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await createFn({ data: { email, password, display_name: displayName, role } });
+      await createFn({ data: {
+        email, password, display_name: displayName, role,
+        enterprise_restriction: role === "master" || restriction === "none" ? null : (restriction as Enterprise["value"]),
+      } });
       toast.success("Usuário criado com sucesso!");
-      setEmail(""); setPassword(""); setDisplayName(""); setRole("user");
+      setEmail(""); setPassword(""); setDisplayName(""); setRole("user"); setRestriction("none");
       qc.invalidateQueries({ queryKey: ["admin-users"] });
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Erro");

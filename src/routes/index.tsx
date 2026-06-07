@@ -46,6 +46,7 @@ import {
 } from "lucide-react";
 import { ENTERPRISES, type EnterpriseValue, enterpriseLabel } from "@/lib/enterprises";
 import { useAuth } from "@/lib/auth";
+import { useMyRestriction } from "@/lib/use-restriction";
 import { exportDREPdf } from "@/lib/pdf-export";
 
 export const Route = createFileRoute("/")({
@@ -82,8 +83,12 @@ function fmt(n: number) {
 
 function Dashboard() {
   const { isMaster } = useAuth();
+  const { restriction } = useMyRestriction();
   const nav = useNavigate();
-  const [enterprise, setEnterprise] = useState<EnterpriseFilter>("all");
+  const [enterpriseRaw, setEnterprise] = useState<EnterpriseFilter>("all");
+  // Operadores com restrição são forçados ao seu empreendimento; ignora o estado.
+  const enterprise: EnterpriseFilter = restriction ? (restriction as EnterpriseFilter) : enterpriseRaw;
+  const lockedToEnterprise = !!restriction && !isMaster;
 
   const txFn = useServerFn(listTransactions);
   const bkFn = useServerFn(listBankAccounts);

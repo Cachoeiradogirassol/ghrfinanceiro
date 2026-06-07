@@ -190,6 +190,7 @@ function List() {
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : "Erro"),
   });
+  const [editing, setEditing] = useState<null | Record<string, unknown>>(null);
 
 
   return (

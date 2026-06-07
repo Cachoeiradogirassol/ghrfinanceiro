@@ -193,12 +193,13 @@ function EditUserDialog({
 }: {
   user: AdminUser | null;
   onClose: () => void;
-  onSave: (data: { user_id: string; email: string; display_name: string; role: "user" | "master"; password?: string }) => Promise<void>;
+  onSave: (data: { user_id: string; email: string; display_name: string; role: "user" | "master"; password?: string; enterprise_restriction: Enterprise["value"] | null }) => Promise<void>;
 }) {
   const [displayName, setDisplayName] = useState("");
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<"user" | "master">("user");
   const [password, setPassword] = useState("");
+  const [restriction, setRestriction] = useState<string>("none");
 
   useEffect(() => {
     if (!user) return;
@@ -206,6 +207,7 @@ function EditUserDialog({
     setEmail(user.email ?? "");
     setRole((user.role as "user" | "master") ?? "user");
     setPassword("");
+    setRestriction(user.enterprise_restriction ?? "none");
   }, [user]);
 
   return (
@@ -226,6 +228,19 @@ function EditUserDialog({
             </Select>
           </div>
           <div>
+            <Label>Restrição a empreendimento</Label>
+            <Select value={restriction} onValueChange={setRestriction} disabled={role === "master"}>
+              <SelectTrigger><SelectValue placeholder="Sem restrição" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">Sem restrição (todos)</SelectItem>
+                {ENTERPRISES.filter((e) => !e.masterOnly).map((e) => (
+                  <SelectItem key={e.value} value={e.value}>{e.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground mt-1">Master sempre tem acesso total — restrição é ignorada.</p>
+          </div>
+          <div>
             <Label>Redefinir senha (opcional)</Label>
             <PasswordInput placeholder="Deixe em branco para manter" value={password} onChange={(e) => setPassword(e.target.value)} />
             <p className="text-xs text-muted-foreground mt-1">Mínimo 8 caracteres se for alterar.</p>
@@ -242,6 +257,7 @@ function EditUserDialog({
               display_name: displayName,
               role,
               password: password || undefined,
+              enterprise_restriction: role === "master" || restriction === "none" ? null : (restriction as Enterprise["value"]),
             });
           }}>Salvar alterações</Button>
         </DialogFooter>

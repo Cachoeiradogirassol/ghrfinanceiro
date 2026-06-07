@@ -9,6 +9,8 @@ const EnterpriseEnum = z.enum([
   "restaurante",
   "vinhedo",
   "ghr",
+  "ghr_aldeia",
+  "ghr_jk",
   "institucional_fazenda",
   "impostos",
 ]);
@@ -39,16 +41,20 @@ export const listUsers = createServerFn({ method: "GET" })
     const ids = data.users.map((u) => u.id);
     const { data: roles } = await supabaseAdmin
       .from("user_roles")
-      .select("user_id, role")
+      .select("user_id, role, enterprise_restriction")
       .in("user_id", ids.length ? ids : ["00000000-0000-0000-0000-000000000000"]);
-    return data.users.map((u) => ({
-      id: u.id,
-      email: u.email,
-      display_name: (u.user_metadata as { display_name?: string } | null)?.display_name ?? "",
-      banned_until: (u as { banned_until?: string }).banned_until ?? null,
-      created_at: u.created_at,
-      role: roles?.find((r) => r.user_id === u.id)?.role ?? "user",
-    }));
+    return data.users.map((u) => {
+      const r = roles?.find((x) => x.user_id === u.id);
+      return {
+        id: u.id,
+        email: u.email,
+        display_name: (u.user_metadata as { display_name?: string } | null)?.display_name ?? "",
+        banned_until: (u as { banned_until?: string }).banned_until ?? null,
+        created_at: u.created_at,
+        role: r?.role ?? "user",
+        enterprise_restriction: (r as { enterprise_restriction?: string | null } | undefined)?.enterprise_restriction ?? null,
+      };
+    });
   });
 
 export const updateUser = createServerFn({ method: "POST" })
@@ -61,6 +67,7 @@ export const updateUser = createServerFn({ method: "POST" })
         display_name: z.string().max(100).optional(),
         role: z.enum(["user", "master"]),
         password: z.string().min(8).max(72).optional().or(z.literal("")),
+        enterprise_restriction: EnterpriseEnum.nullable().optional(),
       })
       .parse(d),
   )
@@ -79,11 +86,12 @@ export const updateUser = createServerFn({ method: "POST" })
         : error.message;
       throw new Error(msg);
     }
-    // sync role: remove other roles, ensure desired role
+    // sync role + restriction: remove other roles, ensure desired role
     await supabaseAdmin.from("user_roles").delete().eq("user_id", data.user_id);
+    const restriction = data.role === "master" ? null : (data.enterprise_restriction ?? null);
     await supabaseAdmin
       .from("user_roles")
-      .upsert({ user_id: data.user_id, role: data.role }, { onConflict: "user_id,role" });
+      .insert({ user_id: data.user_id, role: data.role, enterprise_restriction: restriction });
     return { ok: true };
   });
 
@@ -96,6 +104,7 @@ export const createUser = createServerFn({ method: "POST" })
         password: z.string().min(8).max(72),
         display_name: z.string().max(100).optional(),
         role: z.enum(["user", "master"]).default("user"),
+        enterprise_restriction: EnterpriseEnum.nullable().optional(),
       })
       .parse(d),
   )
@@ -114,13 +123,30 @@ export const createUser = createServerFn({ method: "POST" })
         : error.message;
       throw new Error(msg);
     }
+    const restriction = data.role === "master" ? null : (data.enterprise_restriction ?? null);
+    // handle_new_user trigger already inserts a default ('user') role row — replace it.
+    await supabaseAdmin.from("user_roles").delete().eq("user_id", created.user.id);
     await supabaseAdmin
       .from("user_roles")
-      .upsert(
-        { user_id: created.user.id, role: data.role },
-        { onConflict: "user_id,role" },
-      );
+      .insert({ user_id: created.user.id, role: data.role, enterprise_restriction: restriction });
     return { id: created.user.id };
+  });
+
+// Returns the currently-signed-in user's enterprise restriction (null = no restriction / master).
+export const getMyRestriction = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { data } = await context.supabase
+      .from("user_roles")
+      .select("role, enterprise_restriction")
+      .eq("user_id", context.userId)
+      .maybeSingle();
+    const role = (data as { role?: string } | null)?.role ?? "user";
+    const restriction = (data as { enterprise_restriction?: string | null } | null)?.enterprise_restriction ?? null;
+    return { role, enterprise_restriction: role === "master" ? null : restriction } as {
+      role: string;
+      enterprise_restriction: string | null;
+    };
   });
 
 export const setUserActive = createServerFn({ method: "POST" })

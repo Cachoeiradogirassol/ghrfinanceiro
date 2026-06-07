@@ -45,6 +45,7 @@ type AdminUser = {
   display_name?: string;
   banned_until: string | null;
   role: string;
+  enterprise_restriction?: string | null;
 };
 
 export function UsersTab() {
@@ -58,14 +59,18 @@ export function UsersTab() {
   const [password, setPassword] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [role, setRole] = useState<"user" | "master">("user");
+  const [restriction, setRestriction] = useState<string>("none");
   const [editing, setEditing] = useState<AdminUser | null>(null);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await createFn({ data: { email, password, display_name: displayName, role } });
+      await createFn({ data: {
+        email, password, display_name: displayName, role,
+        enterprise_restriction: role === "master" || restriction === "none" ? null : (restriction as Enterprise["value"]),
+      } });
       toast.success("Usuário criado com sucesso!");
-      setEmail(""); setPassword(""); setDisplayName(""); setRole("user");
+      setEmail(""); setPassword(""); setDisplayName(""); setRole("user"); setRestriction("none");
       qc.invalidateQueries({ queryKey: ["admin-users"] });
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Erro");
@@ -90,6 +95,19 @@ export function UsersTab() {
               </SelectContent>
             </Select>
           </div>
+          <div>
+            <Label>Restrição a empreendimento (operador)</Label>
+            <Select value={restriction} onValueChange={setRestriction} disabled={role === "master"}>
+              <SelectTrigger><SelectValue placeholder="Sem restrição" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">Sem restrição (todos)</SelectItem>
+                {ENTERPRISES.filter((e) => !e.masterOnly).map((e) => (
+                  <SelectItem key={e.value} value={e.value}>{e.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground mt-1">Master sempre tem acesso total.</p>
+          </div>
           <div className="md:col-span-2"><Button type="submit">Criar usuário</Button></div>
         </form>
       </Card>
@@ -103,6 +121,7 @@ export function UsersTab() {
                 <TableHead>Nome</TableHead>
                 <TableHead>E-mail</TableHead>
                 <TableHead>Nível</TableHead>
+                <TableHead>Restrição</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead className="text-right">Ações</TableHead>
               </TableRow>
@@ -116,6 +135,13 @@ export function UsersTab() {
                     {u.role === "master"
                       ? <Badge variant="destructive" translate="no"><Lock className="h-3 w-3 mr-1" />Master</Badge>
                       : <Badge variant="secondary" translate="no">Operador</Badge>}
+                  </TableCell>
+                  <TableCell className="text-xs">
+                    {u.role === "master"
+                      ? <span className="text-muted-foreground">—</span>
+                      : (u.enterprise_restriction
+                          ? <Badge variant="outline">{ENTERPRISES.find((e) => e.value === u.enterprise_restriction)?.label ?? u.enterprise_restriction}</Badge>
+                          : <span className="text-muted-foreground">Todos</span>)}
                   </TableCell>
                   <TableCell>
                     {u.banned_until ? <Badge variant="outline">Desativado</Badge> : <Badge>Ativo</Badge>}
@@ -137,7 +163,7 @@ export function UsersTab() {
                 </TableRow>
               ))}
               {!q.data?.length && (
-                <TableRow><TableCell colSpan={5} className="text-center text-sm text-muted-foreground">Nenhum usuário cadastrado.</TableCell></TableRow>
+                <TableRow><TableCell colSpan={6} className="text-center text-sm text-muted-foreground">Nenhum usuário cadastrado.</TableCell></TableRow>
               )}
             </TableBody>
           </Table>
@@ -167,12 +193,13 @@ function EditUserDialog({
 }: {
   user: AdminUser | null;
   onClose: () => void;
-  onSave: (data: { user_id: string; email: string; display_name: string; role: "user" | "master"; password?: string }) => Promise<void>;
+  onSave: (data: { user_id: string; email: string; display_name: string; role: "user" | "master"; password?: string; enterprise_restriction: Enterprise["value"] | null }) => Promise<void>;
 }) {
   const [displayName, setDisplayName] = useState("");
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<"user" | "master">("user");
   const [password, setPassword] = useState("");
+  const [restriction, setRestriction] = useState<string>("none");
 
   useEffect(() => {
     if (!user) return;
@@ -180,6 +207,7 @@ function EditUserDialog({
     setEmail(user.email ?? "");
     setRole((user.role as "user" | "master") ?? "user");
     setPassword("");
+    setRestriction(user.enterprise_restriction ?? "none");
   }, [user]);
 
   return (
@@ -200,6 +228,19 @@ function EditUserDialog({
             </Select>
           </div>
           <div>
+            <Label>Restrição a empreendimento</Label>
+            <Select value={restriction} onValueChange={setRestriction} disabled={role === "master"}>
+              <SelectTrigger><SelectValue placeholder="Sem restrição" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">Sem restrição (todos)</SelectItem>
+                {ENTERPRISES.filter((e) => !e.masterOnly).map((e) => (
+                  <SelectItem key={e.value} value={e.value}>{e.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground mt-1">Master sempre tem acesso total — restrição é ignorada.</p>
+          </div>
+          <div>
             <Label>Redefinir senha (opcional)</Label>
             <PasswordInput placeholder="Deixe em branco para manter" value={password} onChange={(e) => setPassword(e.target.value)} />
             <p className="text-xs text-muted-foreground mt-1">Mínimo 8 caracteres se for alterar.</p>
@@ -216,6 +257,7 @@ function EditUserDialog({
               display_name: displayName,
               role,
               password: password || undefined,
+              enterprise_restriction: role === "master" || restriction === "none" ? null : (restriction as Enterprise["value"]),
             });
           }}>Salvar alterações</Button>
         </DialogFooter>

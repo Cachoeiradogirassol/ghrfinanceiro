@@ -400,18 +400,27 @@ export type Database = {
       user_roles: {
         Row: {
           created_at: string
+          enterprise_restriction:
+            | Database["public"]["Enums"]["enterprise_type"]
+            | null
           id: string
           role: Database["public"]["Enums"]["app_role"]
           user_id: string
         }
         Insert: {
           created_at?: string
+          enterprise_restriction?:
+            | Database["public"]["Enums"]["enterprise_type"]
+            | null
           id?: string
           role?: Database["public"]["Enums"]["app_role"]
           user_id: string
         }
         Update: {
           created_at?: string
+          enterprise_restriction?:
+            | Database["public"]["Enums"]["enterprise_type"]
+            | null
           id?: string
           role?: Database["public"]["Enums"]["app_role"]
           user_id?: string
@@ -442,6 +451,8 @@ export type Database = {
         | "ghr"
         | "institucional_fazenda"
         | "impostos"
+        | "ghr_aldeia"
+        | "ghr_jk"
       transaction_status: "pending" | "paid" | "reconciled"
       transaction_type: "payable" | "receivable"
     }
@@ -579,6 +590,8 @@ export const Constants = {
         "ghr",
         "institucional_fazenda",
         "impostos",
+        "ghr_aldeia",
+        "ghr_jk",
       ],
       transaction_status: ["pending", "paid", "reconciled"],
       transaction_type: ["payable", "receivable"],

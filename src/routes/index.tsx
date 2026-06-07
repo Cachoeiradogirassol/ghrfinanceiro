@@ -46,6 +46,7 @@ import {
 } from "lucide-react";
 import { ENTERPRISES, type EnterpriseValue, enterpriseLabel } from "@/lib/enterprises";
 import { useAuth } from "@/lib/auth";
+import { useMyRestriction } from "@/lib/use-restriction";
 import { exportDREPdf } from "@/lib/pdf-export";
 
 export const Route = createFileRoute("/")({
@@ -82,8 +83,12 @@ function fmt(n: number) {
 
 function Dashboard() {
   const { isMaster } = useAuth();
+  const { restriction } = useMyRestriction();
   const nav = useNavigate();
-  const [enterprise, setEnterprise] = useState<EnterpriseFilter>("all");
+  const [enterpriseRaw, setEnterprise] = useState<EnterpriseFilter>("all");
+  // Operadores com restrição são forçados ao seu empreendimento; ignora o estado.
+  const enterprise: EnterpriseFilter = restriction ? (restriction as EnterpriseFilter) : enterpriseRaw;
+  const lockedToEnterprise = !!restriction && !isMaster;
 
   const txFn = useServerFn(listTransactions);
   const bkFn = useServerFn(listBankAccounts);
@@ -135,20 +140,31 @@ function Dashboard() {
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <Filter className="h-4 w-4 text-muted-foreground" />
-            <Select value={enterprise} onValueChange={(v) => setEnterprise(v as EnterpriseFilter)}>
-              <SelectTrigger className="w-[220px]">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Consolidado (todos)</SelectItem>
-                {visibleEnterprises.map((e) => (
-                  <SelectItem key={e.value} value={e.value}>
-                    {e.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            {lockedToEnterprise ? (
+              <div className="flex items-center gap-2 px-3 py-2 rounded border border-border bg-muted/40">
+                <Filter className="h-4 w-4 text-muted-foreground" />
+                <span className="text-sm font-medium" translate="no">
+                  {enterpriseLabel(restriction)}
+                </span>
+              </div>
+            ) : (
+              <>
+                <Filter className="h-4 w-4 text-muted-foreground" />
+                <Select value={enterprise} onValueChange={(v) => setEnterprise(v as EnterpriseFilter)}>
+                  <SelectTrigger className="w-[220px]">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Consolidado (todos)</SelectItem>
+                    {visibleEnterprises.map((e) => (
+                      <SelectItem key={e.value} value={e.value}>
+                        {e.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </>
+            )}
             <Button onClick={() => nav({ to: "/lancamentos/novo" })}>
               + Lançamento
             </Button>

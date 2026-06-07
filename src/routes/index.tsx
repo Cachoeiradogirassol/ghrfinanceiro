@@ -526,66 +526,70 @@ function Copilot({
                 (p as { output?: { ok?: boolean } }).output?.ok,
             );
           return (
-          <div key={m.id} className={`flex gap-2 ${m.role === "user" ? "justify-end" : ""}`}>
-            {m.role === "assistant" && (
-              <img
-                src={PAULO_AVATAR}
-                alt="Paulo"
-                className="h-8 w-8 rounded-full object-cover shrink-0 bg-white ring-2 ring-amber-500/60"
-              />
-            )}
             <div
-              className={`rounded-lg px-3 py-2 text-sm max-w-[85%] space-y-2 shadow-md ${
-                m.role === "user"
-                  ? "bg-primary text-primary-foreground"
-                  : `bg-gradient-to-br from-slate-900 to-slate-800 text-slate-100 border ${
-                      createdOk
-                        ? "border-emerald-400 shadow-emerald-500/30 ring-1 ring-emerald-400/50"
-                        : "border-slate-700/80"
-                    }`
-              }`}
+              key={m.id}
+              className={`flex gap-2 ${m.role === "user" ? "justify-end" : ""}`}
             >
-              {m.parts.map((p, i) => {
-                if (p.type === "text")
-                  return <span key={i} className="whitespace-pre-wrap block">{p.text}</span>;
-                if (p.type === "tool-create_transaction") {
-                  const out = (p as { output?: { ok?: boolean; summary?: { type: string; enterprise: string; category: string; amount: number; status: string; due_date: string; bank: string | null }; error?: string } }).output;
-                  if (!out) return <div key={i} className="text-xs italic opacity-70">Registrando lançamento…</div>;
-                  if (!out.ok) {
+              {m.role === "assistant" && (
+                <img
+                  src={PAULO_AVATAR}
+                  alt="Paulo"
+                  className="h-8 w-8 rounded-full object-cover shrink-0 bg-white ring-2 ring-amber-500/60"
+                />
+              )}
+              <div
+                className={`rounded-lg px-3 py-2 text-sm max-w-[85%] space-y-2 shadow-md ${
+                  m.role === "user"
+                    ? "bg-primary text-primary-foreground"
+                    : `bg-gradient-to-br from-slate-900 to-slate-800 text-slate-100 border ${
+                        createdOk
+                          ? "border-emerald-400 shadow-emerald-500/30 ring-1 ring-emerald-400/50"
+                          : "border-slate-700/80"
+                      }`
+                }`}
+              >
+                {m.parts.map((p, i) => {
+                  if (p.type === "text")
+                    return <span key={i} className="whitespace-pre-wrap block">{p.text}</span>;
+                  if (p.type === "tool-create_transaction") {
+                    const out = (p as { output?: { ok?: boolean; summary?: { type: string; enterprise: string; category: string; amount: number; status: string; due_date: string; bank: string | null }; error?: string } }).output;
+                    if (!out) return <div key={i} className="text-xs italic opacity-70">Registrando lançamento…</div>;
+                    if (!out.ok) {
+                      return (
+                        <div key={i} className="rounded-md border border-destructive/40 bg-destructive/10 p-2 text-xs flex gap-2">
+                          <XCircle className="h-4 w-4 text-destructive shrink-0" />
+                          <div><b>Não consegui lançar.</b><br />{out.error}</div>
+                        </div>
+                      );
+                    }
+                    const s = out.summary!;
                     return (
-                      <div key={i} className="rounded-md border border-destructive/40 bg-destructive/10 p-2 text-xs flex gap-2">
-                        <XCircle className="h-4 w-4 text-destructive shrink-0" />
-                        <div><b>Não consegui lançar.</b><br />{out.error}</div>
+                      <div key={i} className="rounded-md border border-emerald-400/50 bg-emerald-500/10 p-2 text-xs space-y-1">
+                        <div className="flex items-center gap-1 font-semibold text-emerald-300">
+                          <CheckCircle2 className="h-4 w-4" /> Lançamento criado
+                        </div>
+                        <div>{s.type} · <b>{s.enterprise}</b></div>
+                        <div>Categoria: {s.category}</div>
+                        <div>Valor: R$ {s.amount.toFixed(2).replace(".", ",")} · {s.status === "paid" ? "Pago" : "Pendente"}</div>
+                        {s.bank && <div>Conta: {s.bank}</div>}
+                        <div className="opacity-70">Vencimento: {new Date(s.due_date).toLocaleDateString("pt-BR")}</div>
                       </div>
                     );
                   }
-                  const s = out.summary!;
-                  return (
-                    <div key={i} className="rounded-md border border-primary/40 bg-primary/5 p-2 text-xs space-y-1">
-                      <div className="flex items-center gap-1 font-semibold text-primary">
-                        <CheckCircle2 className="h-4 w-4" /> Lançamento criado
-                      </div>
-                      <div>{s.type} · <b>{s.enterprise}</b></div>
-                      <div>Categoria: {s.category}</div>
-                      <div>Valor: R$ {s.amount.toFixed(2).replace(".", ",")} · {s.status === "paid" ? "Pago" : "Pendente"}</div>
-                      {s.bank && <div>Conta: {s.bank}</div>}
-                      <div className="opacity-70">Vencimento: {new Date(s.due_date).toLocaleDateString("pt-BR")}</div>
-                    </div>
-                  );
-                }
-                if (p.type === "tool-simulate_investment")
-                  return <div key={i} className="text-[11px] opacity-70 italic">🔧 simulação executada</div>;
-                return null;
-              })}
-            </div>
-            {m.role === "user" && (
-              <div className="w-6 h-6 rounded-full bg-muted flex items-center justify-center shrink-0">
-                <User className="h-3 w-3" />
+                  if (p.type === "tool-simulate_investment")
+                    return <div key={i} className="text-[11px] opacity-70 italic">🔧 simulação executada</div>;
+                  return null;
+                })}
               </div>
-            )}
-          </div>
+              {m.role === "user" && (
+                <div className="w-6 h-6 rounded-full bg-muted flex items-center justify-center shrink-0">
+                  <User className="h-3 w-3" />
+                </div>
+              )}
+            </div>
           );
         })}
+
         {isLoading && <div className="text-xs text-muted-foreground italic">Paulo está pensando…</div>}
       </div>
       <div className="p-2 border-t border-border space-y-2">

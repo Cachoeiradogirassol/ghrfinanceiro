@@ -315,14 +315,24 @@ function List() {
                   </TableCell>
                 )}
                 <TableCell>
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    aria-label="Excluir lançamento"
-                    onClick={() => mut.mutate(t.id)}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
+                  <div className="flex gap-1">
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      aria-label="Editar lançamento"
+                      onClick={() => setEditing(t as unknown as Record<string, unknown>)}
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      aria-label="Excluir lançamento"
+                      onClick={() => mut.mutate(t.id)}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </TableCell>
 
               </TableRow>

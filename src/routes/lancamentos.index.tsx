@@ -347,6 +347,11 @@ function List() {
           </TableBody>
         </Table>
       </div>
+      <EditTransactionDialog
+        tx={editing as never}
+        open={!!editing}
+        onOpenChange={(v) => { if (!v) setEditing(null); }}
+      />
     </div>
   );
 }

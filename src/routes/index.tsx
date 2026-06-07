@@ -29,7 +29,7 @@ import {
 } from "recharts";
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport } from "ai";
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useMemo, useRef, Fragment } from "react";
 import { Textarea } from "@/components/ui/textarea";
 import {
   TrendingUp,

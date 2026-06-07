@@ -95,6 +95,19 @@ export function UsersTab() {
               </SelectContent>
             </Select>
           </div>
+          <div>
+            <Label>Restrição a empreendimento (operador)</Label>
+            <Select value={restriction} onValueChange={setRestriction} disabled={role === "master"}>
+              <SelectTrigger><SelectValue placeholder="Sem restrição" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">Sem restrição (todos)</SelectItem>
+                {ENTERPRISES.filter((e) => !e.masterOnly).map((e) => (
+                  <SelectItem key={e.value} value={e.value}>{e.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground mt-1">Master sempre tem acesso total.</p>
+          </div>
           <div className="md:col-span-2"><Button type="submit">Criar usuário</Button></div>
         </form>
       </Card>
@@ -108,6 +121,7 @@ export function UsersTab() {
                 <TableHead>Nome</TableHead>
                 <TableHead>E-mail</TableHead>
                 <TableHead>Nível</TableHead>
+                <TableHead>Restrição</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead className="text-right">Ações</TableHead>
               </TableRow>
@@ -121,6 +135,13 @@ export function UsersTab() {
                     {u.role === "master"
                       ? <Badge variant="destructive" translate="no"><Lock className="h-3 w-3 mr-1" />Master</Badge>
                       : <Badge variant="secondary" translate="no">Operador</Badge>}
+                  </TableCell>
+                  <TableCell className="text-xs">
+                    {u.role === "master"
+                      ? <span className="text-muted-foreground">—</span>
+                      : (u.enterprise_restriction
+                          ? <Badge variant="outline">{ENTERPRISES.find((e) => e.value === u.enterprise_restriction)?.label ?? u.enterprise_restriction}</Badge>
+                          : <span className="text-muted-foreground">Todos</span>)}
                   </TableCell>
                   <TableCell>
                     {u.banned_until ? <Badge variant="outline">Desativado</Badge> : <Badge>Ativo</Badge>}
@@ -142,7 +163,7 @@ export function UsersTab() {
                 </TableRow>
               ))}
               {!q.data?.length && (
-                <TableRow><TableCell colSpan={5} className="text-center text-sm text-muted-foreground">Nenhum usuário cadastrado.</TableCell></TableRow>
+                <TableRow><TableCell colSpan={6} className="text-center text-sm text-muted-foreground">Nenhum usuário cadastrado.</TableCell></TableRow>
               )}
             </TableBody>
           </Table>

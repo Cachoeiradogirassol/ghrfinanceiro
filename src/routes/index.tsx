@@ -29,7 +29,7 @@ import {
 } from "recharts";
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport } from "ai";
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { Textarea } from "@/components/ui/textarea";
 import {
   TrendingUp,
@@ -37,17 +37,23 @@ import {
   Wallet,
   AlertTriangle,
   Send,
-  Bot,
   User,
   ArrowDownLeft,
   ArrowUpRight,
   Filter,
   FileDown,
+  CheckCircle2,
+  XCircle,
 } from "lucide-react";
 import { ENTERPRISES, type EnterpriseValue, enterpriseLabel } from "@/lib/enterprises";
 import { useAuth } from "@/lib/auth";
 import { useMyRestriction } from "@/lib/use-restriction";
 import { exportDREPdf } from "@/lib/pdf-export";
+import { supabase } from "@/integrations/supabase/client";
+import { useQueryClient } from "@tanstack/react-query";
+import pauloAsset from "@/assets/bot_minipaulo.png.asset.json";
+
+const PAULO_AVATAR = pauloAsset.url;
 
 export const Route = createFileRoute("/")({
   head: () => ({

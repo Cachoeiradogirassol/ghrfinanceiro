@@ -251,6 +251,34 @@ export const createContact = createServerFn({ method: "POST" })
     return row;
   });
 
+const UpdateTxInput = z.object({
+  id: z.string().uuid(),
+  patch: z
+    .object({
+      bank_account_id: z.string().uuid().nullable().optional(),
+      description: z.string().max(500).nullable().optional(),
+      amount: z.number().positive().optional(),
+      due_date: z.string().optional(),
+      document_datetime: z.string().nullable().optional(),
+      payment_method: z.enum(["pix", "boleto", "credit_card", "cash"]).nullable().optional(),
+      status: z.enum(["pending", "paid", "reconciled"]).optional(),
+    })
+    .refine((o) => Object.keys(o).length > 0, "Nada para atualizar"),
+});
+
+export const updateTransaction = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => UpdateTxInput.parse(d))
+  .handler(async ({ context, data }) => {
+    // Atualiza estritamente os campos enviados; jamais toca cost_center_id ou account_id.
+    const { error } = await context.supabase
+      .from("transactions")
+      .update(data.patch)
+      .eq("id", data.id);
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
 export const deleteTransaction = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((data: unknown) => z.object({ id: z.string().uuid() }).parse(data))

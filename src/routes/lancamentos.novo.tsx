@@ -129,7 +129,10 @@ function Form() {
   const [duplicateAlert, setDuplicateAlert] = useState<string | null>(null);
 
   const filteredAccounts = useMemo(
-    () => (accs.data ?? []).filter((a) => a.cost_center_id === costCenterId),
+    () =>
+      (accs.data ?? []).filter(
+        (a) => a.cost_center_id === costCenterId && a.is_active !== false,
+      ),
     [accs.data, costCenterId],
   );
 

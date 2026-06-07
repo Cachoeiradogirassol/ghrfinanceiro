@@ -48,7 +48,6 @@ import {
 import {
   ENTERPRISES,
   ENTERPRISE_GROUPS,
-  type EnterpriseValue,
   type EnterpriseFilterValue,
   enterpriseLabel,
   expandEnterpriseFilter,

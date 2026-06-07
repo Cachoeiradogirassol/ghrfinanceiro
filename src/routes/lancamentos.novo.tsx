@@ -324,12 +324,24 @@ function Form() {
             <Select value={costCenterId} onValueChange={setCostCenterId}>
               <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
               <SelectContent>
-                {(ccs.data ?? []).map((c) => (
-                  <SelectItem key={c.id} value={c.id}>
-                    {c.code} - {c.name}
-                    {c.master_only && " 🔒"}
-                  </SelectItem>
-                ))}
+                {(ccs.data ?? []).map((c) => {
+                  // Centros de custo macro/holding não são selecionáveis — apenas agrupadores visuais.
+                  const SELECTABLE = ["turismo", "restaurante", "vinhedo", "ghr_aldeia", "ghr_jk"];
+                  const selectable = SELECTABLE.includes(c.enterprise ?? "");
+                  return (
+                    <SelectItem
+                      key={c.id}
+                      value={c.id}
+                      disabled={!selectable}
+                      className={!selectable ? "opacity-60 font-semibold uppercase text-xs" : ""}
+                    >
+                      {selectable
+                        ? `${c.code} - ${c.name}`
+                        : `— ${c.code} ${c.name} (agrupador) —`}
+                      {c.master_only && selectable && " 🔒"}
+                    </SelectItem>
+                  );
+                })}
               </SelectContent>
             </Select>
           </div>

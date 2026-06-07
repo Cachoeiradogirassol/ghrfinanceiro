@@ -100,6 +100,19 @@ export const createTransaction = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((data: unknown) => TxInput.parse(data))
   .handler(async ({ context, data }) => {
+    // Guard: bloqueia centros de custo macro/holding (apenas agrupadores).
+    const { data: ccRow } = await context.supabase
+      .from("cost_centers")
+      .select("enterprise, name")
+      .eq("id", data.cost_center_id)
+      .maybeSingle();
+    const SELECTABLE = ["turismo", "restaurante", "vinhedo", "ghr_aldeia", "ghr_jk"];
+    if (!ccRow || !SELECTABLE.includes(ccRow.enterprise ?? "")) {
+      throw new Error(
+        `Bloco "${ccRow?.name ?? "desconhecido"}" é apenas agrupador; selecione um centro de custo finalístico (Turismo, Restaurante, Vinhedo, Aldeia ou JK).`,
+      );
+    }
+
     // Validar rateio
     const allocations = data.allocations ?? [];
     if (allocations.length > 0) {

@@ -405,13 +405,44 @@ function Copilot({
   dre: { totals: { revenue: number; expense: number; net: number } } | undefined;
 }) {
   const [input, setInput] = useState("");
+  const [token, setToken] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const transport = useRef(new DefaultChatTransport({ api: "/api/chat" }));
-  const { messages, sendMessage, status } = useChat({ transport: transport.current });
+  const qc = useQueryClient();
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => setToken(data.session?.access_token ?? null));
+    const { data: sub } = supabase.auth.onAuthStateChange((_e, s) =>
+      setToken(s?.access_token ?? null),
+    );
+    return () => sub.subscription.unsubscribe();
+  }, []);
+
+  const transport = useMemo(
+    () =>
+      new DefaultChatTransport({
+        api: "/api/chat",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      }),
+    [token],
+  );
+  const { messages, sendMessage, status } = useChat({ transport });
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
-  }, [messages]);
+    // Quando a IA criar um lançamento, invalida listas
+    const created = messages.some((m) =>
+      m.parts.some(
+        (p) =>
+          p.type === "tool-create_transaction" &&
+          (p as { output?: { ok?: boolean } }).output?.ok,
+      ),
+    );
+    if (created) {
+      qc.invalidateQueries({ queryKey: ["txs"] });
+      qc.invalidateQueries({ queryKey: ["proj"] });
+      qc.invalidateQueries({ queryKey: ["dre"] });
+    }
+  }, [messages, qc]);
 
   const send = () => {
     if (!input.trim() || !context) return;
@@ -422,46 +453,79 @@ function Copilot({
 
   return (
     <Card className="p-0 flex flex-col h-[calc(100vh-3rem)] sticky top-6 overflow-hidden">
-      <div className="p-3 border-b border-border bg-primary text-primary-foreground">
-        <h2 className="font-semibold flex items-center gap-2 text-sm">
-          <Bot className="h-4 w-4" /> Copilot Financeiro
-        </h2>
+      <div className="p-3 border-b border-border bg-primary text-primary-foreground flex items-center gap-2">
+        <img
+          src={PAULO_AVATAR}
+          alt="Paulo, assistente financeiro"
+          className="h-8 w-8 rounded-full object-cover bg-white"
+        />
+        <div>
+          <h2 className="font-semibold text-sm leading-tight">Paulo</h2>
+          <p className="text-[10px] opacity-80 leading-tight">Assistente Financeiro</p>
+        </div>
       </div>
       <div ref={scrollRef} className="flex-1 overflow-y-auto p-3 space-y-3">
         {messages.length === 0 && (
           <div className="text-xs text-muted-foreground space-y-2">
-            <p>Olá! Analiso DRE, projeção e simulo cenários.</p>
+            <p>Olá! Sou o Paulo. Posso analisar caixa, simular cenários e lançar despesas para você.</p>
             <button
               className="block text-left p-2 rounded bg-muted hover:bg-accent w-full"
-              onClick={() => setInput("Posso investir R$ 8.000 em uma reforma nos próximos 3 meses?")}
+              onClick={() => setInput("Paulo, paguei 150 de gás no Restaurante pelo PagBank hoje")}
             >
-              "Posso investir R$ 8.000 em reforma nos próximos 3 meses?"
+              "Paguei 150 de gás no Restaurante pelo PagBank hoje"
             </button>
             <button
               className="block text-left p-2 rounded bg-muted hover:bg-accent w-full"
-              onClick={() => setInput("Qual o risco de quebra em 60 dias?")}
+              onClick={() => setInput("Posso investir R$ 8.000 em reforma nos próximos 3 meses?")}
             >
-              "Qual o risco de quebra em 60 dias?"
+              "Posso investir R$ 8.000 em reforma nos próximos 3 meses?"
             </button>
           </div>
         )}
         {messages.map((m) => (
           <div key={m.id} className={`flex gap-2 ${m.role === "user" ? "justify-end" : ""}`}>
             {m.role === "assistant" && (
-              <div className="w-6 h-6 rounded-full bg-primary text-primary-foreground flex items-center justify-center shrink-0">
-                <Bot className="h-3 w-3" />
-              </div>
+              <img
+                src={PAULO_AVATAR}
+                alt="Paulo"
+                className="h-7 w-7 rounded-full object-cover shrink-0 bg-white border border-border"
+              />
             )}
             <div
-              className={`rounded-lg px-3 py-2 text-sm max-w-[85%] ${
+              className={`rounded-lg px-3 py-2 text-sm max-w-[85%] space-y-2 ${
                 m.role === "user" ? "bg-primary text-primary-foreground" : "bg-muted"
               }`}
             >
               {m.parts.map((p, i) => {
                 if (p.type === "text")
-                  return <span key={i} className="whitespace-pre-wrap">{p.text}</span>;
-                if (p.type.startsWith("tool-"))
-                  return <div key={i} className="text-xs opacity-70 mt-1 italic">🔧 simulação</div>;
+                  return <span key={i} className="whitespace-pre-wrap block">{p.text}</span>;
+                if (p.type === "tool-create_transaction") {
+                  const out = (p as { output?: { ok?: boolean; summary?: { type: string; enterprise: string; category: string; amount: number; status: string; due_date: string; bank: string | null }; error?: string } }).output;
+                  if (!out) return <div key={i} className="text-xs italic opacity-70">Registrando lançamento…</div>;
+                  if (!out.ok) {
+                    return (
+                      <div key={i} className="rounded-md border border-destructive/40 bg-destructive/10 p-2 text-xs flex gap-2">
+                        <XCircle className="h-4 w-4 text-destructive shrink-0" />
+                        <div><b>Não consegui lançar.</b><br />{out.error}</div>
+                      </div>
+                    );
+                  }
+                  const s = out.summary!;
+                  return (
+                    <div key={i} className="rounded-md border border-primary/40 bg-primary/5 p-2 text-xs space-y-1">
+                      <div className="flex items-center gap-1 font-semibold text-primary">
+                        <CheckCircle2 className="h-4 w-4" /> Lançamento criado
+                      </div>
+                      <div>{s.type} · <b>{s.enterprise}</b></div>
+                      <div>Categoria: {s.category}</div>
+                      <div>Valor: R$ {s.amount.toFixed(2).replace(".", ",")} · {s.status === "paid" ? "Pago" : "Pendente"}</div>
+                      {s.bank && <div>Conta: {s.bank}</div>}
+                      <div className="opacity-70">Vencimento: {new Date(s.due_date).toLocaleDateString("pt-BR")}</div>
+                    </div>
+                  );
+                }
+                if (p.type === "tool-simulate_investment")
+                  return <div key={i} className="text-[11px] opacity-70 italic">🔧 simulação executada</div>;
                 return null;
               })}
             </div>
@@ -472,7 +536,7 @@ function Copilot({
             )}
           </div>
         ))}
-        {isLoading && <div className="text-xs text-muted-foreground italic">Pensando...</div>}
+        {isLoading && <div className="text-xs text-muted-foreground italic">Paulo está pensando…</div>}
       </div>
       <div className="p-2 border-t border-border space-y-2">
         <Textarea

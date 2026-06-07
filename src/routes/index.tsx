@@ -140,20 +140,31 @@ function Dashboard() {
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <Filter className="h-4 w-4 text-muted-foreground" />
-            <Select value={enterprise} onValueChange={(v) => setEnterprise(v as EnterpriseFilter)}>
-              <SelectTrigger className="w-[220px]">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Consolidado (todos)</SelectItem>
-                {visibleEnterprises.map((e) => (
-                  <SelectItem key={e.value} value={e.value}>
-                    {e.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            {lockedToEnterprise ? (
+              <div className="flex items-center gap-2 px-3 py-2 rounded border border-border bg-muted/40">
+                <Filter className="h-4 w-4 text-muted-foreground" />
+                <span className="text-sm font-medium" translate="no">
+                  {enterpriseLabel(restriction)}
+                </span>
+              </div>
+            ) : (
+              <>
+                <Filter className="h-4 w-4 text-muted-foreground" />
+                <Select value={enterprise} onValueChange={(v) => setEnterprise(v as EnterpriseFilter)}>
+                  <SelectTrigger className="w-[220px]">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Consolidado (todos)</SelectItem>
+                    {visibleEnterprises.map((e) => (
+                      <SelectItem key={e.value} value={e.value}>
+                        {e.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </>
+            )}
             <Button onClick={() => nav({ to: "/lancamentos/novo" })}>
               + Lançamento
             </Button>

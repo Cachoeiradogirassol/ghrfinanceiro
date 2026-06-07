@@ -570,6 +570,8 @@ export const buildDRE = createServerFn({ method: "POST" })
       return b;
     };
 
+    const set = enterpriseSet(filter);
+
     for (const tx of txs) {
       if (tx.status === "pending") continue; // DRE = realizado
       // Data de competência: prioriza document_datetime (data do fato/nota)
@@ -582,7 +584,7 @@ export const buildDRE = createServerFn({ method: "POST" })
       const bankEnt = bank?.enterprise ?? null;
       const allocs = effectiveAllocs(tx, ccById, allocByTx);
       for (const a of allocs) {
-        const include = filter === "all" || a.cc_enterprise === filter;
+        const include = matchesFilter(set, a.cc_enterprise);
         if (include) {
           const b = ensure(key);
           if (tx.type === "receivable") b.revenue += a.amount;
@@ -591,11 +593,11 @@ export const buildDRE = createServerFn({ method: "POST" })
         // Aportes cruzados
         if (bankEnt && bankEnt !== a.cc_enterprise && tx.type === "payable") {
           // CC enterprise recebeu aporte de bankEnt
-          if (filter === "all" || a.cc_enterprise === filter) {
+          if (matchesFilter(set, a.cc_enterprise)) {
             ensure(key).aporteRecebido += a.amount;
           }
           // bankEnt concedeu aporte
-          if (filter === "all" || bankEnt === filter) {
+          if (matchesFilter(set, bankEnt)) {
             ensure(key).aporteConcedido += a.amount;
           }
         }

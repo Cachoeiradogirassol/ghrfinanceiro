@@ -3,8 +3,35 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { z } from "zod";
 
 const EnterpriseFilter = z
-  .enum(["all", "turismo", "restaurante", "vinhedo", "ghr", "institucional_fazenda", "impostos"])
+  .enum([
+    "all",
+    // Grupos macro
+    "fazenda",
+    "ghr_grupo",
+    // Finalísticos
+    "turismo",
+    "restaurante",
+    "vinhedo",
+    "ghr_aldeia",
+    "ghr_jk",
+    // Legados (mantidos por compatibilidade)
+    "ghr",
+    "institucional_fazenda",
+    "impostos",
+  ])
   .default("all");
+
+// Expande "fazenda" → {turismo, restaurante, vinhedo}; "ghr_grupo" → {ghr_aldeia, ghr_jk}.
+// Retorna null para "all".
+function enterpriseSet(filter: string): Set<string> | null {
+  if (filter === "all") return null;
+  if (filter === "fazenda") return new Set(["turismo", "restaurante", "vinhedo"]);
+  if (filter === "ghr_grupo") return new Set(["ghr_aldeia", "ghr_jk"]);
+  return new Set([filter]);
+}
+function matchesFilter(set: Set<string> | null, value: string | null | undefined) {
+  return !set || (value != null && set.has(value));
+}
 
 // ---------- LISTS ----------
 export const listCostCenters = createServerFn({ method: "GET" })

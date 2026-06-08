@@ -82,6 +82,11 @@ export function PromoteLineDialog({
     setPaymentMethod("__none__");
   }, [line]);
 
+  useEffect(() => {
+    setAccountId("");
+  }, [costCenterId]);
+
+
   const amt = line ? Number(line.amount) : 0;
   const isPayable = amt < 0;
   const filteredAccounts = (accQ.data ?? []).filter((a) => {

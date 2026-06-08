@@ -254,19 +254,35 @@ export function parseCSV(text: string): ParsedLine[] {
     const dateCell = r[cols.date] ?? "";
     const date = extractDate(dateCell);
     if (!date) continue;
-    if (cols.amount < 0) continue;
-    const { value, sign } = parseAmountCell(r[cols.amount] ?? "");
-    if (Number.isNaN(value)) continue;
-    let finalSign: -1 | 1 = sign === -1 ? -1 : sign === 1 ? 1 : 1;
-    if (sign === 0 && cols.dc !== undefined) {
-      const dc = (r[cols.dc] ?? "").trim().toUpperCase();
-      if (dc.startsWith("D")) finalSign = -1;
-      else if (dc.startsWith("C")) finalSign = 1;
-    }
     const description =
       cols.desc.map((i) => r[i] ?? "").join(" ").replace(/\s+/g, " ").trim() ||
       null;
-    out.push({ statement_date: date, amount: finalSign * value, description });
+    let amount: number | null = null;
+
+    if (cols.credit !== undefined && cols.debit !== undefined) {
+      const credit = parseAmountCell(r[cols.credit] ?? "");
+      const debit = parseAmountCell(r[cols.debit] ?? "");
+      if (Number.isNaN(credit.value) && Number.isNaN(debit.value)) continue;
+      const forcedSign = signFromDescription(description);
+      const creditValue = Number.isNaN(credit.value) ? 0 : credit.value;
+      const debitValue = Number.isNaN(debit.value) ? 0 : debit.value;
+      if (forcedSign === -1) amount = -Math.abs(debitValue || creditValue);
+      else if (forcedSign === 1) amount = Math.abs(creditValue || debitValue);
+      else amount = debitValue > 0 ? -debitValue : creditValue;
+    } else if (cols.amount !== undefined) {
+      const { value, sign } = parseAmountCell(r[cols.amount] ?? "");
+      if (Number.isNaN(value)) continue;
+      let finalSign: -1 | 1 = sign === -1 ? -1 : sign === 1 ? 1 : 1;
+      if (sign === 0 && cols.dc !== undefined) {
+        const dc = (r[cols.dc] ?? "").trim().toUpperCase();
+        if (dc.startsWith("D")) finalSign = -1;
+        else if (dc.startsWith("C")) finalSign = 1;
+      }
+      amount = applyDescriptionSign(value, description, finalSign);
+    }
+
+    if (amount === null || Math.abs(amount) < 0.005) continue;
+    out.push({ statement_date: date, amount, description });
   }
   return out;
 }

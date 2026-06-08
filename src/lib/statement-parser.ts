@@ -63,19 +63,63 @@ export function parseAmountCell(raw: string): { value: number; sign: -1 | 1 | 0 
     if (sign === 0) sign = 1;
     s = s.slice(1);
   }
-  // BR format: "1.234,56" (comma is decimal). US format: "1,234.56".
+  // BR format: "1.234,56" (comma decimal), US/simple format: "1,234.56" or "40.00".
   let num: number;
-  if (/,\d{1,2}$/.test(s)) {
-    num = parseFloat(s.replace(/\./g, "").replace(",", "."));
-  } else if (/\.\d{1,2}$/.test(s) && /,/.test(s)) {
-    // US-style with thousands commas
-    num = parseFloat(s.replace(/,/g, ""));
+  const lastComma = s.lastIndexOf(",");
+  const lastDot = s.lastIndexOf(".");
+  if (lastComma >= 0 && lastDot >= 0) {
+    num =
+      lastComma > lastDot
+        ? parseFloat(s.replace(/\./g, "").replace(",", "."))
+        : parseFloat(s.replace(/,/g, ""));
+  } else if (lastComma >= 0) {
+    num = /,\d{1,2}$/.test(s)
+      ? parseFloat(s.replace(/\./g, "").replace(",", "."))
+      : parseFloat(s.replace(/,/g, ""));
+  } else if (lastDot >= 0) {
+    num = /\.\d{1,2}$/.test(s)
+      ? parseFloat(s)
+      : parseFloat(s.replace(/\./g, ""));
   } else {
-    // No fractional part — strip thousand separators conservatively
-    num = parseFloat(s.replace(/[.,]/g, ""));
+    num = parseFloat(s);
   }
   if (Number.isNaN(num)) return { value: NaN, sign };
   return { value: Math.abs(num), sign };
+}
+
+function normalizeText(s: string) {
+  return s
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+}
+
+function signFromDescription(description: string | null | undefined): -1 | 1 | 0 {
+  const text = normalizeText(description ?? "");
+  const income =
+    /\bpix\s+recebid[oa]\b/.test(text) ||
+    /\brecebid[oa]\b/.test(text) ||
+    /\bcredito\b/.test(text) ||
+    /\bestorno\b/.test(text) ||
+    /\bdeposito\b/.test(text);
+  const expense =
+    /\bdoc\s*\/?\s*ted\s+enviad[oa]\b/.test(text) ||
+    /\bpix\s+enviad[oa]\b/.test(text) ||
+    /\benviad[oa]\b/.test(text) ||
+    /\bpago\b|\bpaga\b|\bpagamento\b/.test(text) ||
+    /\bdebito\b/.test(text) ||
+    /\btarifa\b/.test(text) ||
+    /\bsaque\b/.test(text);
+  if (income && !expense) return 1;
+  if (expense && !income) return -1;
+  if (income) return 1;
+  if (expense) return -1;
+  return 0;
+}
+
+function applyDescriptionSign(value: number, description: string | null | undefined, fallback: -1 | 1) {
+  const forced = signFromDescription(description);
+  return (forced === 0 ? fallback : forced) * Math.abs(value);
 }
 
 // ---------- OFX ----------

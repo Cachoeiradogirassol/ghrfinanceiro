@@ -63,19 +63,63 @@ export function parseAmountCell(raw: string): { value: number; sign: -1 | 1 | 0 
     if (sign === 0) sign = 1;
     s = s.slice(1);
   }
-  // BR format: "1.234,56" (comma is decimal). US format: "1,234.56".
+  // BR format: "1.234,56" (comma decimal), US/simple format: "1,234.56" or "40.00".
   let num: number;
-  if (/,\d{1,2}$/.test(s)) {
-    num = parseFloat(s.replace(/\./g, "").replace(",", "."));
-  } else if (/\.\d{1,2}$/.test(s) && /,/.test(s)) {
-    // US-style with thousands commas
-    num = parseFloat(s.replace(/,/g, ""));
+  const lastComma = s.lastIndexOf(",");
+  const lastDot = s.lastIndexOf(".");
+  if (lastComma >= 0 && lastDot >= 0) {
+    num =
+      lastComma > lastDot
+        ? parseFloat(s.replace(/\./g, "").replace(",", "."))
+        : parseFloat(s.replace(/,/g, ""));
+  } else if (lastComma >= 0) {
+    num = /,\d{1,2}$/.test(s)
+      ? parseFloat(s.replace(/\./g, "").replace(",", "."))
+      : parseFloat(s.replace(/,/g, ""));
+  } else if (lastDot >= 0) {
+    num = /\.\d{1,2}$/.test(s)
+      ? parseFloat(s)
+      : parseFloat(s.replace(/\./g, ""));
   } else {
-    // No fractional part — strip thousand separators conservatively
-    num = parseFloat(s.replace(/[.,]/g, ""));
+    num = parseFloat(s);
   }
   if (Number.isNaN(num)) return { value: NaN, sign };
   return { value: Math.abs(num), sign };
+}
+
+function normalizeText(s: string) {
+  return s
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+}
+
+function signFromDescription(description: string | null | undefined): -1 | 1 | 0 {
+  const text = normalizeText(description ?? "");
+  const income =
+    /\bpix\s+recebid[oa]\b/.test(text) ||
+    /\brecebid[oa]\b/.test(text) ||
+    /\bcredito\b/.test(text) ||
+    /\bestorno\b/.test(text) ||
+    /\bdeposito\b/.test(text);
+  const expense =
+    /\bdoc\s*\/?\s*ted\s+enviad[oa]\b/.test(text) ||
+    /\bpix\s+enviad[oa]\b/.test(text) ||
+    /\benviad[oa]\b/.test(text) ||
+    /\bpago\b|\bpaga\b|\bpagamento\b/.test(text) ||
+    /\bdebito\b/.test(text) ||
+    /\btarifa\b/.test(text) ||
+    /\bsaque\b/.test(text);
+  if (income && !expense) return 1;
+  if (expense && !income) return -1;
+  if (income) return 1;
+  if (expense) return -1;
+  return 0;
+}
+
+function applyDescriptionSign(value: number, description: string | null | undefined, fallback: -1 | 1) {
+  const forced = signFromDescription(description);
+  return (forced === 0 ? fallback : forced) * Math.abs(value);
 }
 
 // ---------- OFX ----------
@@ -105,7 +149,7 @@ export function parseOFX(text: string): ParsedLine[] {
     }
     lines.push({
       statement_date: date,
-      amount: finalSign * value,
+      amount: applyDescriptionSign(value, memo, finalSign),
       description: memo || null,
       external_id: fitid || null,
     });
@@ -147,7 +191,14 @@ function splitCSVLine(line: string, delim: string): string[] {
   return out.map((c) => c.trim());
 }
 
-type ColMap = { date: number; amount: number; desc: number[]; dc?: number };
+type ColMap = {
+  date: number;
+  amount?: number;
+  credit?: number;
+  debit?: number;
+  desc: number[];
+  dc?: number;
+};
 
 function inferColumns(rows: string[][]): ColMap {
   // Score each column for date-ness and amount-ness across body rows.
@@ -164,25 +215,25 @@ function inferColumns(rows: string[][]): ColMap {
     }
   }
   let dateCol = 0,
-    amountCol = -1,
     dcCol: number | undefined;
   scores.forEach((s, i) => {
     if (s.date > scores[dateCol].date) dateCol = i;
   });
   scores.forEach((s, i) => {
-    if (i === dateCol) return;
-    if (amountCol === -1 || s.amount > scores[amountCol].amount) {
-      if (s.amount > 0) amountCol = i;
-    }
-  });
-  scores.forEach((s, i) => {
     if (s.dc > 0 && (dcCol === undefined || s.dc > scores[dcCol].dc)) dcCol = i;
   });
+  const amountCols = scores
+    .map((s, i) => ({ i, score: s.amount }))
+    .filter((c) => c.i !== dateCol && c.i !== dcCol && c.score > 0)
+    .sort((a, b) => a.i - b.i);
+  const valueCols = amountCols.length >= 2
+    ? { credit: amountCols[amountCols.length - 2].i, debit: amountCols[amountCols.length - 1].i }
+    : { amount: amountCols[0]?.i };
   const desc: number[] = [];
   for (let i = 0; i < ncols; i++) {
-    if (i !== dateCol && i !== amountCol && i !== dcCol) desc.push(i);
+    if (i !== dateCol && i !== valueCols.amount && i !== valueCols.credit && i !== valueCols.debit && i !== dcCol) desc.push(i);
   }
-  return { date: dateCol, amount: amountCol, desc, dc: dcCol };
+  return { date: dateCol, ...valueCols, desc, dc: dcCol };
 }
 
 export function parseCSV(text: string): ParsedLine[] {
@@ -203,19 +254,35 @@ export function parseCSV(text: string): ParsedLine[] {
     const dateCell = r[cols.date] ?? "";
     const date = extractDate(dateCell);
     if (!date) continue;
-    if (cols.amount < 0) continue;
-    const { value, sign } = parseAmountCell(r[cols.amount] ?? "");
-    if (Number.isNaN(value)) continue;
-    let finalSign: -1 | 1 = sign === -1 ? -1 : sign === 1 ? 1 : 1;
-    if (sign === 0 && cols.dc !== undefined) {
-      const dc = (r[cols.dc] ?? "").trim().toUpperCase();
-      if (dc.startsWith("D")) finalSign = -1;
-      else if (dc.startsWith("C")) finalSign = 1;
-    }
     const description =
       cols.desc.map((i) => r[i] ?? "").join(" ").replace(/\s+/g, " ").trim() ||
       null;
-    out.push({ statement_date: date, amount: finalSign * value, description });
+    let amount: number | null = null;
+
+    if (cols.credit !== undefined && cols.debit !== undefined) {
+      const credit = parseAmountCell(r[cols.credit] ?? "");
+      const debit = parseAmountCell(r[cols.debit] ?? "");
+      if (Number.isNaN(credit.value) && Number.isNaN(debit.value)) continue;
+      const forcedSign = signFromDescription(description);
+      const creditValue = Number.isNaN(credit.value) ? 0 : credit.value;
+      const debitValue = Number.isNaN(debit.value) ? 0 : debit.value;
+      if (forcedSign === -1) amount = -Math.abs(debitValue || creditValue);
+      else if (forcedSign === 1) amount = Math.abs(creditValue || debitValue);
+      else amount = debitValue > 0 ? -debitValue : creditValue;
+    } else if (cols.amount !== undefined) {
+      const { value, sign } = parseAmountCell(r[cols.amount] ?? "");
+      if (Number.isNaN(value)) continue;
+      let finalSign: -1 | 1 = sign === -1 ? -1 : sign === 1 ? 1 : 1;
+      if (sign === 0 && cols.dc !== undefined) {
+        const dc = (r[cols.dc] ?? "").trim().toUpperCase();
+        if (dc.startsWith("D")) finalSign = -1;
+        else if (dc.startsWith("C")) finalSign = 1;
+      }
+      amount = applyDescriptionSign(value, description, finalSign);
+    }
+
+    if (amount === null || Math.abs(amount) < 0.005) continue;
+    out.push({ statement_date: date, amount, description });
   }
   return out;
 }
@@ -279,7 +346,11 @@ export function parsePDFText(text: string): ParsedLine[] {
       .trim();
     if (!desc) desc = "(sem descrição)";
     const finalSign: -1 | 1 = sign === -1 ? -1 : sign === 1 ? 1 : 1;
-    out.push({ statement_date: date, amount: finalSign * value, description: desc });
+    out.push({
+      statement_date: date,
+      amount: applyDescriptionSign(value, desc, finalSign),
+      description: desc,
+    });
   }
   return out;
 }

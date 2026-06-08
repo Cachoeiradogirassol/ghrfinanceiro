@@ -104,6 +104,8 @@ function signFromDescription(description: string | null | undefined): -1 | 1 | 0
     /\bdeposito\b/.test(text);
   const expense =
     /\bdoc\s*\/?\s*ted\s+enviad[oa]\b/.test(text) ||
+    /\bted\s+enviad[oa]\b/.test(text) ||
+    /\btransferencia\s+enviad[oa]\b/.test(text) ||
     /\bpix\s+enviad[oa]\b/.test(text) ||
     /\benviad[oa]\b/.test(text) ||
     /\bpago\b|\bpaga\b|\bpagamento\b/.test(text) ||
@@ -120,6 +122,16 @@ function signFromDescription(description: string | null | undefined): -1 | 1 | 0
 function applyDescriptionSign(value: number, description: string | null | undefined, fallback: -1 | 1) {
   const forced = signFromDescription(description);
   return (forced === 0 ? fallback : forced) * Math.abs(value);
+}
+
+function extractLeadingDate(s: string): string | null {
+  const br = /^\s*(\d{2})[/-](\d{2})[/-](\d{2,4})\b/.exec(s);
+  if (br) {
+    const yyyy = br[3].length === 2 ? (parseInt(br[3], 10) < 70 ? `20${br[3]}` : `19${br[3]}`) : br[3];
+    return `${yyyy}-${br[2]}-${br[1]}`;
+  }
+  const iso = /^\s*(\d{4})-(\d{2})-(\d{2})\b/.exec(s);
+  return iso ? `${iso[1]}-${iso[2]}-${iso[3]}` : null;
 }
 
 // ---------- OFX ----------
@@ -325,30 +337,32 @@ async function extractPdfText(file: File): Promise<string> {
 export function parsePDFText(text: string): ParsedLine[] {
   const lines = text.split("\n");
   const out: ParsedLine[] = [];
-  // Match the LAST amount on the line (typical bank PDF: ... description ... 1.234,56 D)
-  const amountRe =
-    /(-?\s*R?\$?\s*\d{1,3}(?:\.\d{3})*(?:,\d{2})|-?\s*\d+,\d{2})\s*([DC])?\b\s*$/i;
+  // PDF digital: read semantic text lines, not bank-specific columns.
+  // Pick the LAST monetary value in the line and force sign by keywords or +/-/D/C markers.
+  const amountRe = /([+-]?[ \t]*(?:R\$[ \t]*)?\d{1,3}(?:\.\d{3})*(?:,\d{2}|\.\d{2})|[+-]?[ \t]*(?:R\$[ \t]*)?\d+(?:,\d{2}|\.\d{2}))[ \t]*([DC])?/gi;
   for (const raw of lines) {
     const line = raw.trim();
     if (!line) continue;
-    const date = extractDate(line);
+    const date = extractLeadingDate(line) ?? extractDate(line);
     if (!date) continue;
-    const am = amountRe.exec(line);
-    if (!am) continue;
-    const amountToken = am[1] + (am[2] ?? "");
+    const matches = Array.from(line.matchAll(amountRe));
+    if (matches.length === 0) continue;
+    const am = matches[matches.length - 1];
+    const amountToken = `${am[1]}${am[2] ?? ""}`;
     const { value, sign } = parseAmountCell(amountToken);
     if (Number.isNaN(value)) continue;
     // Description = line minus date and amount token
     let desc = line
       .replace(am[0], "")
-      .replace(/\b\d{2}\/\d{2}\/\d{2,4}\b|\b\d{4}-\d{2}-\d{2}\b/, "")
+      .replace(/^\s*\d{2}[/-]\d{2}[/-]\d{2,4}\b|^\s*\d{4}-\d{2}-\d{2}\b/, "")
       .replace(/\s+/g, " ")
       .trim();
     if (!desc) desc = "(sem descrição)";
-    const finalSign: -1 | 1 = sign === -1 ? -1 : sign === 1 ? 1 : 1;
+    const forcedSign = signFromDescription(line);
+    const finalSign: -1 | 1 = forcedSign === -1 ? -1 : forcedSign === 1 ? 1 : sign === -1 ? -1 : 1;
     out.push({
       statement_date: date,
-      amount: applyDescriptionSign(value, desc, finalSign),
+      amount: finalSign * Math.abs(value),
       description: desc,
     });
   }

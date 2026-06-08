@@ -85,9 +85,11 @@ export function PromoteLineDialog({
   const amt = line ? Number(line.amount) : 0;
   const isPayable = amt < 0;
   const filteredAccounts = (accQ.data ?? []).filter((a) => {
-    if (!isPayable) return a.kind === "RECEITA";
-    return a.kind !== "RECEITA";
+    if (costCenterId && a.cost_center_id !== costCenterId) return false;
+    if (a.is_active === false) return false;
+    return isPayable ? a.kind === "expense" : a.kind === "revenue";
   });
+
 
   const mut = useMutation({
     mutationFn: async () => {

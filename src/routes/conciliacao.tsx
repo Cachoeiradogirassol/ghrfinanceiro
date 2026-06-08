@@ -377,9 +377,70 @@ function Conc() {
           className="text-sm"
         />
         <span className="text-xs text-muted-foreground">
-          CSV: data,valor,descrição (ex: 2026-06-01,-2800,Folha)
+          Aceita <b>OFX</b> (bancos) ou <b>CSV</b> (data,valor,descrição). O
+          sistema detecta duplicidades, marca lançamentos manuais como pagos e
+          cria pendentes para os movimentos inéditos.
         </span>
       </Card>
+
+      {(() => {
+        const pending = filteredLines.filter(
+          (l) => !l.reconciled && !(l as { matched_transaction_id?: string | null }).matched_transaction_id,
+        );
+        if (pending.length === 0) return null;
+        return (
+          <Card className="p-4 border-amber-500/40 bg-amber-500/5">
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="font-semibold text-sm flex items-center gap-2">
+                <Sparkles className="h-4 w-4 text-amber-600" />
+                Movimentos do extrato aguardando categorização ({pending.length})
+              </h2>
+            </div>
+            <div className="space-y-1 max-h-64 overflow-y-auto">
+              {pending.map((l) => {
+                const isNew = highlightLineIds.has(l.id as string);
+                return (
+                  <div
+                    key={l.id}
+                    className={`flex items-center gap-3 p-2 rounded-md border text-sm bg-background ${
+                      isNew ? "border-amber-500 ring-1 ring-amber-500/40" : "border-border"
+                    }`}
+                  >
+                    <Badge variant="outline" className="gap-1 border-amber-500/60 text-amber-700 dark:text-amber-300">
+                      <Sparkles className="h-3 w-3" /> extrato
+                    </Badge>
+                    <span className="font-mono text-xs w-24">
+                      {new Date(l.statement_date as string).toLocaleDateString("pt-BR")}
+                    </span>
+                    <span className="flex-1 truncate text-xs">{l.description ?? "(sem descrição)"}</span>
+                    <span
+                      className={`font-mono text-xs ${Number(l.amount) < 0 ? "text-destructive" : "text-primary"}`}
+                    >
+                      {fmt(Number(l.amount))}
+                    </span>
+                    <Button
+                      size="sm"
+                      onClick={() =>
+                        setPromoting({
+                          id: l.id as string,
+                          statement_date: l.statement_date as string,
+                          amount: l.amount as number,
+                          description: (l.description ?? null) as string | null,
+                          bank_accounts: (l as { bank_accounts?: { name?: string | null } | null }).bank_accounts ?? null,
+                        })
+                      }
+                    >
+                      Categorizar
+                    </Button>
+                  </div>
+                );
+              })}
+            </div>
+          </Card>
+        );
+      })()}
+
+
 
       {selectedTx && (
         <Card className="p-4 bg-primary/5 border-primary/30">

@@ -372,7 +372,7 @@ function Conc() {
         </Select>
         <input
           type="file"
-          accept=".csv,.ofx,.txt"
+          accept=".csv,.ofx,.txt,.pdf,application/pdf"
           onChange={(e) => {
             const f = e.target.files?.[0];
             if (f) handleCSV(f);
@@ -381,9 +381,9 @@ function Conc() {
           className="text-sm"
         />
         <span className="text-xs text-muted-foreground">
-          Aceita <b>OFX</b> (bancos) ou <b>CSV</b> (data,valor,descrição). O
-          sistema detecta duplicidades, marca lançamentos manuais como pagos e
-          cria pendentes para os movimentos inéditos.
+          Aceita <b>OFX</b>, <b>CSV</b> (BR: ; separador, vírgula decimal) ou{" "}
+          <b>PDF</b> de extrato. O sistema detecta sinais (+/D = entrada, -/D =
+          saída), preserva a data real de cada linha e ignora duplicidades.
         </span>
       </Card>
 
@@ -415,8 +415,8 @@ function Conc() {
               <div className="flex flex-wrap gap-2">
                 <Button
                   size="sm"
-                  variant="default"
                   disabled={credits.length === 0}
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white"
                   onClick={() =>
                     runBulk(async () => {
                       const r = await consolidateFn({
@@ -433,12 +433,12 @@ function Conc() {
                   }
                   title={`${credits.length} crédito(s) • ${fmt(creditsSum)}`}
                 >
-                  Consolidar Entradas em Massa ({credits.length})
+                  ▲ Consolidar Entradas em Massa ({credits.length})
                 </Button>
                 <Button
                   size="sm"
-                  variant="outline"
                   disabled={debits.length === 0}
+                  className="bg-rose-600 hover:bg-rose-700 text-white"
                   onClick={() =>
                     runBulk(async () => {
                       const r = await draftsFn({
@@ -455,47 +455,67 @@ function Conc() {
                   }
                   title={`${debits.length} saída(s) sem nota • ${fmt(debitsSum)}`}
                 >
-                  Gerar Rascunhos de Saídas s/ Comprovação ({debits.length})
+                  ▼ Gerar Rascunhos de Saídas s/ Comprovação ({debits.length})
                 </Button>
               </div>
             </div>
 
-            <div className="space-y-1 max-h-64 overflow-y-auto">
+            <div className="grid gap-4 md:grid-cols-2 max-h-[520px] overflow-y-auto pr-1">
               {pending.map((l) => {
                 const isNew = highlightLineIds.has(l.id as string);
+                const isCredit = Number(l.amount) > 0;
                 return (
                   <div
                     key={l.id}
-                    className={`flex items-center gap-3 p-2 rounded-md border text-sm bg-background ${
-                      isNew ? "border-amber-500 ring-1 ring-amber-500/40" : "border-border"
+                    className={`rounded-xl border-2 bg-card p-5 shadow-sm transition hover:shadow-md ${
+                      isNew
+                        ? "ring-2 ring-amber-500/60 border-amber-500/60"
+                        : isCredit
+                          ? "border-emerald-500/30"
+                          : "border-rose-500/30"
                     }`}
                   >
-                    <Badge variant="outline" className="gap-1 border-amber-500/60 text-amber-700 dark:text-amber-300">
-                      <Sparkles className="h-3 w-3" /> extrato
-                    </Badge>
-                    <span className="font-mono text-xs w-24">
-                      {new Date(l.statement_date as string).toLocaleDateString("pt-BR")}
-                    </span>
-                    <span className="flex-1 truncate text-xs">{l.description ?? "(sem descrição)"}</span>
-                    <span
-                      className={`font-mono text-xs ${Number(l.amount) < 0 ? "text-destructive" : "text-primary"}`}
-                    >
-                      {fmt(Number(l.amount))}
-                    </span>
-                    <Button
-                      size="sm"
-                      onClick={() =>
-                        setPromoting({
-                          id: l.id as string,
-                          statement_date: l.statement_date as string,
-                          amount: l.amount as number,
-                          description: (l.description ?? null) as string | null,
-                          bank_accounts: (l as { bank_accounts?: { name?: string | null } | null }).bank_accounts ?? null,
-                        })
-                      }
-                    >
-                      Categorizar
-                    </Button>
+                    <div className="flex items-start justify-between gap-3 mb-3">
+                      <Badge
+                        className={
+                          isCredit
+                            ? "bg-emerald-600 hover:bg-emerald-600 text-white border-0"
+                            : "bg-rose-600 hover:bg-rose-600 text-white border-0"
+                        }
+                      >
+                        {isCredit ? "ENTRADA" : "SAÍDA"}
+                      </Badge>
+                      <span className="font-mono text-sm font-medium text-muted-foreground">
+                        {new Date(l.statement_date as string).toLocaleDateString("pt-BR")}
+                      </span>
+                    </div>
+                    <p className="text-sm font-medium leading-snug mb-3 line-clamp-2 min-h-[2.5rem]">
+                      {l.description ?? "(sem descrição)"}
+                    </p>
+                    <div className="flex items-center justify-between gap-3">
+                      <span
+                        className={`text-xl font-bold tabular-nums ${
+                          isCredit ? "text-emerald-600" : "text-rose-600"
+                        }`}
+                      >
+                        {isCredit ? "+ " : "- "}
+                        {fmt(Math.abs(Number(l.amount)))}
+                      </span>
+                      <Button
+                        size="sm"
+                        onClick={() =>
+                          setPromoting({
+                            id: l.id as string,
+                            statement_date: l.statement_date as string,
+                            amount: l.amount as number,
+                            description: (l.description ?? null) as string | null,
+                            bank_accounts: (l as { bank_accounts?: { name?: string | null } | null }).bank_accounts ?? null,
+                          })
+                        }
+                      >
+                        Categorizar
+                      </Button>
+                    </div>
                   </div>
                 );
               })}
@@ -548,42 +568,54 @@ function Conc() {
               ({filteredLines.length})
             </span>
           </h2>
-          <div className="space-y-1 max-h-[600px] overflow-y-auto">
-            {filteredLines.map((l) => (
-              <label
-                key={l.id}
-                className={`flex items-center gap-3 p-2 rounded-md border text-sm cursor-pointer transition ${
-                  l.reconciled
-                    ? "opacity-60 bg-muted/30"
-                    : selectedLines.has(l.id)
-                      ? "bg-primary/10 border-primary"
-                      : "hover:bg-accent border-border"
-                }`}
-              >
-                <Checkbox
-                  checked={selectedLines.has(l.id)}
-                  disabled={l.reconciled || !selectedTx}
-                  onCheckedChange={() => toggleLine(l.id)}
-                />
-                <span className="font-mono text-xs w-24">
-                  {new Date(l.statement_date as string).toLocaleDateString("pt-BR")}
-                </span>
-                <span className="flex-1 truncate text-xs">{l.description}</span>
-                <span
-                  className={`font-mono text-xs ${Number(l.amount) < 0 ? "text-destructive" : "text-primary"}`}
+          <div className="space-y-3 max-h-[600px] pr-1 overflow-y-auto">
+            {filteredLines.map((l) => {
+              const isCredit = Number(l.amount) > 0;
+              return (
+                <label
+                  key={l.id}
+                  className={`flex items-center gap-4 p-4 rounded-lg border-2 cursor-pointer transition ${
+                    l.reconciled
+                      ? "opacity-60 bg-muted/30 border-border"
+                      : selectedLines.has(l.id)
+                        ? "bg-primary/10 border-primary"
+                        : `hover:bg-accent ${isCredit ? "border-emerald-500/30" : "border-rose-500/30"}`
+                  }`}
                 >
-                  {fmt(Number(l.amount))}
-                </span>
-                {l.reconciled && <Badge variant="outline">conciliado</Badge>}
-                {isMaster &&
-                  (l as { matched_by?: string }).matched_by && (
-                    <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
-                      <User className="h-3 w-3" />
-                      {userLabel((l as { matched_by: string }).matched_by)}
-                    </span>
-                  )}
-              </label>
-            ))}
+                  <Checkbox
+                    checked={selectedLines.has(l.id)}
+                    disabled={l.reconciled || !selectedTx}
+                    onCheckedChange={() => toggleLine(l.id)}
+                  />
+                  <Badge
+                    className={
+                      isCredit
+                        ? "bg-emerald-600 hover:bg-emerald-600 text-white border-0"
+                        : "bg-rose-600 hover:bg-rose-600 text-white border-0"
+                    }
+                  >
+                    {isCredit ? "+" : "−"}
+                  </Badge>
+                  <span className="font-mono text-sm w-24 font-medium">
+                    {new Date(l.statement_date as string).toLocaleDateString("pt-BR")}
+                  </span>
+                  <span className="flex-1 truncate text-sm">{l.description}</span>
+                  <span
+                    className={`font-mono text-base font-bold tabular-nums ${isCredit ? "text-emerald-600" : "text-rose-600"}`}
+                  >
+                    {fmt(Number(l.amount))}
+                  </span>
+                  {l.reconciled && <Badge variant="outline">conciliado</Badge>}
+                  {isMaster &&
+                    (l as { matched_by?: string }).matched_by && (
+                      <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
+                        <User className="h-3 w-3" />
+                        {userLabel((l as { matched_by: string }).matched_by)}
+                      </span>
+                    )}
+                </label>
+              );
+            })}
             {filteredLines.length === 0 && (
               <p className="text-muted-foreground text-sm p-4 text-center">
                 Nenhuma linha no período.
@@ -599,7 +631,7 @@ function Conc() {
               ({filteredTxs.length})
             </span>
           </h2>
-          <div className="space-y-1 max-h-[600px] overflow-y-auto">
+          <div className="space-y-3 max-h-[600px] pr-1 overflow-y-auto">
             {filteredTxs
               .filter((t) => t.status !== "reconciled")
               .map((t) => {

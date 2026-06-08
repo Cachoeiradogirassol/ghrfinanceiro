@@ -6,8 +6,8 @@ import {
   listStatementLines,
   listTransactions,
   listBankAccounts,
-  importStatementLines,
   smartImportStatement,
+
   autoMatch,
   reconcile,
   listReconciliationPeriods,

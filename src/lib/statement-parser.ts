@@ -339,7 +339,7 @@ export function parsePDFText(text: string): ParsedLine[] {
   const out: ParsedLine[] = [];
   // PDF digital: read semantic text lines, not bank-specific columns.
   // Pick the LAST monetary value in the line and force sign by keywords or +/-/D/C markers.
-  const amountRe = /([+-]?\s*(?:R\$\s*)?\d{1,3}(?:\.\d{3})*(?:,\d{2}|\.\d{2})|[+-]?\s*(?:R\$\s*)?\d+(?:,\d{2}|\.\d{2}))\s*([DC])?/gi;
+  const amountRe = /([+-]?[ \t]*(?:R\$[ \t]*)?\d{1,3}(?:\.\d{3})*(?:,\d{2}|\.\d{2})|[+-]?[ \t]*(?:R\$[ \t]*)?\d+(?:,\d{2}|\.\d{2}))[ \t]*([DC])?/gi;
   for (const raw of lines) {
     const line = raw.trim();
     if (!line) continue;

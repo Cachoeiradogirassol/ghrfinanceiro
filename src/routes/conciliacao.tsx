@@ -148,6 +148,10 @@ function Conc() {
       toast.error("Selecione uma conta bancária");
       return;
     }
+    if (!file.name.toLowerCase().endsWith(".pdf") && file.type !== "application/pdf") {
+      toast.error("Para o novo teste, envie apenas extrato em PDF digital.");
+      return;
+    }
     try {
       const rows = await parseStatementFile(file);
       if (rows.length === 0) {
@@ -372,7 +376,7 @@ function Conc() {
         </Select>
         <input
           type="file"
-          accept=".csv,.ofx,.txt,.pdf,application/pdf"
+          accept=".pdf,application/pdf"
           onChange={(e) => {
             const f = e.target.files?.[0];
             if (f) handleCSV(f);
@@ -381,9 +385,9 @@ function Conc() {
           className="text-sm"
         />
         <span className="text-xs text-muted-foreground">
-          Aceita <b>OFX</b>, <b>CSV</b> (BR: ; separador, vírgula decimal) ou{" "}
-          <b>PDF</b> de extrato. O sistema detecta sinais (+/D = entrada, -/D =
-          saída), preserva a data real de cada linha e ignora duplicidades.
+          Novo teste: arraste um <b>PDF digital</b> de extrato. O sistema lê o texto,
+          força <b>saídas</b> por termos como enviado/pago/tarifa ou sinal − e
+          <b> entradas</b> por recebido/crédito/depósito ou sinal +, preservando a data real.
         </span>
       </Card>
 

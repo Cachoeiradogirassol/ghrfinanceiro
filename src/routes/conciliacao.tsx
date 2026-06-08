@@ -585,6 +585,12 @@ function Conc() {
           </div>
         </Card>
       </div>
+      <PromoteLineDialog
+        line={promoting}
+        open={!!promoting}
+        onOpenChange={(v) => { if (!v) setPromoting(null); }}
+      />
     </div>
   );
+
 }

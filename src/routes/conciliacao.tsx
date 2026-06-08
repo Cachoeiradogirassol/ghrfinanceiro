@@ -415,8 +415,8 @@ function Conc() {
               <div className="flex flex-wrap gap-2">
                 <Button
                   size="sm"
-                  variant="default"
                   disabled={credits.length === 0}
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white"
                   onClick={() =>
                     runBulk(async () => {
                       const r = await consolidateFn({
@@ -433,12 +433,12 @@ function Conc() {
                   }
                   title={`${credits.length} crédito(s) • ${fmt(creditsSum)}`}
                 >
-                  Consolidar Entradas em Massa ({credits.length})
+                  ▲ Consolidar Entradas em Massa ({credits.length})
                 </Button>
                 <Button
                   size="sm"
-                  variant="outline"
                   disabled={debits.length === 0}
+                  className="bg-rose-600 hover:bg-rose-700 text-white"
                   onClick={() =>
                     runBulk(async () => {
                       const r = await draftsFn({
@@ -455,7 +455,7 @@ function Conc() {
                   }
                   title={`${debits.length} saída(s) sem nota • ${fmt(debitsSum)}`}
                 >
-                  Gerar Rascunhos de Saídas s/ Comprovação ({debits.length})
+                  ▼ Gerar Rascunhos de Saídas s/ Comprovação ({debits.length})
                 </Button>
               </div>
             </div>

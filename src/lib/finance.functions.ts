@@ -453,6 +453,210 @@ export const reconcile = createServerFn({ method: "POST" })
     return { ok: true, sum: sumLines };
   });
 
+// ---------- SMART IMPORT (dedupe + auto-create skeleton) ----------
+const SmartImportInput = z.object({
+  bank_account_id: z.string().uuid(),
+  match_window_days: z.number().int().min(0).max(30).default(7),
+  lines: z
+    .array(
+      z.object({
+        statement_date: z.string(),
+        amount: z.number(),
+        description: z.string().optional().nullable(),
+        external_id: z.string().optional().nullable(),
+      }),
+    )
+    .min(1)
+    .max(2000),
+});
+
+export const smartImportStatement = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => SmartImportInput.parse(d))
+  .handler(async ({ context, data }) => {
+    const windowMs = data.match_window_days * 24 * 60 * 60 * 1000;
+    const dates = data.lines.map((l) => l.statement_date).sort();
+    const minDate = dates[0];
+    const maxDate = dates[dates.length - 1];
+    const padDate = (iso: string, days: number) => {
+      const d = new Date(iso + "T00:00:00Z");
+      d.setUTCDate(d.getUTCDate() + days);
+      return d.toISOString().slice(0, 10);
+    };
+
+    // Avoid re-importing the same line (by bank + date + amount + description)
+    const { data: existing } = await context.supabase
+      .from("bank_statement_lines")
+      .select("statement_date, amount, description")
+      .eq("bank_account_id", data.bank_account_id)
+      .gte("statement_date", padDate(minDate, -1))
+      .lte("statement_date", padDate(maxDate, 1));
+    const existKey = new Set(
+      (existing ?? []).map(
+        (l) =>
+          `${l.statement_date}|${Number(l.amount).toFixed(2)}|${(l.description ?? "").trim().toLowerCase()}`,
+      ),
+    );
+
+    const { data: txs } = await context.supabase
+      .from("transactions")
+      .select("id, amount, due_date, document_datetime, status")
+      .neq("status", "reconciled")
+      .gte("due_date", padDate(minDate, -data.match_window_days))
+      .lte("due_date", padDate(maxDate, data.match_window_days));
+    const usedTxIds = new Set<string>();
+
+    let duplicates = 0;
+    let matchedExisting = 0;
+    let createdSkeleton = 0;
+    const skeletonIds: string[] = [];
+
+    for (const line of data.lines) {
+      const key = `${line.statement_date}|${Number(line.amount).toFixed(2)}|${(line.description ?? "").trim().toLowerCase()}`;
+      if (existKey.has(key)) {
+        duplicates++;
+        continue;
+      }
+
+      const lineMs = new Date(line.statement_date + "T00:00:00Z").getTime();
+      const absAmount = Math.abs(line.amount);
+      const candidate = (txs ?? []).find((t) => {
+        if (usedTxIds.has(t.id)) return false;
+        if (Math.abs(Number(t.amount) - absAmount) > 0.01) return false;
+        const ref = t.document_datetime
+          ? new Date(t.document_datetime).getTime()
+          : new Date(t.due_date + "T00:00:00Z").getTime();
+        return Math.abs(ref - lineMs) <= windowMs;
+      });
+
+      if (candidate) {
+        usedTxIds.add(candidate.id);
+        const paidAt = new Date(line.statement_date + "T12:00:00Z").toISOString();
+        const { data: inserted, error: insErr } = await context.supabase
+          .from("bank_statement_lines")
+          .insert({
+            bank_account_id: data.bank_account_id,
+            statement_date: line.statement_date,
+            amount: line.amount,
+            description: line.description ?? null,
+            matched_transaction_id: candidate.id,
+            reconciled: true,
+            matched_by: context.userId,
+            matched_at: new Date().toISOString(),
+          })
+          .select("id")
+          .single();
+        if (insErr) throw new Error(insErr.message);
+        await context.supabase
+          .from("transactions")
+          .update({ status: "paid", paid_at: paidAt })
+          .eq("id", candidate.id);
+        matchedExisting++;
+        existKey.add(key);
+        skeletonIds.push(inserted!.id);
+      } else {
+        const { data: inserted, error: insErr } = await context.supabase
+          .from("bank_statement_lines")
+          .insert({
+            bank_account_id: data.bank_account_id,
+            statement_date: line.statement_date,
+            amount: line.amount,
+            description: line.description ?? null,
+          })
+          .select("id")
+          .single();
+        if (insErr) throw new Error(insErr.message);
+        createdSkeleton++;
+        existKey.add(key);
+        skeletonIds.push(inserted!.id);
+      }
+    }
+
+    return {
+      total: data.lines.length,
+      duplicates,
+      matched_existing: matchedExisting,
+      pending_categorization: createdSkeleton,
+      line_ids: skeletonIds,
+    };
+  });
+
+const PromoteLineInput = z.object({
+  statement_line_id: z.string().uuid(),
+  cost_center_id: z.string().uuid(),
+  account_id: z.string().uuid(),
+  contact_id: z.string().uuid().nullable().optional(),
+  description: z.string().max(500).nullable().optional(),
+  payment_method: z.enum(["pix", "boleto", "credit_card", "cash"]).nullable().optional(),
+});
+
+export const promoteStatementLineToTransaction = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => PromoteLineInput.parse(d))
+  .handler(async ({ context, data }) => {
+    const { data: line, error: lineErr } = await context.supabase
+      .from("bank_statement_lines")
+      .select("id, bank_account_id, statement_date, amount, description, matched_transaction_id, reconciled")
+      .eq("id", data.statement_line_id)
+      .single();
+    if (lineErr || !line) throw new Error("Linha de extrato não encontrada");
+    if (line.reconciled || line.matched_transaction_id)
+      throw new Error("Linha já está conciliada");
+
+    const { data: cc } = await context.supabase
+      .from("cost_centers")
+      .select("enterprise, name")
+      .eq("id", data.cost_center_id)
+      .maybeSingle();
+    const SELECTABLE = ["turismo", "restaurante", "vinhedo", "ghr_aldeia", "ghr_jk"];
+    if (!cc || !SELECTABLE.includes(cc.enterprise ?? "")) {
+      throw new Error(
+        `Bloco "${cc?.name ?? "desconhecido"}" é apenas agrupador; selecione um centro de custo finalístico.`,
+      );
+    }
+
+    const amt = Number(line.amount);
+    const type = amt < 0 ? "payable" : "receivable";
+    const absAmt = Math.abs(amt);
+    const dueDate = line.statement_date as string;
+    const paidAt = new Date(dueDate + "T12:00:00Z").toISOString();
+
+    const { data: tx, error: txErr } = await context.supabase
+      .from("transactions")
+      .insert({
+        cost_center_id: data.cost_center_id,
+        account_id: data.account_id,
+        bank_account_id: line.bank_account_id,
+        contact_id: data.contact_id ?? null,
+        type,
+        amount: absAmt,
+        description: data.description ?? line.description ?? null,
+        document_datetime: paidAt,
+        due_date: dueDate,
+        status: "reconciled",
+        paid_at: paidAt,
+        payment_method: data.payment_method ?? null,
+        created_by: context.userId,
+      })
+      .select("id")
+      .single();
+    if (txErr || !tx) throw new Error(txErr?.message ?? "Falha ao criar lançamento");
+
+    await context.supabase
+      .from("bank_statement_lines")
+      .update({
+        matched_transaction_id: tx.id,
+        reconciled: true,
+        matched_by: context.userId,
+        matched_at: new Date().toISOString(),
+      })
+      .eq("id", line.id);
+
+    return { ok: true, transaction_id: tx.id };
+  });
+
+
+
 
 // ---------- DRE + PROJECTION (com filtro de empreendimento) ----------
 type EnterpriseValue =

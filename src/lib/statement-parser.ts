@@ -224,10 +224,8 @@ export function parseCSV(text: string): ParsedLine[] {
 
 async function extractPdfText(file: File): Promise<string> {
   // Dynamic import keeps pdfjs out of any SSR bundle.
-  const pdfjs = await import("pdfjs-dist/build/pdf.mjs");
-  // Use a CDN worker to avoid bundling issues.
+  const pdfjs: any = await import("pdfjs-dist/build/pdf.mjs" as string);
   try {
-    // @ts-expect-error workerSrc is set at runtime
     pdfjs.GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
   } catch {
     /* noop */

@@ -104,6 +104,8 @@ function signFromDescription(description: string | null | undefined): -1 | 1 | 0
     /\bdeposito\b/.test(text);
   const expense =
     /\bdoc\s*\/?\s*ted\s+enviad[oa]\b/.test(text) ||
+    /\bted\s+enviad[oa]\b/.test(text) ||
+    /\btransferencia\s+enviad[oa]\b/.test(text) ||
     /\bpix\s+enviad[oa]\b/.test(text) ||
     /\benviad[oa]\b/.test(text) ||
     /\bpago\b|\bpaga\b|\bpagamento\b/.test(text) ||
@@ -120,6 +122,16 @@ function signFromDescription(description: string | null | undefined): -1 | 1 | 0
 function applyDescriptionSign(value: number, description: string | null | undefined, fallback: -1 | 1) {
   const forced = signFromDescription(description);
   return (forced === 0 ? fallback : forced) * Math.abs(value);
+}
+
+function extractLeadingDate(s: string): string | null {
+  const br = /^\s*(\d{2})[/-](\d{2})[/-](\d{2,4})\b/.exec(s);
+  if (br) {
+    const yyyy = br[3].length === 2 ? (parseInt(br[3], 10) < 70 ? `20${br[3]}` : `19${br[3]}`) : br[3];
+    return `${yyyy}-${br[2]}-${br[1]}`;
+  }
+  const iso = /^\s*(\d{4})-(\d{2})-(\d{2})\b/.exec(s);
+  return iso ? `${iso[1]}-${iso[2]}-${iso[3]}` : null;
 }
 
 // ---------- OFX ----------

@@ -79,7 +79,7 @@ function Conc() {
   const linesFn = useServerFn(listStatementLines);
   const txFn = useServerFn(listTransactions);
   const banksFn = useServerFn(listBankAccounts);
-  const importFn = useServerFn(importStatementLines);
+  const importFn = useServerFn(smartImportStatement);
   const matchFn = useServerFn(autoMatch);
   const recFn = useServerFn(reconcile);
   const periodsFn = useServerFn(listReconciliationPeriods);

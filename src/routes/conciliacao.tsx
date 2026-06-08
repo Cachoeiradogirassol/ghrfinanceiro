@@ -568,7 +568,7 @@ function Conc() {
               ({filteredLines.length})
             </span>
           </h2>
-          <div className="space-y-1 max-h-[600px] overflow-y-auto">
+          <div className="space-y-3 max-h-[600px] pr-1 overflow-y-auto">
             {filteredLines.map((l) => {
               const isCredit = Number(l.amount) > 0;
               return (
@@ -631,7 +631,7 @@ function Conc() {
               ({filteredTxs.length})
             </span>
           </h2>
-          <div className="space-y-1 max-h-[600px] overflow-y-auto">
+          <div className="space-y-3 max-h-[600px] pr-1 overflow-y-auto">
             {filteredTxs
               .filter((t) => t.status !== "reconciled")
               .map((t) => {

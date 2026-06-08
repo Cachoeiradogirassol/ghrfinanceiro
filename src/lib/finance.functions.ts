@@ -655,7 +655,199 @@ export const promoteStatementLineToTransaction = createServerFn({ method: "POST"
     return { ok: true, transaction_id: tx.id };
   });
 
+const BulkRangeInput = z.object({
+  bank_account_id: z.string().uuid().nullable().optional(),
+  start_date: z.string(),
+  end_date: z.string(),
+});
 
+// Pick the native cost center + a default account for a bank, based on bank.enterprise
+async function pickBankDefaults(
+  supabase: { from: (t: string) => unknown },
+  bankId: string,
+  kind: "revenue" | "expense",
+): Promise<{ cost_center_id: string; account_id: string; bank_name: string } | null> {
+  const supa = supabase as unknown as {
+    from: (t: string) => {
+      select: (s: string) => {
+        eq: (c: string, v: unknown) => {
+          maybeSingle?: () => Promise<{ data: unknown }>;
+          order?: (c: string) => { limit: (n: number) => Promise<{ data: unknown }> };
+        };
+      };
+    };
+  };
+  const bankRes = (await supa
+    .from("bank_accounts")
+    .select("id, name, enterprise")
+    .eq("id", bankId)
+    .maybeSingle!()) as { data: { id: string; name: string; enterprise: string } | null };
+  if (!bankRes.data) return null;
+  const ent = bankRes.data.enterprise;
+  const ccRes = (await supa
+    .from("cost_centers")
+    .select("id")
+    .eq("enterprise", ent)
+    .order!("code")
+    .limit(1)) as { data: Array<{ id: string }> };
+  const ccId = ccRes.data?.[0]?.id;
+  if (!ccId) return null;
+  const accRes = (await supa.from("accounts").select("id, name, kind").eq("cost_center_id", ccId)) as unknown as {
+    data: Array<{ id: string; name: string; kind: string }> | null;
+  };
+  const accs = (accRes.data ?? []).filter((a) => a.kind === kind);
+  if (accs.length === 0) return null;
+  const preferred = accs.find((a) => /outros/i.test(a.name)) ?? accs[0];
+  return { cost_center_id: ccId, account_id: preferred.id, bank_name: bankRes.data.name };
+}
+
+// 1) Consolidate all pending positive (revenue) statement lines per bank into a single transaction
+export const consolidateStatementRevenues = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => BulkRangeInput.parse(d))
+  .handler(async ({ context, data }) => {
+    let query = context.supabase
+      .from("bank_statement_lines")
+      .select("id, bank_account_id, statement_date, amount, description, reconciled, matched_transaction_id")
+      .gte("statement_date", data.start_date)
+      .lte("statement_date", data.end_date)
+      .eq("reconciled", false)
+      .is("matched_transaction_id", null)
+      .gt("amount", 0);
+    if (data.bank_account_id) query = query.eq("bank_account_id", data.bank_account_id);
+    const { data: lines, error } = await query;
+    if (error) throw new Error(error.message);
+    if (!lines || lines.length === 0) return { ok: true, created: 0, lines: 0, total: 0 };
+
+    const byBank = new Map<string, typeof lines>();
+    for (const l of lines) {
+      const arr = byBank.get(l.bank_account_id as string) ?? [];
+      arr.push(l);
+      byBank.set(l.bank_account_id as string, arr);
+    }
+
+    let created = 0;
+    let lineCount = 0;
+    let total = 0;
+
+    for (const [bankId, group] of byBank) {
+      const defaults = await pickBankDefaults(
+        context.supabase as unknown as { from: (t: string) => unknown },
+        bankId,
+        "revenue",
+      );
+      if (!defaults) continue;
+      const sum = group.reduce((s, l) => s + Number(l.amount), 0);
+      const lastDate = group.reduce(
+        (acc, l) => ((l.statement_date as string) > acc ? (l.statement_date as string) : acc),
+        group[0].statement_date as string,
+      );
+      const paidAt = new Date(lastDate + "T12:00:00Z").toISOString();
+      const { data: tx, error: txErr } = await context.supabase
+        .from("transactions")
+        .insert({
+          cost_center_id: defaults.cost_center_id,
+          account_id: defaults.account_id,
+          bank_account_id: bankId,
+          type: "receivable",
+          amount: sum,
+          description: `Receita Operacional Consolidada via Extrato - ${defaults.bank_name} (${data.start_date} a ${data.end_date})`,
+          document_datetime: paidAt,
+          due_date: lastDate,
+          status: "paid",
+          paid_at: paidAt,
+          created_by: context.userId,
+        })
+        .select("id")
+        .single();
+      if (txErr || !tx) throw new Error(txErr?.message ?? "Falha ao criar receita consolidada");
+      const ids = group.map((l) => l.id as string);
+      await context.supabase
+        .from("bank_statement_lines")
+        .update({
+          matched_transaction_id: tx.id,
+          reconciled: true,
+          matched_by: context.userId,
+          matched_at: new Date().toISOString(),
+        })
+        .in("id", ids);
+      created++;
+      lineCount += group.length;
+      total += sum;
+    }
+
+    return { ok: true, created, lines: lineCount, total };
+  });
+
+// 2) Create "Saída Sem Comprovação" drafts for unmatched negative lines so balance reflects reality
+export const createUnverifiedExpenseDrafts = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => BulkRangeInput.parse(d))
+  .handler(async ({ context, data }) => {
+    let query = context.supabase
+      .from("bank_statement_lines")
+      .select("id, bank_account_id, statement_date, amount, description, reconciled, matched_transaction_id")
+      .gte("statement_date", data.start_date)
+      .lte("statement_date", data.end_date)
+      .eq("reconciled", false)
+      .is("matched_transaction_id", null)
+      .lt("amount", 0);
+    if (data.bank_account_id) query = query.eq("bank_account_id", data.bank_account_id);
+    const { data: lines, error } = await query;
+    if (error) throw new Error(error.message);
+    if (!lines || lines.length === 0) return { ok: true, created: 0 };
+
+    const cache = new Map<string, { cost_center_id: string; account_id: string; bank_name: string } | null>();
+    let created = 0;
+    for (const l of lines) {
+      const bankId = l.bank_account_id as string;
+      if (!cache.has(bankId)) {
+        cache.set(
+          bankId,
+          await pickBankDefaults(
+            context.supabase as unknown as { from: (t: string) => unknown },
+            bankId,
+            "expense",
+          ),
+        );
+      }
+      const defaults = cache.get(bankId);
+      if (!defaults) continue;
+      const amt = Math.abs(Number(l.amount));
+      const dueDate = l.statement_date as string;
+      const paidAt = new Date(dueDate + "T12:00:00Z").toISOString();
+      const favorecido = ((l.description ?? "") as string).trim().slice(0, 120) || "Sem descrição";
+      const { data: tx, error: txErr } = await context.supabase
+        .from("transactions")
+        .insert({
+          cost_center_id: defaults.cost_center_id,
+          account_id: defaults.account_id,
+          bank_account_id: bankId,
+          type: "payable",
+          amount: amt,
+          description: `Saída Sem Comprovação - ${favorecido}`,
+          document_datetime: paidAt,
+          due_date: dueDate,
+          status: "paid",
+          paid_at: paidAt,
+          created_by: context.userId,
+        })
+        .select("id")
+        .single();
+      if (txErr || !tx) throw new Error(txErr?.message ?? "Falha ao criar rascunho de saída");
+      await context.supabase
+        .from("bank_statement_lines")
+        .update({
+          matched_transaction_id: tx.id,
+          reconciled: true,
+          matched_by: context.userId,
+          matched_at: new Date().toISOString(),
+        })
+        .eq("id", l.id as string);
+      created++;
+    }
+    return { ok: true, created };
+  });
 
 
 // ---------- DRE + PROJECTION (com filtro de empreendimento) ----------

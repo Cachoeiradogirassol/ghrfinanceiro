@@ -569,41 +569,53 @@ function Conc() {
             </span>
           </h2>
           <div className="space-y-1 max-h-[600px] overflow-y-auto">
-            {filteredLines.map((l) => (
-              <label
-                key={l.id}
-                className={`flex items-center gap-3 p-2 rounded-md border text-sm cursor-pointer transition ${
-                  l.reconciled
-                    ? "opacity-60 bg-muted/30"
-                    : selectedLines.has(l.id)
-                      ? "bg-primary/10 border-primary"
-                      : "hover:bg-accent border-border"
-                }`}
-              >
-                <Checkbox
-                  checked={selectedLines.has(l.id)}
-                  disabled={l.reconciled || !selectedTx}
-                  onCheckedChange={() => toggleLine(l.id)}
-                />
-                <span className="font-mono text-xs w-24">
-                  {new Date(l.statement_date as string).toLocaleDateString("pt-BR")}
-                </span>
-                <span className="flex-1 truncate text-xs">{l.description}</span>
-                <span
-                  className={`font-mono text-xs ${Number(l.amount) < 0 ? "text-destructive" : "text-primary"}`}
+            {filteredLines.map((l) => {
+              const isCredit = Number(l.amount) > 0;
+              return (
+                <label
+                  key={l.id}
+                  className={`flex items-center gap-4 p-4 rounded-lg border-2 cursor-pointer transition ${
+                    l.reconciled
+                      ? "opacity-60 bg-muted/30 border-border"
+                      : selectedLines.has(l.id)
+                        ? "bg-primary/10 border-primary"
+                        : `hover:bg-accent ${isCredit ? "border-emerald-500/30" : "border-rose-500/30"}`
+                  }`}
                 >
-                  {fmt(Number(l.amount))}
-                </span>
-                {l.reconciled && <Badge variant="outline">conciliado</Badge>}
-                {isMaster &&
-                  (l as { matched_by?: string }).matched_by && (
-                    <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
-                      <User className="h-3 w-3" />
-                      {userLabel((l as { matched_by: string }).matched_by)}
-                    </span>
-                  )}
-              </label>
-            ))}
+                  <Checkbox
+                    checked={selectedLines.has(l.id)}
+                    disabled={l.reconciled || !selectedTx}
+                    onCheckedChange={() => toggleLine(l.id)}
+                  />
+                  <Badge
+                    className={
+                      isCredit
+                        ? "bg-emerald-600 hover:bg-emerald-600 text-white border-0"
+                        : "bg-rose-600 hover:bg-rose-600 text-white border-0"
+                    }
+                  >
+                    {isCredit ? "+" : "−"}
+                  </Badge>
+                  <span className="font-mono text-sm w-24 font-medium">
+                    {new Date(l.statement_date as string).toLocaleDateString("pt-BR")}
+                  </span>
+                  <span className="flex-1 truncate text-sm">{l.description}</span>
+                  <span
+                    className={`font-mono text-base font-bold tabular-nums ${isCredit ? "text-emerald-600" : "text-rose-600"}`}
+                  >
+                    {fmt(Number(l.amount))}
+                  </span>
+                  {l.reconciled && <Badge variant="outline">conciliado</Badge>}
+                  {isMaster &&
+                    (l as { matched_by?: string }).matched_by && (
+                      <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
+                        <User className="h-3 w-3" />
+                        {userLabel((l as { matched_by: string }).matched_by)}
+                      </span>
+                    )}
+                </label>
+              );
+            })}
             {filteredLines.length === 0 && (
               <p className="text-muted-foreground text-sm p-4 text-center">
                 Nenhuma linha no período.

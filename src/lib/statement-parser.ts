@@ -346,7 +346,11 @@ export function parsePDFText(text: string): ParsedLine[] {
       .trim();
     if (!desc) desc = "(sem descrição)";
     const finalSign: -1 | 1 = sign === -1 ? -1 : sign === 1 ? 1 : 1;
-    out.push({ statement_date: date, amount: finalSign * value, description: desc });
+    out.push({
+      statement_date: date,
+      amount: applyDescriptionSign(value, desc, finalSign),
+      description: desc,
+    });
   }
   return out;
 }

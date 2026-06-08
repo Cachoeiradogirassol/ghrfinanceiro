@@ -144,31 +144,30 @@ function Conc() {
       toast.error("Selecione uma conta bancária");
       return;
     }
-    const text = await file.text();
-    const rows = text
-      .split("\n")
-      .map((l) => l.trim())
-      .filter(Boolean)
-      .slice(file.name.endsWith(".csv") ? 1 : 0)
-      .map((l) => {
-        const [date, amount, ...desc] = l.split(/[,;\t]/);
-        return {
-          statement_date: date,
-          amount: parseFloat(amount),
-          description: desc.join(",").trim(),
-        };
-      })
-      .filter((r) => !isNaN(r.amount) && r.statement_date);
     try {
+      const rows = await parseStatementFile(file);
+      if (rows.length === 0) {
+        toast.error("Não foi possível extrair linhas do arquivo");
+        return;
+      }
       const res = await importFn({
         data: { bank_account_id: importBankId, lines: rows },
       });
-      toast.success(`${res.inserted} linhas importadas`);
+      const parts = [
+        `${res.matched_existing} conciliada(s) com lançamento existente`,
+        `${res.pending_categorization} nova(s) aguardando categoria`,
+        res.duplicates ? `${res.duplicates} duplicada(s) ignorada(s)` : null,
+      ].filter(Boolean);
+      toast.success(`Extrato processado: ${parts.join(" • ")}`);
+      setHighlightLineIds(new Set(res.line_ids));
       qc.invalidateQueries({ queryKey: ["lines"] });
+      qc.invalidateQueries({ queryKey: ["txs"] });
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Erro");
     }
   };
+
+
 
   const runAutoMatch = async () => {
     const r = await matchFn();

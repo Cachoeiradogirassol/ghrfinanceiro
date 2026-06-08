@@ -372,7 +372,7 @@ function Conc() {
         </Select>
         <input
           type="file"
-          accept=".csv,.ofx,.txt"
+          accept=".csv,.ofx,.txt,.pdf,application/pdf"
           onChange={(e) => {
             const f = e.target.files?.[0];
             if (f) handleCSV(f);
@@ -381,9 +381,9 @@ function Conc() {
           className="text-sm"
         />
         <span className="text-xs text-muted-foreground">
-          Aceita <b>OFX</b> (bancos) ou <b>CSV</b> (data,valor,descrição). O
-          sistema detecta duplicidades, marca lançamentos manuais como pagos e
-          cria pendentes para os movimentos inéditos.
+          Aceita <b>OFX</b>, <b>CSV</b> (BR: ; separador, vírgula decimal) ou{" "}
+          <b>PDF</b> de extrato. O sistema detecta sinais (+/D = entrada, -/D =
+          saída), preserva a data real de cada linha e ignora duplicidades.
         </span>
       </Card>
 

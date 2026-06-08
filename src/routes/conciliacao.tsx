@@ -460,42 +460,62 @@ function Conc() {
               </div>
             </div>
 
-            <div className="space-y-1 max-h-64 overflow-y-auto">
+            <div className="grid gap-4 md:grid-cols-2 max-h-[520px] overflow-y-auto pr-1">
               {pending.map((l) => {
                 const isNew = highlightLineIds.has(l.id as string);
+                const isCredit = Number(l.amount) > 0;
                 return (
                   <div
                     key={l.id}
-                    className={`flex items-center gap-3 p-2 rounded-md border text-sm bg-background ${
-                      isNew ? "border-amber-500 ring-1 ring-amber-500/40" : "border-border"
+                    className={`rounded-xl border-2 bg-card p-5 shadow-sm transition hover:shadow-md ${
+                      isNew
+                        ? "ring-2 ring-amber-500/60 border-amber-500/60"
+                        : isCredit
+                          ? "border-emerald-500/30"
+                          : "border-rose-500/30"
                     }`}
                   >
-                    <Badge variant="outline" className="gap-1 border-amber-500/60 text-amber-700 dark:text-amber-300">
-                      <Sparkles className="h-3 w-3" /> extrato
-                    </Badge>
-                    <span className="font-mono text-xs w-24">
-                      {new Date(l.statement_date as string).toLocaleDateString("pt-BR")}
-                    </span>
-                    <span className="flex-1 truncate text-xs">{l.description ?? "(sem descrição)"}</span>
-                    <span
-                      className={`font-mono text-xs ${Number(l.amount) < 0 ? "text-destructive" : "text-primary"}`}
-                    >
-                      {fmt(Number(l.amount))}
-                    </span>
-                    <Button
-                      size="sm"
-                      onClick={() =>
-                        setPromoting({
-                          id: l.id as string,
-                          statement_date: l.statement_date as string,
-                          amount: l.amount as number,
-                          description: (l.description ?? null) as string | null,
-                          bank_accounts: (l as { bank_accounts?: { name?: string | null } | null }).bank_accounts ?? null,
-                        })
-                      }
-                    >
-                      Categorizar
-                    </Button>
+                    <div className="flex items-start justify-between gap-3 mb-3">
+                      <Badge
+                        className={
+                          isCredit
+                            ? "bg-emerald-600 hover:bg-emerald-600 text-white border-0"
+                            : "bg-rose-600 hover:bg-rose-600 text-white border-0"
+                        }
+                      >
+                        {isCredit ? "ENTRADA" : "SAÍDA"}
+                      </Badge>
+                      <span className="font-mono text-sm font-medium text-muted-foreground">
+                        {new Date(l.statement_date as string).toLocaleDateString("pt-BR")}
+                      </span>
+                    </div>
+                    <p className="text-sm font-medium leading-snug mb-3 line-clamp-2 min-h-[2.5rem]">
+                      {l.description ?? "(sem descrição)"}
+                    </p>
+                    <div className="flex items-center justify-between gap-3">
+                      <span
+                        className={`text-xl font-bold tabular-nums ${
+                          isCredit ? "text-emerald-600" : "text-rose-600"
+                        }`}
+                      >
+                        {isCredit ? "+ " : "- "}
+                        {fmt(Math.abs(Number(l.amount)))}
+                      </span>
+                      <Button
+                        size="sm"
+                        onClick={() =>
+                          setPromoting({
+                            id: l.id as string,
+                            statement_date: l.statement_date as string,
+                            amount: l.amount as number,
+                            description: (l.description ?? null) as string | null,
+                            bank_accounts: (l as { bank_accounts?: { name?: string | null } | null }).bank_accounts ?? null,
+                          })
+                        }
+                      >
+                        Categorizar
+                      </Button>
+                    </div>
                   </div>
                 );
               })}

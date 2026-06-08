@@ -337,30 +337,32 @@ async function extractPdfText(file: File): Promise<string> {
 export function parsePDFText(text: string): ParsedLine[] {
   const lines = text.split("\n");
   const out: ParsedLine[] = [];
-  // Match the LAST amount on the line (typical bank PDF: ... description ... 1.234,56 D)
-  const amountRe =
-    /(-?\s*R?\$?\s*\d{1,3}(?:\.\d{3})*(?:,\d{2})|-?\s*\d+,\d{2})\s*([DC])?\b\s*$/i;
+  // PDF digital: read semantic text lines, not bank-specific columns.
+  // Pick the LAST monetary value in the line and force sign by keywords or +/-/D/C markers.
+  const amountRe = /([+-]?\s*(?:R\$\s*)?\d{1,3}(?:\.\d{3})*(?:,\d{2}|\.\d{2})|[+-]?\s*(?:R\$\s*)?\d+(?:,\d{2}|\.\d{2}))\s*([DC])?/gi;
   for (const raw of lines) {
     const line = raw.trim();
     if (!line) continue;
-    const date = extractDate(line);
+    const date = extractLeadingDate(line) ?? extractDate(line);
     if (!date) continue;
-    const am = amountRe.exec(line);
-    if (!am) continue;
-    const amountToken = am[1] + (am[2] ?? "");
+    const matches = Array.from(line.matchAll(amountRe));
+    if (matches.length === 0) continue;
+    const am = matches[matches.length - 1];
+    const amountToken = `${am[1]}${am[2] ?? ""}`;
     const { value, sign } = parseAmountCell(amountToken);
     if (Number.isNaN(value)) continue;
     // Description = line minus date and amount token
     let desc = line
       .replace(am[0], "")
-      .replace(/\b\d{2}\/\d{2}\/\d{2,4}\b|\b\d{4}-\d{2}-\d{2}\b/, "")
+      .replace(/^\s*\d{2}[/-]\d{2}[/-]\d{2,4}\b|^\s*\d{4}-\d{2}-\d{2}\b/, "")
       .replace(/\s+/g, " ")
       .trim();
     if (!desc) desc = "(sem descrição)";
-    const finalSign: -1 | 1 = sign === -1 ? -1 : sign === 1 ? 1 : 1;
+    const forcedSign = signFromDescription(line);
+    const finalSign: -1 | 1 = forcedSign === -1 ? -1 : forcedSign === 1 ? 1 : sign === -1 ? -1 : 1;
     out.push({
       statement_date: date,
-      amount: applyDescriptionSign(value, desc, finalSign),
+      amount: finalSign * Math.abs(value),
       description: desc,
     });
   }

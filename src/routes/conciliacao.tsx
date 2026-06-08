@@ -89,6 +89,8 @@ function Conc() {
   const closePeriodFn = useServerFn(closeReconciliationPeriod);
   const reopenPeriodFn = useServerFn(reopenReconciliationPeriod);
   const usersFn = useServerFn(listAuditUsers);
+  const consolidateFn = useServerFn(consolidateStatementRevenues);
+  const draftsFn = useServerFn(createUnverifiedExpenseDrafts);
   const { isMaster } = useAuth();
   const qc = useQueryClient();
 

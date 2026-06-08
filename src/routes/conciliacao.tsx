@@ -113,6 +113,9 @@ function Conc() {
   const [importBankId, setImportBankId] = useState("");
   const [selectedTx, setSelectedTx] = useState<string | null>(null);
   const [selectedLines, setSelectedLines] = useState<Set<string>>(new Set());
+  const [highlightLineIds, setHighlightLineIds] = useState<Set<string>>(new Set());
+  const [promoting, setPromoting] = useState<PendingLine | null>(null);
+
 
   // Filtro de período
   const todayIso = new Date().toISOString().slice(0, 10);

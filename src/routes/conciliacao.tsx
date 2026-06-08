@@ -15,6 +15,8 @@ import {
   closeReconciliationPeriod,
   reopenReconciliationPeriod,
   listAuditUsers,
+  consolidateStatementRevenues,
+  createUnverifiedExpenseDrafts,
 } from "@/lib/finance.functions";
 import { parseStatementFile } from "@/lib/statement-parser";
 import { PromoteLineDialog, type PendingLine } from "@/components/PromoteLineDialog";
@@ -87,6 +89,8 @@ function Conc() {
   const closePeriodFn = useServerFn(closeReconciliationPeriod);
   const reopenPeriodFn = useServerFn(reopenReconciliationPeriod);
   const usersFn = useServerFn(listAuditUsers);
+  const consolidateFn = useServerFn(consolidateStatementRevenues);
+  const draftsFn = useServerFn(createUnverifiedExpenseDrafts);
   const { isMaster } = useAuth();
   const qc = useQueryClient();
 
@@ -388,14 +392,74 @@ function Conc() {
           (l) => !l.reconciled && !(l as { matched_transaction_id?: string | null }).matched_transaction_id,
         );
         if (pending.length === 0) return null;
+        const credits = pending.filter((l) => Number(l.amount) > 0);
+        const debits = pending.filter((l) => Number(l.amount) < 0);
+        const creditsSum = credits.reduce((s, l) => s + Number(l.amount), 0);
+        const debitsSum = debits.reduce((s, l) => s + Math.abs(Number(l.amount)), 0);
+        const runBulk = async (fn: () => Promise<void>) => {
+          try {
+            await fn();
+            qc.invalidateQueries({ queryKey: ["lines"] });
+            qc.invalidateQueries({ queryKey: ["txs"] });
+          } catch (e) {
+            toast.error(e instanceof Error ? e.message : "Erro");
+          }
+        };
         return (
           <Card className="p-4 border-amber-500/40 bg-amber-500/5">
-            <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center justify-between mb-3 gap-2 flex-wrap">
               <h2 className="font-semibold text-sm flex items-center gap-2">
                 <Sparkles className="h-4 w-4 text-amber-600" />
                 Movimentos do extrato aguardando categorização ({pending.length})
               </h2>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  size="sm"
+                  variant="default"
+                  disabled={credits.length === 0}
+                  onClick={() =>
+                    runBulk(async () => {
+                      const r = await consolidateFn({
+                        data: {
+                          bank_account_id: importBankId || null,
+                          start_date: rangeStart,
+                          end_date: rangeEnd,
+                        },
+                      });
+                      toast.success(
+                        `Consolidação criada: ${r.created} lançamento(s) unificando ${r.lines} linha(s) — ${fmt(r.total)}`,
+                      );
+                    })
+                  }
+                  title={`${credits.length} crédito(s) • ${fmt(creditsSum)}`}
+                >
+                  Consolidar Entradas em Massa ({credits.length})
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={debits.length === 0}
+                  onClick={() =>
+                    runBulk(async () => {
+                      const r = await draftsFn({
+                        data: {
+                          bank_account_id: importBankId || null,
+                          start_date: rangeStart,
+                          end_date: rangeEnd,
+                        },
+                      });
+                      toast.success(
+                        `${r.created} rascunho(s) "Saída Sem Comprovação" criados — ${fmt(debitsSum)} aguardando justificativa.`,
+                      );
+                    })
+                  }
+                  title={`${debits.length} saída(s) sem nota • ${fmt(debitsSum)}`}
+                >
+                  Gerar Rascunhos de Saídas s/ Comprovação ({debits.length})
+                </Button>
+              </div>
             </div>
+
             <div className="space-y-1 max-h-64 overflow-y-auto">
               {pending.map((l) => {
                 const isNew = highlightLineIds.has(l.id as string);

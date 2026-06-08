@@ -149,7 +149,7 @@ export function parseOFX(text: string): ParsedLine[] {
     }
     lines.push({
       statement_date: date,
-      amount: finalSign * value,
+      amount: applyDescriptionSign(value, memo, finalSign),
       description: memo || null,
       external_id: fitid || null,
     });
@@ -191,7 +191,14 @@ function splitCSVLine(line: string, delim: string): string[] {
   return out.map((c) => c.trim());
 }
 
-type ColMap = { date: number; amount: number; desc: number[]; dc?: number };
+type ColMap = {
+  date: number;
+  amount?: number;
+  credit?: number;
+  debit?: number;
+  desc: number[];
+  dc?: number;
+};
 
 function inferColumns(rows: string[][]): ColMap {
   // Score each column for date-ness and amount-ness across body rows.
@@ -208,25 +215,25 @@ function inferColumns(rows: string[][]): ColMap {
     }
   }
   let dateCol = 0,
-    amountCol = -1,
     dcCol: number | undefined;
   scores.forEach((s, i) => {
     if (s.date > scores[dateCol].date) dateCol = i;
   });
   scores.forEach((s, i) => {
-    if (i === dateCol) return;
-    if (amountCol === -1 || s.amount > scores[amountCol].amount) {
-      if (s.amount > 0) amountCol = i;
-    }
-  });
-  scores.forEach((s, i) => {
     if (s.dc > 0 && (dcCol === undefined || s.dc > scores[dcCol].dc)) dcCol = i;
   });
+  const amountCols = scores
+    .map((s, i) => ({ i, score: s.amount }))
+    .filter((c) => c.i !== dateCol && c.i !== dcCol && c.score > 0)
+    .sort((a, b) => a.i - b.i);
+  const valueCols = amountCols.length >= 2
+    ? { credit: amountCols[amountCols.length - 2].i, debit: amountCols[amountCols.length - 1].i }
+    : { amount: amountCols[0]?.i };
   const desc: number[] = [];
   for (let i = 0; i < ncols; i++) {
-    if (i !== dateCol && i !== amountCol && i !== dcCol) desc.push(i);
+    if (i !== dateCol && i !== valueCols.amount && i !== valueCols.credit && i !== valueCols.debit && i !== dcCol) desc.push(i);
   }
-  return { date: dateCol, amount: amountCol, desc, dc: dcCol };
+  return { date: dateCol, ...valueCols, desc, dc: dcCol };
 }
 
 export function parseCSV(text: string): ParsedLine[] {

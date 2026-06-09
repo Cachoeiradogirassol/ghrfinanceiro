@@ -503,26 +503,38 @@ function Conc() {
 
         <label
           htmlFor="statement-file-input"
+          onDragEnter={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            if (!isProcessing) setIsDragging(true);
+          }}
           onDragOver={(e) => {
             e.preventDefault();
+            e.stopPropagation();
             if (!isProcessing) setIsDragging(true);
           }}
           onDragLeave={(e) => {
             e.preventDefault();
+            e.stopPropagation();
             setIsDragging(false);
           }}
           onDrop={(e) => {
             e.preventDefault();
+            e.stopPropagation();
             setIsDragging(false);
             if (isProcessing) return;
-            const f = e.dataTransfer.files?.[0];
-            if (f) handleStatementFile(f);
+            const f = e.dataTransfer?.files?.[0];
+            if (f) {
+              void handleStatementFile(f);
+            } else {
+              toast.error("Nenhum arquivo foi detectado no arrasto. Tente clicar na área para selecionar.");
+            }
           }}
           className={`relative flex flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed px-6 py-10 text-center transition-colors ${
             isProcessing
-              ? "border-muted bg-muted/30 cursor-not-allowed pointer-events-none"
+              ? "border-muted bg-muted/30 cursor-wait"
               : isDragging
-                ? "border-primary bg-primary/10 ring-2 ring-primary/30 cursor-pointer"
+                ? "border-primary bg-primary/10 ring-2 ring-primary/30 cursor-copy"
                 : "border-border bg-muted/20 hover:border-primary/60 hover:bg-primary/5 cursor-pointer"
           }`}
         >
@@ -530,7 +542,7 @@ function Conc() {
             <>
               <Loader2 className="h-10 w-10 text-primary animate-spin" />
               <div className="space-y-1">
-                <p className="text-base font-semibold">Processando extrato bancário…</p>
+                <p className="text-base font-semibold">Paulo está auditando o extrato… Aguarde.</p>
                 <p className="text-sm text-muted-foreground">
                   Extraindo dados de fluxo de caixa{processingFileName ? ` de "${processingFileName}"` : ""}.
                 </p>
@@ -554,24 +566,26 @@ function Conc() {
                   <FileText className="h-3.5 w-3.5" /> Saídas: enviado/pago/tarifa • Entradas: recebido/crédito/depósito
                 </p>
               </div>
-              <Button type="button" variant="default" className="mt-1 pointer-events-none">
-                <Upload className="h-4 w-4 mr-2" /> Ou clique para selecionar o arquivo
-              </Button>
+              <span className="mt-1 inline-flex items-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow">
+                <Upload className="h-4 w-4 mr-2" /> Ou clique aqui para selecionar o arquivo
+              </span>
             </>
           )}
           <input
             id="statement-file-input"
             type="file"
-            accept=".pdf,application/pdf,.csv,text/csv,.ofx"
             disabled={isProcessing}
             onChange={(e) => {
               const f = e.target.files?.[0];
-              if (f) handleStatementFile(f);
+              if (f) {
+                void handleStatementFile(f);
+              }
               e.target.value = "";
             }}
             className="sr-only"
           />
         </label>
+
       </Card>
 
 

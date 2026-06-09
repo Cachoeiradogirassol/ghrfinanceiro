@@ -214,17 +214,17 @@ function Conc() {
         const importedExits = rows
           .filter((row) => row.amount < 0)
           .reduce((sum, row) => sum + Math.abs(row.amount), 0);
-        const systemBalance = Number(selectedBank.initial_balance ?? 0);
+        const systemBalance = getSystemBalanceForBank(importBankId);
         const calculatedFinalBalance = systemBalance + importedEntries - importedExits;
         setCashAudit({
           fileName: file.name,
           bankName: selectedBank.name,
           systemBalance,
           finalBalance: parsed.finalBalance,
-          importedEntries,
-          importedExits,
-          calculatedFinalBalance,
-          difference: calculatedFinalBalance - parsed.finalBalance,
+          importedEntries: cents(importedEntries),
+          importedExits: cents(importedExits),
+          calculatedFinalBalance: cents(calculatedFinalBalance),
+          difference: cents(calculatedFinalBalance - parsed.finalBalance),
         });
       } else if (isPdf) {
         toast.warning("PDF importado, mas o Saldo Final não foi localizado no texto do extrato.");

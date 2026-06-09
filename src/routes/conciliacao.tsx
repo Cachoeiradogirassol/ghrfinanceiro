@@ -240,7 +240,6 @@ function Conc() {
         `${res.pending_categorization} nova(s) aguardando categoria`,
         res.duplicates ? `${res.duplicates} duplicada(s) ignorada(s)` : null,
       ].filter(Boolean);
-      toast.success(`Extrato processado: ${parts.join(" • ")}`, { id: toastId });
       setUploadError(null);
       setHighlightLineIds(new Set(res.line_ids));
       const selectedBank = (banks.data ?? []).find((b) => b.id === effectiveBankId);
@@ -269,8 +268,11 @@ function Conc() {
           PERSISTENT_TOAST,
         );
       }
-      qc.invalidateQueries({ queryKey: ["lines"] });
-      qc.invalidateQueries({ queryKey: ["txs"] });
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ["lines"] }),
+        qc.invalidateQueries({ queryKey: ["txs"] }),
+      ]);
+      toast.success(`Extrato processado: ${parts.join(" • ")}`, { id: toastId });
     } catch (e) {
       console.error("[Conciliação] Falha ao importar linhas", e);
       const message = `Erro ao importar para o banco: ${e instanceof Error ? e.message : String(e)}`;

@@ -413,12 +413,22 @@ export function parsePDFText(text: string): ParsedLine[] {
 // ---------- Public entry ----------
 
 export async function parseStatementFile(file: File): Promise<ParsedLine[]> {
+  const parsed = await parseStatementDocument(file);
+  return parsed.lines;
+}
+
+export async function parseStatementDocument(file: File): Promise<ParsedStatement> {
   const name = file.name.toLowerCase();
   if (name.endsWith(".pdf") || file.type === "application/pdf") {
     const text = await extractPdfText(file);
-    return parsePDFText(text);
+    return {
+      lines: parsePDFText(text),
+      finalBalance: extractFinalBalanceFromText(text),
+    };
   }
   const text = await file.text();
-  if (name.endsWith(".ofx") || /<OFX>/i.test(text)) return parseOFX(text);
-  return parseCSV(text);
+  return {
+    lines: name.endsWith(".ofx") || /<OFX>/i.test(text) ? parseOFX(text) : parseCSV(text),
+    finalBalance: null,
+  };
 }

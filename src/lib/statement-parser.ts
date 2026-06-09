@@ -405,8 +405,9 @@ async function extractPdfText(file: File): Promise<string> {
 export function parsePDFText(text: string): ParsedLine[] {
   const lines = text.split("\n");
   const out: ParsedLine[] = [];
-  // PDF digital: read semantic text lines, not bank-specific columns.
-  // Pick the LAST monetary value in the line and force sign by keywords or +/-/D/C markers.
+  // PDF digital: pick the FIRST monetary token on the line ("Valor" column).
+  // Banco Inter and most BR statements render: <data> <descrição> <Valor> <Saldo por transação>.
+  // The last token is the running balance — using it inflates totals and corrupts the audit.
   for (const raw of lines) {
     const line = raw.trim();
     if (!line) continue;
@@ -415,7 +416,8 @@ export function parsePDFText(text: string): ParsedLine[] {
     if (!date) continue;
     const matches = Array.from(line.matchAll(moneyTokenRegex()));
     if (matches.length === 0) continue;
-    const am = matches[matches.length - 1];
+    // Use the FIRST money token = Valor da transação. Ignore "Saldo por transação" entirely.
+    const am = matches[0];
     const { value, sign } = parseMoneyMatch(am);
     if (Number.isNaN(value)) continue;
     // Description = line minus date and amount token

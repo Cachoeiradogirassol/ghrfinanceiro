@@ -8,6 +8,11 @@ export type ParsedLine = {
   external_id?: string | null;
 };
 
+export type ParsedStatement = {
+  lines: ParsedLine[];
+  finalBalance: number | null;
+};
+
 // ---------- Primitive parsers ----------
 
 const DATE_REGEXES: RegExp[] = [
@@ -17,6 +22,10 @@ const DATE_REGEXES: RegExp[] = [
   /\b(\d{2})-(\d{2})-(\d{4})\b/, // 07-06-2025
   /\b(\d{8})\b/, // OFX 20250607
 ];
+
+function moneyTokenRegex() {
+  return /([+-]?[ \t]*(?:R\$[ \t]*)?[+-]?[ \t]*(?:\d{1,3}(?:\.\d{3})*|\d+)(?:,\d{2}|\.\d{2}))[ \t]*([DC])?/gi;
+}
 
 export function extractDate(s: string): string | null {
   s = s.trim();
@@ -132,6 +141,46 @@ function extractLeadingDate(s: string): string | null {
   }
   const iso = /^\s*(\d{4})-(\d{2})-(\d{2})\b/.exec(s);
   return iso ? `${iso[1]}-${iso[2]}-${iso[3]}` : null;
+}
+
+function parseMoneyMatch(match: RegExpMatchArray): { value: number; sign: -1 | 1 | 0 } {
+  return parseAmountCell(`${match[1]}${match[2] ?? ""}`);
+}
+
+function isBalanceSummaryText(text: string) {
+  const normalized = normalizeText(text);
+  return (
+    /\bsaldo\s+(inicial|anterior|final|disponivel|atual)\b/.test(normalized) ||
+    /\bsaldo\s+em\s+\d{1,2}[\/-]\d{1,2}(?:[\/-]\d{2,4})?\b/.test(normalized)
+  );
+}
+
+export function extractFinalBalanceFromText(text: string): number | null {
+  const lines = text
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  for (let i = lines.length - 1; i >= 0; i--) {
+    const current = lines[i];
+    const next = lines[i + 1] ?? "";
+    const scope = `${current} ${next}`.trim();
+    const normalized = normalizeText(scope);
+    const isBalanceLine = isBalanceSummaryText(scope) && !/\bsaldo\s+(inicial|anterior)\b/.test(normalized);
+
+    if (!isBalanceLine) continue;
+
+    const matches = Array.from(scope.matchAll(moneyTokenRegex()));
+    if (matches.length === 0) continue;
+
+    const parsed = parseMoneyMatch(matches[matches.length - 1]);
+    if (Number.isNaN(parsed.value)) continue;
+
+    const sign = parsed.sign === -1 || /\b(devedor|negativo)\b/.test(normalized) ? -1 : 1;
+    return sign * Math.abs(parsed.value);
+  }
+
+  return null;
 }
 
 // ---------- OFX ----------
@@ -305,12 +354,12 @@ async function extractPdfText(file: File): Promise<string> {
   // Dynamic import keeps pdfjs out of any SSR bundle.
   const pdfjs: any = await import("pdfjs-dist/build/pdf.mjs" as string);
   try {
-    pdfjs.GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
+    pdfjs.GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${pdfjs.version}/build/pdf.worker.mjs`;
   } catch {
     /* noop */
   }
   const buf = await file.arrayBuffer();
-  const doc = await pdfjs.getDocument({ data: buf }).promise;
+  const doc = await pdfjs.getDocument({ data: new Uint8Array(buf) }).promise;
   const allLines: string[] = [];
   for (let p = 1; p <= doc.numPages; p++) {
     const page = await doc.getPage(p);
@@ -339,17 +388,16 @@ export function parsePDFText(text: string): ParsedLine[] {
   const out: ParsedLine[] = [];
   // PDF digital: read semantic text lines, not bank-specific columns.
   // Pick the LAST monetary value in the line and force sign by keywords or +/-/D/C markers.
-  const amountRe = /([+-]?[ \t]*(?:R\$[ \t]*)?\d{1,3}(?:\.\d{3})*(?:,\d{2}|\.\d{2})|[+-]?[ \t]*(?:R\$[ \t]*)?\d+(?:,\d{2}|\.\d{2}))[ \t]*([DC])?/gi;
   for (const raw of lines) {
     const line = raw.trim();
     if (!line) continue;
+    if (isBalanceSummaryText(line)) continue;
     const date = extractLeadingDate(line) ?? extractDate(line);
     if (!date) continue;
-    const matches = Array.from(line.matchAll(amountRe));
+    const matches = Array.from(line.matchAll(moneyTokenRegex()));
     if (matches.length === 0) continue;
     const am = matches[matches.length - 1];
-    const amountToken = `${am[1]}${am[2] ?? ""}`;
-    const { value, sign } = parseAmountCell(amountToken);
+    const { value, sign } = parseMoneyMatch(am);
     if (Number.isNaN(value)) continue;
     // Description = line minus date and amount token
     let desc = line
@@ -372,12 +420,22 @@ export function parsePDFText(text: string): ParsedLine[] {
 // ---------- Public entry ----------
 
 export async function parseStatementFile(file: File): Promise<ParsedLine[]> {
+  const parsed = await parseStatementDocument(file);
+  return parsed.lines;
+}
+
+export async function parseStatementDocument(file: File): Promise<ParsedStatement> {
   const name = file.name.toLowerCase();
   if (name.endsWith(".pdf") || file.type === "application/pdf") {
     const text = await extractPdfText(file);
-    return parsePDFText(text);
+    return {
+      lines: parsePDFText(text),
+      finalBalance: extractFinalBalanceFromText(text),
+    };
   }
   const text = await file.text();
-  if (name.endsWith(".ofx") || /<OFX>/i.test(text)) return parseOFX(text);
-  return parseCSV(text);
+  return {
+    lines: name.endsWith(".ofx") || /<OFX>/i.test(text) ? parseOFX(text) : parseCSV(text),
+    finalBalance: null,
+  };
 }

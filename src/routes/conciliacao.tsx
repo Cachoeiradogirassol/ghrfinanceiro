@@ -18,7 +18,7 @@ import {
   consolidateStatementRevenues,
   createUnverifiedExpenseDrafts,
 } from "@/lib/finance.functions";
-import { parseStatementFile } from "@/lib/statement-parser";
+import { parseStatementDocument } from "@/lib/statement-parser";
 import { PromoteLineDialog, type PendingLine } from "@/components/PromoteLineDialog";
 
 import { Card } from "@/components/ui/card";
@@ -47,6 +47,7 @@ import {
   FileUp,
   Loader2,
   FileText,
+  AlertTriangle,
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/lib/auth";
@@ -80,6 +81,21 @@ export const Route = createFileRoute("/conciliacao")({
 function fmt(n: number) {
   return n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
+
+function cents(n: number) {
+  return Math.round(n * 100) / 100;
+}
+
+type CashAudit = {
+  fileName: string;
+  bankName: string;
+  systemBalance: number;
+  finalBalance: number;
+  importedEntries: number;
+  importedExits: number;
+  calculatedFinalBalance: number;
+  difference: number;
+};
 
 function Conc() {
   const linesFn = useServerFn(listStatementLines);
@@ -126,6 +142,7 @@ function Conc() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [processingFileName, setProcessingFileName] = useState<string | null>(null);
+  const [cashAudit, setCashAudit] = useState<CashAudit | null>(null);
 
 
   // Filtro de período
@@ -150,9 +167,16 @@ function Conc() {
     return inRange(d);
   });
 
-  const handleCSV = async (file: File) => {
+  const handleStatementFile = async (file: File) => {
+    setIsProcessing(true);
+    setProcessingFileName(file.name);
+    setHighlightLineIds(new Set());
+    setSelectedLines(new Set());
+    setCashAudit(null);
     if (!importBankId) {
       toast.error("Selecione uma conta bancária antes de enviar o arquivo");
+      setIsProcessing(false);
+      setProcessingFileName(null);
       return;
     }
     const name = file.name.toLowerCase();
@@ -161,13 +185,13 @@ function Conc() {
     const isOfx = name.endsWith(".ofx");
     if (!isPdf && !isCsv && !isOfx) {
       toast.error("Formato não suportado. Envie PDF, CSV ou OFX.");
+      setIsProcessing(false);
+      setProcessingFileName(null);
       return;
     }
-    setIsProcessing(true);
-    setProcessingFileName(file.name);
-    setHighlightLineIds(new Set());
     try {
-      const rows = await parseStatementFile(file);
+      const parsed = await parseStatementDocument(file);
+      const rows = parsed.lines;
       if (rows.length === 0) {
         toast.error("Não foi possível extrair linhas do arquivo");
         return;
@@ -182,6 +206,29 @@ function Conc() {
       ].filter(Boolean);
       toast.success(`Extrato processado: ${parts.join(" • ")}`);
       setHighlightLineIds(new Set(res.line_ids));
+      const selectedBank = (banks.data ?? []).find((b) => b.id === importBankId);
+      if (isPdf && parsed.finalBalance !== null && selectedBank) {
+        const importedEntries = rows
+          .filter((row) => row.amount > 0)
+          .reduce((sum, row) => sum + row.amount, 0);
+        const importedExits = rows
+          .filter((row) => row.amount < 0)
+          .reduce((sum, row) => sum + Math.abs(row.amount), 0);
+        const systemBalance = getSystemBalanceForBank(importBankId);
+        const calculatedFinalBalance = systemBalance + importedEntries - importedExits;
+        setCashAudit({
+          fileName: file.name,
+          bankName: selectedBank.name,
+          systemBalance,
+          finalBalance: parsed.finalBalance,
+          importedEntries: cents(importedEntries),
+          importedExits: cents(importedExits),
+          calculatedFinalBalance: cents(calculatedFinalBalance),
+          difference: cents(calculatedFinalBalance - parsed.finalBalance),
+        });
+      } else if (isPdf) {
+        toast.warning("PDF importado, mas o Saldo Final não foi localizado no texto do extrato.");
+      }
       qc.invalidateQueries({ queryKey: ["lines"] });
       qc.invalidateQueries({ queryKey: ["txs"] });
     } catch (e) {
@@ -265,8 +312,30 @@ function Conc() {
     ? Math.abs(selectedSum - Number(selectedTxObj.amount)) < 0.01
     : false;
 
+  const getSystemBalanceForBank = (bankId: string) => {
+    const bank = (banks.data ?? []).find((b) => b.id === bankId);
+    let balance = Number(bank?.initial_balance ?? 0);
+    for (const tx of txs.data ?? []) {
+      if ((tx as { bank_account_id?: string | null }).bank_account_id !== bankId) continue;
+      if (tx.status !== "paid" && tx.status !== "reconciled") continue;
+      balance += tx.type === "receivable" ? Number(tx.amount) : -Number(tx.amount);
+    }
+    return cents(balance);
+  };
+
   return (
-    <div className="p-8 space-y-6">
+    <div className="relative p-8 space-y-6">
+      {isProcessing && (
+        <div className="absolute inset-0 z-50 flex items-start justify-center rounded-xl bg-background/75 p-8 pt-40 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-xl border bg-card p-6 text-center shadow-xl">
+            <Loader2 className="mx-auto mb-3 h-9 w-9 animate-spin text-primary" />
+            <p className="text-base font-semibold">Processando PDF do extrato…</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              A conciliação ficará bloqueada até a leitura terminar{processingFileName ? `: ${processingFileName}` : ""}.
+            </p>
+          </div>
+        </div>
+      )}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold">Conciliação Bancária</h1>
@@ -414,7 +483,7 @@ function Conc() {
             setIsDragging(false);
             if (isProcessing) return;
             const f = e.dataTransfer.files?.[0];
-            if (f) handleCSV(f);
+            if (f) handleStatementFile(f);
           }}
           className={`relative flex flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed px-6 py-10 text-center transition-colors ${
             isProcessing
@@ -464,7 +533,7 @@ function Conc() {
             disabled={isProcessing}
             onChange={(e) => {
               const f = e.target.files?.[0];
-              if (f) handleCSV(f);
+              if (f) handleStatementFile(f);
               e.target.value = "";
             }}
             className="sr-only"
@@ -645,6 +714,71 @@ function Conc() {
           </div>
         </Card>
       )}
+
+      {cashAudit && (() => {
+        const audited = Math.abs(cashAudit.difference) < 0.01;
+        return (
+          <Card className={`p-5 border-2 ${audited ? "border-emerald-500/60 bg-emerald-500/5" : "border-rose-500/60 bg-rose-500/5"}`}>
+            <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
+              <div>
+                <h2 className="text-lg font-bold">Auditoria de Batimento de Caixa</h2>
+                <p className="text-sm text-muted-foreground">
+                  {cashAudit.bankName} • {cashAudit.fileName}
+                </p>
+              </div>
+              <Badge
+                className={
+                  audited
+                    ? "bg-emerald-600 hover:bg-emerald-600 text-white border-0 text-sm px-3 py-1"
+                    : "bg-rose-600 hover:bg-rose-600 text-white border-0 text-sm px-3 py-1"
+                }
+              >
+                {audited ? "CONCILIAÇÃO DO SEED AUDITADA (100% CORRETA)" : `Diferença: ${fmt(Math.abs(cashAudit.difference))}`}
+              </Badge>
+            </div>
+
+            {audited && (
+              <div className="mb-4 rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-4">
+                <p className="text-sm font-medium text-emerald-700">
+                  Paulo: A precisão cirúrgica da gestão privada é a salvaguarda do capital real contra as distorções monetárias — aqui o caixa protege o capital de verdade.
+                </p>
+              </div>
+            )}
+
+            {!audited && (
+              <div className="mb-4 flex items-start gap-2 rounded-lg border border-rose-500/30 bg-rose-500/10 p-4 text-rose-700">
+                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                <p className="text-sm font-medium">
+                  O cálculo importado não bateu com o saldo final do PDF. Revise lançamentos duplicados, ausentes ou com sinal invertido.
+                </p>
+              </div>
+            )}
+
+            <div className="grid gap-3 md:grid-cols-5">
+              <div className="rounded-lg border bg-card p-3">
+                <p className="text-xs text-muted-foreground">Saldo atual no sistema</p>
+                <p className="text-base font-bold tabular-nums">{fmt(cashAudit.systemBalance)}</p>
+              </div>
+              <div className="rounded-lg border bg-card p-3">
+                <p className="text-xs text-muted-foreground">Entradas importadas</p>
+                <p className="text-base font-bold tabular-nums text-emerald-600">+ {fmt(cashAudit.importedEntries)}</p>
+              </div>
+              <div className="rounded-lg border bg-card p-3">
+                <p className="text-xs text-muted-foreground">Saídas importadas</p>
+                <p className="text-base font-bold tabular-nums text-rose-600">− {fmt(cashAudit.importedExits)}</p>
+              </div>
+              <div className="rounded-lg border bg-card p-3">
+                <p className="text-xs text-muted-foreground">Resultado calculado</p>
+                <p className="text-base font-bold tabular-nums">{fmt(cashAudit.calculatedFinalBalance)}</p>
+              </div>
+              <div className="rounded-lg border bg-card p-3">
+                <p className="text-xs text-muted-foreground">Saldo final real do PDF</p>
+                <p className="text-base font-bold tabular-nums">{fmt(cashAudit.finalBalance)}</p>
+              </div>
+            </div>
+          </Card>
+        );
+      })()}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <Card className="p-4">

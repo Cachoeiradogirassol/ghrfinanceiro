@@ -18,7 +18,7 @@ import {
   consolidateStatementRevenues,
   createUnverifiedExpenseDrafts,
 } from "@/lib/finance.functions";
-import { parseStatementDocument } from "@/lib/statement-parser";
+import { parseStatementDocument, type StatementFormat } from "@/lib/statement-parser";
 import { PromoteLineDialog, type PendingLine } from "@/components/PromoteLineDialog";
 
 import { Card } from "@/components/ui/card";

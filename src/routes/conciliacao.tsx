@@ -358,9 +358,9 @@ function Conc() {
         <div className="absolute inset-0 z-50 flex items-start justify-center rounded-xl bg-background/75 p-8 pt-40 backdrop-blur-sm">
           <div className="w-full max-w-md rounded-xl border bg-card p-6 text-center shadow-xl">
             <Loader2 className="mx-auto mb-3 h-9 w-9 animate-spin text-primary" />
-            <p className="text-base font-semibold">Processando PDF do extrato…</p>
+            <p className="text-base font-semibold">Paulo está auditando o extrato… Aguarde.</p>
             <p className="mt-1 text-sm text-muted-foreground">
-              A conciliação ficará bloqueada até a leitura terminar{processingFileName ? `: ${processingFileName}` : ""}.
+              Extraindo dados do arquivo{processingFileName ? `: ${processingFileName}` : ""}.
             </p>
           </div>
         </div>
@@ -582,6 +582,16 @@ function Conc() {
           />
         </label>
 
+        {uploadError && (
+          <div className="flex items-start gap-2 rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+            <div className="space-y-1">
+              <p className="font-semibold">Erro ao processar o extrato</p>
+              <p>{uploadError}</p>
+            </div>
+          </div>
+        )}
+
       </Card>
 
 
@@ -600,7 +610,7 @@ function Conc() {
             qc.invalidateQueries({ queryKey: ["lines"] });
             qc.invalidateQueries({ queryKey: ["txs"] });
           } catch (e) {
-            toast.error(e instanceof Error ? e.message : "Erro");
+            toast.error(e instanceof Error ? e.message : "Erro", PERSISTENT_TOAST);
           }
         };
         return (

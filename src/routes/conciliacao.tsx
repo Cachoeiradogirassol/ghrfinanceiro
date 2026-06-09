@@ -209,7 +209,23 @@ function Conc() {
     const isCsv = ext === ".csv" || file.type === "text/csv" || file.type === "application/vnd.ms-excel";
     const isOfx = ext === ".ofx";
 
-    if (!isPdf && !isCsv && !isOfx) {
+    // Routing: explicit format overrides extension detection.
+    let effectiveFormat: StatementFormat = statementFormat;
+    if (statementFormat === "auto") {
+      if (isPdf) effectiveFormat = "inter-pdf";
+      else if (isOfx) effectiveFormat = "ofx";
+      // CSVs in auto stay "auto" → generic parser
+    } else {
+      // Validate forced format against file extension.
+      const expectsPdf = statementFormat === "inter-pdf";
+      const expectsCsv = statementFormat === "c6-csv" || statementFormat === "mp-csv";
+      const expectsOfx = statementFormat === "ofx";
+      if (expectsPdf && !isPdf) return failUpload(`Padrão selecionado exige PDF, recebido "${ext || file.type}".`);
+      if (expectsCsv && !isCsv) return failUpload(`Padrão selecionado exige CSV, recebido "${ext || file.type}".`);
+      if (expectsOfx && !isOfx) return failUpload(`Padrão selecionado exige OFX, recebido "${ext || file.type}".`);
+    }
+
+    if (statementFormat === "auto" && !isPdf && !isCsv && !isOfx) {
       return failUpload(
         `Formato "${ext || file.type || "desconhecido"}" não suportado. Envie PDF, CSV ou OFX.`,
       );
@@ -217,7 +233,7 @@ function Conc() {
 
     let parsed: Awaited<ReturnType<typeof parseStatementDocument>>;
     try {
-      parsed = await parseStatementDocument(file);
+      parsed = await parseStatementDocument(file, effectiveFormat);
     } catch (e) {
       console.error("[Conciliação] Falha ao ler o arquivo", e);
       return failUpload(

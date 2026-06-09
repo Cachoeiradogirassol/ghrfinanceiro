@@ -147,6 +147,14 @@ function parseMoneyMatch(match: RegExpMatchArray): { value: number; sign: -1 | 1
   return parseAmountCell(`${match[1]}${match[2] ?? ""}`);
 }
 
+function isBalanceSummaryText(text: string) {
+  const normalized = normalizeText(text);
+  return (
+    /\bsaldo\s+(inicial|anterior|final|disponivel|atual)\b/.test(normalized) ||
+    /\bsaldo\s+em\s+\d{1,2}[\/-]\d{1,2}(?:[\/-]\d{2,4})?\b/.test(normalized)
+  );
+}
+
 export function extractFinalBalanceFromText(text: string): number | null {
   const lines = text
     .split("\n")
@@ -158,9 +166,7 @@ export function extractFinalBalanceFromText(text: string): number | null {
     const next = lines[i + 1] ?? "";
     const scope = `${current} ${next}`.trim();
     const normalized = normalizeText(scope);
-    const isBalanceLine =
-      /\bsaldo\s+(final|disponivel|atual)\b/.test(normalized) ||
-      /\bsaldo\s+em\s+\d{1,2}[\/-]\d{1,2}(?:[\/-]\d{2,4})?\b/.test(normalized);
+    const isBalanceLine = isBalanceSummaryText(scope) && !/\bsaldo\s+(inicial|anterior)\b/.test(normalized);
 
     if (!isBalanceLine) continue;
 
@@ -385,6 +391,7 @@ export function parsePDFText(text: string): ParsedLine[] {
   for (const raw of lines) {
     const line = raw.trim();
     if (!line) continue;
+    if (isBalanceSummaryText(line)) continue;
     const date = extractLeadingDate(line) ?? extractDate(line);
     if (!date) continue;
     const matches = Array.from(line.matchAll(moneyTokenRegex()));

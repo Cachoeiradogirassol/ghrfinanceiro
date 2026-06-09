@@ -529,6 +529,27 @@ function Conc() {
               </SelectContent>
             </Select>
           </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
+              <FileText className="h-3 w-3" /> Padrão de Extrato
+            </label>
+            <Select
+              value={statementFormat}
+              onValueChange={(v) => setStatementFormat(v as StatementFormat)}
+              disabled={isProcessing}
+            >
+              <SelectTrigger className="w-64">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="auto">Detectar Automaticamente (Paulo IA)</SelectItem>
+                <SelectItem value="inter-pdf">Banco Inter (PDF)</SelectItem>
+                <SelectItem value="c6-csv">C6 Bank (CSV)</SelectItem>
+                <SelectItem value="mp-csv">Mercado Pago (CSV)</SelectItem>
+                <SelectItem value="ofx">OFX Padrão</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
         </div>
 
         <label

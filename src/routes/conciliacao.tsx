@@ -190,8 +190,12 @@ function Conc() {
       setProcessingFileName(null);
     };
 
+    const effectiveBankId = importBankId || ((banks.data ?? [])[0]?.id as string | undefined) || "";
+    if (!effectiveBankId) {
+      return failUpload("Nenhuma conta bancária disponível para receber o extrato.");
+    }
     if (!importBankId) {
-      return failUpload("Selecione uma conta bancária antes de enviar o arquivo");
+      setImportBankId(effectiveBankId);
     }
 
     const name = file.name.toLowerCase();
@@ -221,7 +225,7 @@ function Conc() {
 
     try {
       const res = await importFn({
-        data: { bank_account_id: importBankId, lines: rows },
+        data: { bank_account_id: effectiveBankId, lines: rows },
       });
       const parts = [
         `${res.matched_existing} conciliada(s) com lançamento existente`,
@@ -231,7 +235,7 @@ function Conc() {
       toast.success(`Extrato processado: ${parts.join(" • ")}`, { id: toastId });
       setUploadError(null);
       setHighlightLineIds(new Set(res.line_ids));
-      const selectedBank = (banks.data ?? []).find((b) => b.id === importBankId);
+      const selectedBank = (banks.data ?? []).find((b) => b.id === effectiveBankId);
       if (isPdf && parsed.finalBalance !== null && selectedBank) {
         const importedEntries = rows
           .filter((row) => row.amount > 0)
@@ -239,7 +243,7 @@ function Conc() {
         const importedExits = rows
           .filter((row) => row.amount < 0)
           .reduce((sum, row) => sum + Math.abs(row.amount), 0);
-        const systemBalance = getSystemBalanceForBank(importBankId);
+        const systemBalance = getSystemBalanceForBank(effectiveBankId);
         const calculatedFinalBalance = systemBalance + importedEntries - importedExits;
         setCashAudit({
           fileName: file.name,

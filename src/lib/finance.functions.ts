@@ -475,7 +475,23 @@ export const smartImportStatement = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => SmartImportInput.parse(d))
   .handler(async ({ context, data }) => {
     const windowMs = data.match_window_days * 24 * 60 * 60 * 1000;
-    const dates = data.lines.map((l) => l.statement_date).sort();
+    const isValidIsoDate = (s: unknown): s is string =>
+      typeof s === "string" &&
+      /^\d{4}-\d{2}-\d{2}$/.test(s) &&
+      !isNaN(new Date(s + "T00:00:00Z").getTime());
+    const validLines = data.lines.filter((l) => isValidIsoDate(l.statement_date));
+    const skippedInvalid = data.lines.length - validLines.length;
+    if (validLines.length === 0) {
+      return {
+        total: data.lines.length,
+        duplicates: 0,
+        matched_existing: 0,
+        pending_categorization: 0,
+        line_ids: [] as string[],
+        skipped_invalid: skippedInvalid,
+      };
+    }
+    const dates = validLines.map((l) => l.statement_date).sort();
     const minDate = dates[0];
     const maxDate = dates[dates.length - 1];
     const padDate = (iso: string, days: number) => {
@@ -511,7 +527,7 @@ export const smartImportStatement = createServerFn({ method: "POST" })
     let createdSkeleton = 0;
     const skeletonIds: string[] = [];
 
-    for (const line of data.lines) {
+    for (const line of validLines) {
       const key = `${line.statement_date}|${Number(line.amount).toFixed(2)}|${(line.description ?? "").trim().toLowerCase()}`;
       if (existKey.has(key)) {
         duplicates++;

@@ -378,36 +378,100 @@ function Conc() {
         </Card>
       )}
 
-      <Card className="p-4 flex flex-wrap items-center gap-3">
-        <Upload className="h-4 w-4 text-muted-foreground" />
-        <Select value={importBankId} onValueChange={setImportBankId}>
-          <SelectTrigger className="w-56">
-            <SelectValue placeholder="Conta bancária" />
-          </SelectTrigger>
-          <SelectContent>
-            {(banks.data ?? []).map((b) => (
-              <SelectItem key={b.id} value={b.id}>
-                {b.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <input
-          type="file"
-          accept=".pdf,application/pdf"
-          onChange={(e) => {
-            const f = e.target.files?.[0];
-            if (f) handleCSV(f);
-            e.target.value = "";
+      <Card className="p-5 space-y-4">
+        <div className="flex flex-wrap items-end gap-3">
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
+              <Upload className="h-3 w-3" /> Conta bancária de destino
+            </label>
+            <Select value={importBankId} onValueChange={setImportBankId} disabled={isProcessing}>
+              <SelectTrigger className="w-64">
+                <SelectValue placeholder="Selecione a conta…" />
+              </SelectTrigger>
+              <SelectContent>
+                {(banks.data ?? []).map((b) => (
+                  <SelectItem key={b.id} value={b.id}>
+                    {b.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+
+        <label
+          htmlFor="statement-file-input"
+          onDragOver={(e) => {
+            e.preventDefault();
+            if (!isProcessing) setIsDragging(true);
           }}
-          className="text-sm"
-        />
-        <span className="text-xs text-muted-foreground">
-          Novo teste: arraste um <b>PDF digital</b> de extrato. O sistema lê o texto,
-          força <b>saídas</b> por termos como enviado/pago/tarifa ou sinal − e
-          <b> entradas</b> por recebido/crédito/depósito ou sinal +, preservando a data real.
-        </span>
+          onDragLeave={(e) => {
+            e.preventDefault();
+            setIsDragging(false);
+          }}
+          onDrop={(e) => {
+            e.preventDefault();
+            setIsDragging(false);
+            if (isProcessing) return;
+            const f = e.dataTransfer.files?.[0];
+            if (f) handleCSV(f);
+          }}
+          className={`relative flex flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed px-6 py-10 text-center transition-colors ${
+            isProcessing
+              ? "border-muted bg-muted/30 cursor-not-allowed pointer-events-none"
+              : isDragging
+                ? "border-primary bg-primary/10 ring-2 ring-primary/30 cursor-pointer"
+                : "border-border bg-muted/20 hover:border-primary/60 hover:bg-primary/5 cursor-pointer"
+          }`}
+        >
+          {isProcessing ? (
+            <>
+              <Loader2 className="h-10 w-10 text-primary animate-spin" />
+              <div className="space-y-1">
+                <p className="text-base font-semibold">Processando extrato bancário…</p>
+                <p className="text-sm text-muted-foreground">
+                  Extraindo dados de fluxo de caixa{processingFileName ? ` de "${processingFileName}"` : ""}.
+                </p>
+              </div>
+              <div className="w-full max-w-md space-y-2 pt-2">
+                <Skeleton className="h-3 w-full" />
+                <Skeleton className="h-3 w-5/6" />
+                <Skeleton className="h-3 w-4/6" />
+              </div>
+            </>
+          ) : (
+            <>
+              <div className={`rounded-full p-4 ${isDragging ? "bg-primary/20" : "bg-primary/10"}`}>
+                <FileUp className={`h-10 w-10 ${isDragging ? "text-primary" : "text-primary/80"}`} />
+              </div>
+              <div className="space-y-1">
+                <p className="text-lg font-semibold">
+                  Arraste e solte seu extrato (PDF, CSV ou OFX) aqui
+                </p>
+                <p className="text-sm text-muted-foreground flex items-center justify-center gap-1">
+                  <FileText className="h-3.5 w-3.5" /> Saídas: enviado/pago/tarifa • Entradas: recebido/crédito/depósito
+                </p>
+              </div>
+              <Button type="button" variant="default" className="mt-1 pointer-events-none">
+                <Upload className="h-4 w-4 mr-2" /> Ou clique para selecionar o arquivo
+              </Button>
+            </>
+          )}
+          <input
+            id="statement-file-input"
+            type="file"
+            accept=".pdf,application/pdf,.csv,text/csv,.ofx"
+            disabled={isProcessing}
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) handleCSV(f);
+              e.target.value = "";
+            }}
+            className="sr-only"
+          />
+        </label>
       </Card>
+
 
       {(() => {
         const pending = filteredLines.filter(

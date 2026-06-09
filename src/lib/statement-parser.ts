@@ -348,12 +348,12 @@ async function extractPdfText(file: File): Promise<string> {
   // Dynamic import keeps pdfjs out of any SSR bundle.
   const pdfjs: any = await import("pdfjs-dist/build/pdf.mjs" as string);
   try {
-    pdfjs.GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
+    pdfjs.GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${pdfjs.version}/build/pdf.worker.mjs`;
   } catch {
     /* noop */
   }
   const buf = await file.arrayBuffer();
-  const doc = await pdfjs.getDocument({ data: buf }).promise;
+  const doc = await pdfjs.getDocument({ data: new Uint8Array(buf) }).promise;
   const allLines: string[] = [];
   for (let p = 1; p <= doc.numPages; p++) {
     const page = await doc.getPage(p);
@@ -382,17 +382,15 @@ export function parsePDFText(text: string): ParsedLine[] {
   const out: ParsedLine[] = [];
   // PDF digital: read semantic text lines, not bank-specific columns.
   // Pick the LAST monetary value in the line and force sign by keywords or +/-/D/C markers.
-  const amountRe = /([+-]?[ \t]*(?:R\$[ \t]*)?\d{1,3}(?:\.\d{3})*(?:,\d{2}|\.\d{2})|[+-]?[ \t]*(?:R\$[ \t]*)?\d+(?:,\d{2}|\.\d{2}))[ \t]*([DC])?/gi;
   for (const raw of lines) {
     const line = raw.trim();
     if (!line) continue;
     const date = extractLeadingDate(line) ?? extractDate(line);
     if (!date) continue;
-    const matches = Array.from(line.matchAll(amountRe));
+    const matches = Array.from(line.matchAll(moneyTokenRegex()));
     if (matches.length === 0) continue;
     const am = matches[matches.length - 1];
-    const amountToken = `${am[1]}${am[2] ?? ""}`;
-    const { value, sign } = parseAmountCell(amountToken);
+    const { value, sign } = parseMoneyMatch(am);
     if (Number.isNaN(value)) continue;
     // Description = line minus date and amount token
     let desc = line

@@ -150,9 +150,13 @@ function parseMoneyMatch(match: RegExpMatchArray): { value: number; sign: -1 | 1
 function isBalanceSummaryText(text: string) {
   const normalized = normalizeText(text);
   return (
-    /\bsaldo\s+(inicial|anterior|final|disponivel|atual)\b/.test(normalized) ||
+    /\bsaldo\s+(inicial|anterior|final|disponivel|disponível|atual|total|em\s+conta)\b/.test(normalized) ||
     /\bsaldo\s+em\s+\d{1,2}[\/-]\d{1,2}(?:[\/-]\d{2,4})?\b/.test(normalized)
   );
+}
+
+function isPriorityBalanceLabel(normalized: string) {
+  return /\bsaldo\s+(disponivel|disponível|total|atual|em\s+conta)\b/.test(normalized);
 }
 
 export function extractFinalBalanceFromText(text: string): number | null {
@@ -161,6 +165,21 @@ export function extractFinalBalanceFromText(text: string): number | null {
     .map((line) => line.trim())
     .filter(Boolean);
 
+  // Pass 1 (priority): scan top→bottom for "Saldo disponível / Saldo total" header (Banco Inter style).
+  for (let i = 0; i < lines.length; i++) {
+    const scope = `${lines[i]} ${lines[i + 1] ?? ""} ${lines[i + 2] ?? ""}`.trim();
+    const normalized = normalizeText(scope);
+    if (!isPriorityBalanceLabel(normalized)) continue;
+    if (/\bsaldo\s+(inicial|anterior)\b/.test(normalized)) continue;
+    const matches = Array.from(scope.matchAll(moneyTokenRegex()));
+    if (matches.length === 0) continue;
+    const parsed = parseMoneyMatch(matches[0]);
+    if (Number.isNaN(parsed.value)) continue;
+    const sign = parsed.sign === -1 || /\b(devedor|negativo)\b/.test(normalized) ? -1 : 1;
+    return sign * Math.abs(parsed.value);
+  }
+
+  // Pass 2 (fallback): scan bottom→top for any "Saldo final/atual/etc." line.
   for (let i = lines.length - 1; i >= 0; i--) {
     const current = lines[i];
     const next = lines[i + 1] ?? "";

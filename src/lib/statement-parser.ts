@@ -8,6 +8,11 @@ export type ParsedLine = {
   external_id?: string | null;
 };
 
+export type ParsedStatement = {
+  lines: ParsedLine[];
+  finalBalance: number | null;
+};
+
 // ---------- Primitive parsers ----------
 
 const DATE_REGEXES: RegExp[] = [
@@ -17,6 +22,10 @@ const DATE_REGEXES: RegExp[] = [
   /\b(\d{2})-(\d{2})-(\d{4})\b/, // 07-06-2025
   /\b(\d{8})\b/, // OFX 20250607
 ];
+
+function moneyTokenRegex() {
+  return /([+-]?[ \t]*(?:R\$[ \t]*)?[+-]?[ \t]*(?:\d{1,3}(?:\.\d{3})*|\d+)(?:,\d{2}|\.\d{2}))[ \t]*([DC])?/gi;
+}
 
 export function extractDate(s: string): string | null {
   s = s.trim();
@@ -132,6 +141,40 @@ function extractLeadingDate(s: string): string | null {
   }
   const iso = /^\s*(\d{4})-(\d{2})-(\d{2})\b/.exec(s);
   return iso ? `${iso[1]}-${iso[2]}-${iso[3]}` : null;
+}
+
+function parseMoneyMatch(match: RegExpMatchArray): { value: number; sign: -1 | 1 | 0 } {
+  return parseAmountCell(`${match[1]}${match[2] ?? ""}`);
+}
+
+export function extractFinalBalanceFromText(text: string): number | null {
+  const lines = text
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  for (let i = lines.length - 1; i >= 0; i--) {
+    const current = lines[i];
+    const next = lines[i + 1] ?? "";
+    const scope = `${current} ${next}`.trim();
+    const normalized = normalizeText(scope);
+    const isBalanceLine =
+      /\bsaldo\s+(final|disponivel|atual)\b/.test(normalized) ||
+      /\bsaldo\s+em\s+\d{1,2}[\/-]\d{1,2}(?:[\/-]\d{2,4})?\b/.test(normalized);
+
+    if (!isBalanceLine) continue;
+
+    const matches = Array.from(scope.matchAll(moneyTokenRegex()));
+    if (matches.length === 0) continue;
+
+    const parsed = parseMoneyMatch(matches[matches.length - 1]);
+    if (Number.isNaN(parsed.value)) continue;
+
+    const sign = parsed.sign === -1 || /\b(devedor|negativo)\b/.test(normalized) ? -1 : 1;
+    return sign * Math.abs(parsed.value);
+  }
+
+  return null;
 }
 
 // ---------- OFX ----------

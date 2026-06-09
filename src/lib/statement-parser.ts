@@ -150,9 +150,13 @@ function parseMoneyMatch(match: RegExpMatchArray): { value: number; sign: -1 | 1
 function isBalanceSummaryText(text: string) {
   const normalized = normalizeText(text);
   return (
-    /\bsaldo\s+(inicial|anterior|final|disponivel|atual)\b/.test(normalized) ||
+    /\bsaldo\s+(inicial|anterior|final|disponivel|disponível|atual|total|em\s+conta)\b/.test(normalized) ||
     /\bsaldo\s+em\s+\d{1,2}[\/-]\d{1,2}(?:[\/-]\d{2,4})?\b/.test(normalized)
   );
+}
+
+function isPriorityBalanceLabel(normalized: string) {
+  return /\bsaldo\s+(disponivel|disponível|total|atual|em\s+conta)\b/.test(normalized);
 }
 
 export function extractFinalBalanceFromText(text: string): number | null {
@@ -161,6 +165,21 @@ export function extractFinalBalanceFromText(text: string): number | null {
     .map((line) => line.trim())
     .filter(Boolean);
 
+  // Pass 1 (priority): scan top→bottom for "Saldo disponível / Saldo total" header (Banco Inter style).
+  for (let i = 0; i < lines.length; i++) {
+    const scope = `${lines[i]} ${lines[i + 1] ?? ""} ${lines[i + 2] ?? ""}`.trim();
+    const normalized = normalizeText(scope);
+    if (!isPriorityBalanceLabel(normalized)) continue;
+    if (/\bsaldo\s+(inicial|anterior)\b/.test(normalized)) continue;
+    const matches = Array.from(scope.matchAll(moneyTokenRegex()));
+    if (matches.length === 0) continue;
+    const parsed = parseMoneyMatch(matches[0]);
+    if (Number.isNaN(parsed.value)) continue;
+    const sign = parsed.sign === -1 || /\b(devedor|negativo)\b/.test(normalized) ? -1 : 1;
+    return sign * Math.abs(parsed.value);
+  }
+
+  // Pass 2 (fallback): scan bottom→top for any "Saldo final/atual/etc." line.
   for (let i = lines.length - 1; i >= 0; i--) {
     const current = lines[i];
     const next = lines[i + 1] ?? "";
@@ -386,8 +405,9 @@ async function extractPdfText(file: File): Promise<string> {
 export function parsePDFText(text: string): ParsedLine[] {
   const lines = text.split("\n");
   const out: ParsedLine[] = [];
-  // PDF digital: read semantic text lines, not bank-specific columns.
-  // Pick the LAST monetary value in the line and force sign by keywords or +/-/D/C markers.
+  // PDF digital: pick the FIRST monetary token on the line ("Valor" column).
+  // Banco Inter and most BR statements render: <data> <descrição> <Valor> <Saldo por transação>.
+  // The last token is the running balance — using it inflates totals and corrupts the audit.
   for (const raw of lines) {
     const line = raw.trim();
     if (!line) continue;
@@ -396,7 +416,8 @@ export function parsePDFText(text: string): ParsedLine[] {
     if (!date) continue;
     const matches = Array.from(line.matchAll(moneyTokenRegex()));
     if (matches.length === 0) continue;
-    const am = matches[matches.length - 1];
+    // Use the FIRST money token = Valor da transação. Ignore "Saldo por transação" entirely.
+    const am = matches[0];
     const { value, sign } = parseMoneyMatch(am);
     if (Number.isNaN(value)) continue;
     // Description = line minus date and amount token

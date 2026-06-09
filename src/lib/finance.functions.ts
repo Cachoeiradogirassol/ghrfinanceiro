@@ -527,7 +527,7 @@ export const smartImportStatement = createServerFn({ method: "POST" })
     let createdSkeleton = 0;
     const skeletonIds: string[] = [];
 
-    for (const line of data.lines) {
+    for (const line of validLines) {
       const key = `${line.statement_date}|${Number(line.amount).toFixed(2)}|${(line.description ?? "").trim().toLowerCase()}`;
       if (existKey.has(key)) {
         duplicates++;

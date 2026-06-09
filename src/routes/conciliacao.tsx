@@ -97,6 +97,9 @@ type CashAudit = {
   difference: number;
 };
 
+const PERSISTENT_TOAST = { duration: Infinity, closeButton: true } as const;
+const LOADING_TOAST = { duration: Infinity } as const;
+
 function Conc() {
   const linesFn = useServerFn(listStatementLines);
   const txFn = useServerFn(listTransactions);
@@ -143,6 +146,7 @@ function Conc() {
   const [isDragging, setIsDragging] = useState(false);
   const [processingFileName, setProcessingFileName] = useState<string | null>(null);
   const [cashAudit, setCashAudit] = useState<CashAudit | null>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
 
 
   // Filtro de período
@@ -172,18 +176,23 @@ function Conc() {
     setHighlightLineIds(new Set());
     setSelectedLines(new Set());
     setCashAudit(null);
+    setUploadError(null);
     setProcessingFileName(file.name);
+    setIsProcessing(true);
 
     const toastId = `import-${Date.now()}`;
-    toast.loading(`Recebi "${file.name}". Paulo está auditando o extrato…`, { id: toastId });
+    toast.loading(`Recebi "${file.name}". Paulo está auditando o extrato…`, { id: toastId, ...LOADING_TOAST });
+
+    const failUpload = (message: string) => {
+      setUploadError(message);
+      toast.error(message, { id: toastId, ...PERSISTENT_TOAST });
+      setIsProcessing(false);
+      setProcessingFileName(null);
+    };
 
     if (!importBankId) {
-      toast.error("Selecione uma conta bancária antes de enviar o arquivo", { id: toastId });
-      setProcessingFileName(null);
-      return;
+      return failUpload("Selecione uma conta bancária antes de enviar o arquivo");
     }
-
-    setIsProcessing(true);
 
     const name = file.name.toLowerCase();
     const ext = name.includes(".") ? name.slice(name.lastIndexOf(".")) : "";
@@ -192,10 +201,7 @@ function Conc() {
     const isOfx = ext === ".ofx";
 
     if (!isPdf && !isCsv && !isOfx) {
-      toast.error(`Formato "${ext || file.type || "desconhecido"}" não suportado. Envie PDF, CSV ou OFX.`, { id: toastId });
-      setIsProcessing(false);
-      setProcessingFileName(null);
-      return;
+      return failUpload(`Formato "${ext || file.type || "desconhecido"}" não suportado. Envie PDF, CSV ou OFX.`);
     }
 
     let parsed: Awaited<ReturnType<typeof parseStatementDocument>>;
@@ -203,24 +209,14 @@ function Conc() {
       parsed = await parseStatementDocument(file);
     } catch (e) {
       console.error("[Conciliação] Falha ao ler o arquivo", e);
-      toast.error(
-        `Falha ao ler "${file.name}": ${e instanceof Error ? e.message : String(e)}`,
-        { id: toastId, duration: 8000 },
-      );
-      setIsProcessing(false);
-      setProcessingFileName(null);
-      return;
+      return failUpload(`Falha ao ler "${file.name}": ${e instanceof Error ? e.message : String(e)}`);
     }
 
     const rows = parsed.lines;
     if (rows.length === 0) {
-      toast.error(
+      return failUpload(
         `Nenhuma linha de transação foi encontrada em "${file.name}". Confira se o PDF é digital (não escaneado) ou se o CSV tem o formato esperado.`,
-        { id: toastId, duration: 8000 },
       );
-      setIsProcessing(false);
-      setProcessingFileName(null);
-      return;
     }
 
     try {
@@ -233,6 +229,7 @@ function Conc() {
         res.duplicates ? `${res.duplicates} duplicada(s) ignorada(s)` : null,
       ].filter(Boolean);
       toast.success(`Extrato processado: ${parts.join(" • ")}`, { id: toastId });
+      setUploadError(null);
       setHighlightLineIds(new Set(res.line_ids));
       const selectedBank = (banks.data ?? []).find((b) => b.id === importBankId);
       if (isPdf && parsed.finalBalance !== null && selectedBank) {
@@ -255,16 +252,15 @@ function Conc() {
           difference: cents(calculatedFinalBalance - parsed.finalBalance),
         });
       } else if (isPdf) {
-        toast.warning("PDF importado, mas o Saldo Final não foi localizado no texto do extrato.");
+        toast.warning("PDF importado, mas o Saldo Final não foi localizado no texto do extrato.", PERSISTENT_TOAST);
       }
       qc.invalidateQueries({ queryKey: ["lines"] });
       qc.invalidateQueries({ queryKey: ["txs"] });
     } catch (e) {
       console.error("[Conciliação] Falha ao importar linhas", e);
-      toast.error(
-        `Erro ao importar para o banco: ${e instanceof Error ? e.message : String(e)}`,
-        { id: toastId, duration: 8000 },
-      );
+      const message = `Erro ao importar para o banco: ${e instanceof Error ? e.message : String(e)}`;
+      setUploadError(message);
+      toast.error(message, { id: toastId, ...PERSISTENT_TOAST });
     } finally {
       setIsProcessing(false);
       setProcessingFileName(null);

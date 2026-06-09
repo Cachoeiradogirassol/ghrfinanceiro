@@ -82,6 +82,10 @@ function fmt(n: number) {
   return n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
 
+function cents(n: number) {
+  return Math.round(n * 100) / 100;
+}
+
 type CashAudit = {
   fileName: string;
   bankName: string;
@@ -307,6 +311,17 @@ function Conc() {
   const sumMatches = selectedTxObj
     ? Math.abs(selectedSum - Number(selectedTxObj.amount)) < 0.01
     : false;
+
+  const getSystemBalanceForBank = (bankId: string) => {
+    const bank = (banks.data ?? []).find((b) => b.id === bankId);
+    let balance = Number(bank?.initial_balance ?? 0);
+    for (const tx of txs.data ?? []) {
+      if ((tx as { bank_account_id?: string | null }).bank_account_id !== bankId) continue;
+      if (tx.status !== "paid" && tx.status !== "reconciled") continue;
+      balance += tx.type === "receivable" ? Number(tx.amount) : -Number(tx.amount);
+    }
+    return cents(balance);
+  };
 
   return (
     <div className="p-8 space-y-6">

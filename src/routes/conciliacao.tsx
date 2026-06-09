@@ -44,7 +44,11 @@ import {
   Unlock,
   CalendarRange,
   User,
+  FileUp,
+  Loader2,
+  FileText,
 } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/lib/auth";
 
 export const Route = createFileRoute("/conciliacao")({

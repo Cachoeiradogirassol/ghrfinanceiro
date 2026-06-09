@@ -168,34 +168,62 @@ function Conc() {
   });
 
   const handleStatementFile = async (file: File) => {
-    setIsProcessing(true);
-    setProcessingFileName(file.name);
+    // Reset all previous state (cache purge)
     setHighlightLineIds(new Set());
     setSelectedLines(new Set());
     setCashAudit(null);
+    setProcessingFileName(file.name);
+
+    const toastId = `import-${Date.now()}`;
+    toast.loading(`Recebi "${file.name}". Paulo está auditando o extrato…`, { id: toastId });
+
     if (!importBankId) {
-      toast.error("Selecione uma conta bancária antes de enviar o arquivo");
-      setIsProcessing(false);
+      toast.error("Selecione uma conta bancária antes de enviar o arquivo", { id: toastId });
       setProcessingFileName(null);
       return;
     }
+
+    setIsProcessing(true);
+
     const name = file.name.toLowerCase();
-    const isPdf = name.endsWith(".pdf") || file.type === "application/pdf";
-    const isCsv = name.endsWith(".csv") || file.type === "text/csv";
-    const isOfx = name.endsWith(".ofx");
+    const ext = name.includes(".") ? name.slice(name.lastIndexOf(".")) : "";
+    const isPdf = ext === ".pdf" || file.type === "application/pdf";
+    const isCsv = ext === ".csv" || file.type === "text/csv" || file.type === "application/vnd.ms-excel";
+    const isOfx = ext === ".ofx";
+
     if (!isPdf && !isCsv && !isOfx) {
-      toast.error("Formato não suportado. Envie PDF, CSV ou OFX.");
+      toast.error(`Formato "${ext || file.type || "desconhecido"}" não suportado. Envie PDF, CSV ou OFX.`, { id: toastId });
       setIsProcessing(false);
       setProcessingFileName(null);
       return;
     }
+
+    let parsed: Awaited<ReturnType<typeof parseStatementDocument>>;
     try {
-      const parsed = await parseStatementDocument(file);
-      const rows = parsed.lines;
-      if (rows.length === 0) {
-        toast.error("Não foi possível extrair linhas do arquivo");
-        return;
-      }
+      parsed = await parseStatementDocument(file);
+    } catch (e) {
+      console.error("[Conciliação] Falha ao ler o arquivo", e);
+      toast.error(
+        `Falha ao ler "${file.name}": ${e instanceof Error ? e.message : String(e)}`,
+        { id: toastId, duration: 8000 },
+      );
+      setIsProcessing(false);
+      setProcessingFileName(null);
+      return;
+    }
+
+    const rows = parsed.lines;
+    if (rows.length === 0) {
+      toast.error(
+        `Nenhuma linha de transação foi encontrada em "${file.name}". Confira se o PDF é digital (não escaneado) ou se o CSV tem o formato esperado.`,
+        { id: toastId, duration: 8000 },
+      );
+      setIsProcessing(false);
+      setProcessingFileName(null);
+      return;
+    }
+
+    try {
       const res = await importFn({
         data: { bank_account_id: importBankId, lines: rows },
       });
@@ -204,7 +232,7 @@ function Conc() {
         `${res.pending_categorization} nova(s) aguardando categoria`,
         res.duplicates ? `${res.duplicates} duplicada(s) ignorada(s)` : null,
       ].filter(Boolean);
-      toast.success(`Extrato processado: ${parts.join(" • ")}`);
+      toast.success(`Extrato processado: ${parts.join(" • ")}`, { id: toastId });
       setHighlightLineIds(new Set(res.line_ids));
       const selectedBank = (banks.data ?? []).find((b) => b.id === importBankId);
       if (isPdf && parsed.finalBalance !== null && selectedBank) {
@@ -232,12 +260,17 @@ function Conc() {
       qc.invalidateQueries({ queryKey: ["lines"] });
       qc.invalidateQueries({ queryKey: ["txs"] });
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Erro ao processar arquivo");
+      console.error("[Conciliação] Falha ao importar linhas", e);
+      toast.error(
+        `Erro ao importar para o banco: ${e instanceof Error ? e.message : String(e)}`,
+        { id: toastId, duration: 8000 },
+      );
     } finally {
       setIsProcessing(false);
       setProcessingFileName(null);
     }
   };
+
 
 
 
@@ -470,26 +503,38 @@ function Conc() {
 
         <label
           htmlFor="statement-file-input"
+          onDragEnter={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            if (!isProcessing) setIsDragging(true);
+          }}
           onDragOver={(e) => {
             e.preventDefault();
+            e.stopPropagation();
             if (!isProcessing) setIsDragging(true);
           }}
           onDragLeave={(e) => {
             e.preventDefault();
+            e.stopPropagation();
             setIsDragging(false);
           }}
           onDrop={(e) => {
             e.preventDefault();
+            e.stopPropagation();
             setIsDragging(false);
             if (isProcessing) return;
-            const f = e.dataTransfer.files?.[0];
-            if (f) handleStatementFile(f);
+            const f = e.dataTransfer?.files?.[0];
+            if (f) {
+              void handleStatementFile(f);
+            } else {
+              toast.error("Nenhum arquivo foi detectado no arrasto. Tente clicar na área para selecionar.");
+            }
           }}
           className={`relative flex flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed px-6 py-10 text-center transition-colors ${
             isProcessing
-              ? "border-muted bg-muted/30 cursor-not-allowed pointer-events-none"
+              ? "border-muted bg-muted/30 cursor-wait"
               : isDragging
-                ? "border-primary bg-primary/10 ring-2 ring-primary/30 cursor-pointer"
+                ? "border-primary bg-primary/10 ring-2 ring-primary/30 cursor-copy"
                 : "border-border bg-muted/20 hover:border-primary/60 hover:bg-primary/5 cursor-pointer"
           }`}
         >
@@ -497,7 +542,7 @@ function Conc() {
             <>
               <Loader2 className="h-10 w-10 text-primary animate-spin" />
               <div className="space-y-1">
-                <p className="text-base font-semibold">Processando extrato bancário…</p>
+                <p className="text-base font-semibold">Paulo está auditando o extrato… Aguarde.</p>
                 <p className="text-sm text-muted-foreground">
                   Extraindo dados de fluxo de caixa{processingFileName ? ` de "${processingFileName}"` : ""}.
                 </p>
@@ -521,24 +566,26 @@ function Conc() {
                   <FileText className="h-3.5 w-3.5" /> Saídas: enviado/pago/tarifa • Entradas: recebido/crédito/depósito
                 </p>
               </div>
-              <Button type="button" variant="default" className="mt-1 pointer-events-none">
-                <Upload className="h-4 w-4 mr-2" /> Ou clique para selecionar o arquivo
-              </Button>
+              <span className="mt-1 inline-flex items-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow">
+                <Upload className="h-4 w-4 mr-2" /> Ou clique aqui para selecionar o arquivo
+              </span>
             </>
           )}
           <input
             id="statement-file-input"
             type="file"
-            accept=".pdf,application/pdf,.csv,text/csv,.ofx"
             disabled={isProcessing}
             onChange={(e) => {
               const f = e.target.files?.[0];
-              if (f) handleStatementFile(f);
+              if (f) {
+                void handleStatementFile(f);
+              }
               e.target.value = "";
             }}
             className="sr-only"
           />
         </label>
+
       </Card>
 
 

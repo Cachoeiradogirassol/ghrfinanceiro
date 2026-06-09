@@ -147,6 +147,7 @@ function Conc() {
   const [processingFileName, setProcessingFileName] = useState<string | null>(null);
   const [cashAudit, setCashAudit] = useState<CashAudit | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [statementFormat, setStatementFormat] = useState<StatementFormat>("auto");
 
 
   // Filtro de período

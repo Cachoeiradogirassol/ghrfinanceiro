@@ -462,23 +462,171 @@ export function parsePDFText(text: string): ParsedLine[] {
 
 // ---------- Public entry ----------
 
+export type StatementFormat =
+  | "auto"
+  | "inter-pdf"
+  | "c6-csv"
+  | "mp-csv"
+  | "ofx";
+
 export async function parseStatementFile(file: File): Promise<ParsedLine[]> {
   const parsed = await parseStatementDocument(file);
   return parsed.lines;
 }
 
-export async function parseStatementDocument(file: File): Promise<ParsedStatement> {
+export async function parseStatementDocument(
+  file: File,
+  format: StatementFormat = "auto",
+): Promise<ParsedStatement> {
   const name = file.name.toLowerCase();
-  if (name.endsWith(".pdf") || file.type === "application/pdf") {
+  const ext = name.includes(".") ? name.slice(name.lastIndexOf(".")) : "";
+  const isPdfFile = ext === ".pdf" || file.type === "application/pdf";
+
+  // PDF route (forced or auto-detected)
+  if (format === "inter-pdf" || (format === "auto" && isPdfFile)) {
+    if (format === "inter-pdf" && !isPdfFile) {
+      throw new Error(`Padrão "Banco Inter (PDF)" exige arquivo .pdf, recebido "${ext || file.type || "desconhecido"}".`);
+    }
     const text = await extractPdfText(file);
     return {
       lines: parsePDFText(text),
       finalBalance: extractFinalBalanceFromText(text),
     };
   }
+
+  // Text-based routes: read as text and pick parser by hint or extension
+  if (isPdfFile) {
+    throw new Error(`Padrão "${format}" não pode ser aplicado a arquivos PDF.`);
+  }
   const text = await file.text();
-  return {
-    lines: name.endsWith(".ofx") || /<OFX>/i.test(text) ? parseOFX(text) : parseCSV(text),
-    finalBalance: null,
-  };
+
+  if (format === "ofx" || (format === "auto" && (ext === ".ofx" || /<OFX>/i.test(text)))) {
+    return { lines: parseOFX(text), finalBalance: null };
+  }
+  if (format === "c6-csv") {
+    return { lines: parseBankCSV(text, "c6"), finalBalance: null };
+  }
+  if (format === "mp-csv") {
+    return { lines: parseBankCSV(text, "mp"), finalBalance: null };
+  }
+  // auto fallback for .csv / unknown text
+  return { lines: parseCSV(text), finalBalance: null };
+}
+
+// ---------- Bank-specific CSV mappers ----------
+
+type BankCsvKind = "c6" | "mp";
+
+const BANK_CSV_LABEL: Record<BankCsvKind, string> = {
+  c6: "C6 Bank (CSV)",
+  mp: "Mercado Pago (CSV)",
+};
+
+const BANK_CSV_COLUMNS: Record<
+  BankCsvKind,
+  { date: string[]; amount: string[]; credit?: string[]; debit?: string[]; desc: string[] }
+> = {
+  c6: {
+    date: ["data", "data lancamento", "data do lancamento", "data movimento"],
+    amount: ["valor", "valor (r$)", "valor r$", "montante"],
+    desc: ["descricao", "historico", "detalhes", "lancamento"],
+  },
+  mp: {
+    date: ["data", "date", "data de origem", "data da operacao", "data_origem"],
+    amount: ["valor", "valor da operacao", "valor liquido", "net_amount", "valor_da_operacao"],
+    credit: ["entrada", "credito"],
+    debit: ["saida", "debito"],
+    desc: ["descricao", "detalhe da operacao", "description", "detalhe"],
+  },
+};
+
+function findColIndex(headers: string[], aliases: string[]): number {
+  const norm = headers.map((h) => normalizeText(h).replace(/\s+/g, " ").trim());
+  for (const a of aliases) {
+    const idx = norm.indexOf(a);
+    if (idx >= 0) return idx;
+  }
+  for (let i = 0; i < norm.length; i++) {
+    if (aliases.some((a) => norm[i].includes(a))) return i;
+  }
+  return -1;
+}
+
+export function parseBankCSV(text: string, kind: BankCsvKind): ParsedLine[] {
+  const label = BANK_CSV_LABEL[kind];
+  const rows = text.replace(/\r/g, "").split("\n").map((l) => l.trim()).filter(Boolean);
+  if (rows.length < 2) {
+    throw new Error(`Padrão ${label}: arquivo vazio ou sem linhas de dados.`);
+  }
+  const delim = detectDelimiter(rows.slice(0, 5).join("\n"));
+  const cfg = BANK_CSV_COLUMNS[kind];
+
+  let headerIdx = -1;
+  let header: string[] = [];
+  for (let i = 0; i < Math.min(rows.length, 10); i++) {
+    const cells = splitCSVLine(rows[i], delim);
+    const hasDate = findColIndex(cells, cfg.date) >= 0;
+    const hasValue =
+      findColIndex(cells, cfg.amount) >= 0 ||
+      (cfg.credit && findColIndex(cells, cfg.credit) >= 0) ||
+      (cfg.debit && findColIndex(cells, cfg.debit) >= 0);
+    if (hasDate && hasValue) {
+      headerIdx = i;
+      header = cells;
+      break;
+    }
+  }
+  if (headerIdx < 0) {
+    throw new Error(`Padrão ${label}: cabeçalho não encontrado. Esperado colunas de Data e Valor.`);
+  }
+
+  const dateCol = findColIndex(header, cfg.date);
+  const amountCol = findColIndex(header, cfg.amount);
+  const creditCol = cfg.credit ? findColIndex(header, cfg.credit) : -1;
+  const debitCol = cfg.debit ? findColIndex(header, cfg.debit) : -1;
+  const descCol = findColIndex(header, cfg.desc);
+
+  if (dateCol < 0) throw new Error(`Padrão ${label}: coluna "Data" não encontrada no cabeçalho.`);
+  if (amountCol < 0 && creditCol < 0 && debitCol < 0) {
+    throw new Error(`Padrão ${label}: coluna "Valor" não encontrada no cabeçalho.`);
+  }
+
+  const out: ParsedLine[] = [];
+  for (let i = headerIdx + 1; i < rows.length; i++) {
+    const lineNum = i + 1;
+    const cells = splitCSVLine(rows[i], delim);
+    try {
+      const dateCell = cells[dateCol] ?? "";
+      const date = extractDate(dateCell);
+      if (!date) {
+        if (!/\d/.test(dateCell)) continue;
+        throw new Error(`data inválida na coluna "Data" ("${dateCell}")`);
+      }
+      const description = descCol >= 0 ? (cells[descCol] ?? "").trim() || null : null;
+      let amount: number | null = null;
+      if (amountCol >= 0) {
+        const { value, sign } = parseAmountCell(cells[amountCol] ?? "");
+        if (Number.isNaN(value)) throw new Error(`valor numérico inválido na coluna "Valor" ("${cells[amountCol]}")`);
+        const fallback: -1 | 1 = sign === -1 ? -1 : 1;
+        amount = applyDescriptionSign(value, description, fallback);
+      } else {
+        const credit = creditCol >= 0 ? parseAmountCell(cells[creditCol] ?? "") : { value: NaN, sign: 0 as const };
+        const debit = debitCol >= 0 ? parseAmountCell(cells[debitCol] ?? "") : { value: NaN, sign: 0 as const };
+        const cv = Number.isNaN(credit.value) ? 0 : credit.value;
+        const dv = Number.isNaN(debit.value) ? 0 : debit.value;
+        if (cv === 0 && dv === 0) throw new Error("entrada/saída sem valor numérico");
+        amount = dv > 0 ? -dv : cv;
+      }
+      if (amount === null || Math.abs(amount) < 0.005) continue;
+      out.push({ statement_date: date, amount, description });
+    } catch (e) {
+      throw new Error(
+        `Erro no CSV ${label}, linha ${lineNum}: ${e instanceof Error ? e.message : String(e)}`,
+      );
+    }
+  }
+  if (out.length === 0) {
+    throw new Error(`Padrão ${label}: nenhuma linha de transação válida foi encontrada.`);
+  }
+  return out;
 }

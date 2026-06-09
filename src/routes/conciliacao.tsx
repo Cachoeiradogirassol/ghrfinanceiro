@@ -18,7 +18,7 @@ import {
   consolidateStatementRevenues,
   createUnverifiedExpenseDrafts,
 } from "@/lib/finance.functions";
-import { parseStatementDocument } from "@/lib/statement-parser";
+import { parseStatementDocument, type StatementFormat } from "@/lib/statement-parser";
 import { PromoteLineDialog, type PendingLine } from "@/components/PromoteLineDialog";
 
 import { Card } from "@/components/ui/card";
@@ -147,6 +147,7 @@ function Conc() {
   const [processingFileName, setProcessingFileName] = useState<string | null>(null);
   const [cashAudit, setCashAudit] = useState<CashAudit | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [statementFormat, setStatementFormat] = useState<StatementFormat>("auto");
 
 
   // Filtro de período
@@ -208,7 +209,23 @@ function Conc() {
     const isCsv = ext === ".csv" || file.type === "text/csv" || file.type === "application/vnd.ms-excel";
     const isOfx = ext === ".ofx";
 
-    if (!isPdf && !isCsv && !isOfx) {
+    // Routing: explicit format overrides extension detection.
+    let effectiveFormat: StatementFormat = statementFormat;
+    if (statementFormat === "auto") {
+      if (isPdf) effectiveFormat = "inter-pdf";
+      else if (isOfx) effectiveFormat = "ofx";
+      // CSVs in auto stay "auto" → generic parser
+    } else {
+      // Validate forced format against file extension.
+      const expectsPdf = statementFormat === "inter-pdf";
+      const expectsCsv = statementFormat === "c6-csv" || statementFormat === "mp-csv";
+      const expectsOfx = statementFormat === "ofx";
+      if (expectsPdf && !isPdf) return failUpload(`Padrão selecionado exige PDF, recebido "${ext || file.type}".`);
+      if (expectsCsv && !isCsv) return failUpload(`Padrão selecionado exige CSV, recebido "${ext || file.type}".`);
+      if (expectsOfx && !isOfx) return failUpload(`Padrão selecionado exige OFX, recebido "${ext || file.type}".`);
+    }
+
+    if (statementFormat === "auto" && !isPdf && !isCsv && !isOfx) {
       return failUpload(
         `Formato "${ext || file.type || "desconhecido"}" não suportado. Envie PDF, CSV ou OFX.`,
       );
@@ -216,7 +233,7 @@ function Conc() {
 
     let parsed: Awaited<ReturnType<typeof parseStatementDocument>>;
     try {
-      parsed = await parseStatementDocument(file);
+      parsed = await parseStatementDocument(file, effectiveFormat);
     } catch (e) {
       console.error("[Conciliação] Falha ao ler o arquivo", e);
       return failUpload(
@@ -509,6 +526,27 @@ function Conc() {
                     {b.name}
                   </SelectItem>
                 ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
+              <FileText className="h-3 w-3" /> Padrão de Extrato
+            </label>
+            <Select
+              value={statementFormat}
+              onValueChange={(v) => setStatementFormat(v as StatementFormat)}
+              disabled={isProcessing}
+            >
+              <SelectTrigger className="w-64">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="auto">Detectar Automaticamente (Paulo IA)</SelectItem>
+                <SelectItem value="inter-pdf">Banco Inter (PDF)</SelectItem>
+                <SelectItem value="c6-csv">C6 Bank (CSV)</SelectItem>
+                <SelectItem value="mp-csv">Mercado Pago (CSV)</SelectItem>
+                <SelectItem value="ofx">OFX Padrão</SelectItem>
               </SelectContent>
             </Select>
           </div>

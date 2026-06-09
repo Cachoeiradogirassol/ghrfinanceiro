@@ -47,9 +47,11 @@ import {
   FileUp,
   Loader2,
   FileText,
+  AlertTriangle,
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/lib/auth";
+import { parseStatementDocument } from "@/lib/statement-parser";
 
 export const Route = createFileRoute("/conciliacao")({
   head: () => ({
@@ -80,6 +82,17 @@ export const Route = createFileRoute("/conciliacao")({
 function fmt(n: number) {
   return n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
+
+type CashAudit = {
+  fileName: string;
+  bankName: string;
+  systemBalance: number;
+  finalBalance: number;
+  importedEntries: number;
+  importedExits: number;
+  calculatedFinalBalance: number;
+  difference: number;
+};
 
 function Conc() {
   const linesFn = useServerFn(listStatementLines);

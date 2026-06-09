@@ -457,7 +457,7 @@ function Conc() {
             setIsDragging(false);
             if (isProcessing) return;
             const f = e.dataTransfer.files?.[0];
-            if (f) handleCSV(f);
+            if (f) handleStatementFile(f);
           }}
           className={`relative flex flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed px-6 py-10 text-center transition-colors ${
             isProcessing
@@ -507,7 +507,7 @@ function Conc() {
             disabled={isProcessing}
             onChange={(e) => {
               const f = e.target.files?.[0];
-              if (f) handleCSV(f);
+              if (f) handleStatementFile(f);
               e.target.value = "";
             }}
             className="sr-only"

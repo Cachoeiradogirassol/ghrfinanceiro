@@ -152,13 +152,20 @@ function Conc() {
 
   const handleCSV = async (file: File) => {
     if (!importBankId) {
-      toast.error("Selecione uma conta bancária");
+      toast.error("Selecione uma conta bancária antes de enviar o arquivo");
       return;
     }
-    if (!file.name.toLowerCase().endsWith(".pdf") && file.type !== "application/pdf") {
-      toast.error("Para o novo teste, envie apenas extrato em PDF digital.");
+    const name = file.name.toLowerCase();
+    const isPdf = name.endsWith(".pdf") || file.type === "application/pdf";
+    const isCsv = name.endsWith(".csv") || file.type === "text/csv";
+    const isOfx = name.endsWith(".ofx");
+    if (!isPdf && !isCsv && !isOfx) {
+      toast.error("Formato não suportado. Envie PDF, CSV ou OFX.");
       return;
     }
+    setIsProcessing(true);
+    setProcessingFileName(file.name);
+    setHighlightLineIds(new Set());
     try {
       const rows = await parseStatementFile(file);
       if (rows.length === 0) {
@@ -178,9 +185,13 @@ function Conc() {
       qc.invalidateQueries({ queryKey: ["lines"] });
       qc.invalidateQueries({ queryKey: ["txs"] });
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Erro");
+      toast.error(e instanceof Error ? e.message : "Erro ao processar arquivo");
+    } finally {
+      setIsProcessing(false);
+      setProcessingFileName(null);
     }
   };
+
 
 
 

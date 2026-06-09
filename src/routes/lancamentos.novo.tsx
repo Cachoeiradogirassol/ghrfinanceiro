@@ -680,7 +680,11 @@ function Form() {
 
 
         <div className="space-y-3 p-3 rounded-md border bg-muted/20">
-          <Label>Conta Parcelada ou Recorrente</Label>
+          <Label>
+            {type === "receivable"
+              ? "Receita Parcelada ou Recorrente (Dividendos / Contratos)"
+              : "Conta Parcelada ou Recorrente"}
+          </Label>
           <RadioGroup
             value={scheduleKind}
             onValueChange={(v) =>
@@ -712,7 +716,9 @@ function Form() {
                 onChange={(e) => setInstallments(e.target.value)}
               />
               <p className="text-xs text-muted-foreground mt-1">
-                Serão geradas {installments || 0} transações com vencimentos a cada 30 dias.
+                {type === "receivable"
+                  ? `Serão geradas ${installments || 0} receitas (1/${installments}, 2/${installments}…) com vencimentos a cada 30 dias e entrarão na Projeção D+90.`
+                  : `Serão geradas ${installments || 0} transações com vencimentos a cada 30 dias.`}
               </p>
             </div>
           )}
@@ -722,10 +728,15 @@ function Form() {
               <Input
                 type="number"
                 min="1"
-                max="36"
+                max="60"
                 value={recurringMonths}
                 onChange={(e) => setRecurringMonths(e.target.value)}
               />
+              <p className="text-xs text-muted-foreground mt-1">
+                {type === "receivable"
+                  ? `Repete a receita mês a mês por ${recurringMonths || 0} meses — ideal para dividendos e distribuições fixas (Aldeia Girassol / JK).`
+                  : `Repete a despesa mês a mês por ${recurringMonths || 0} meses.`}
+              </p>
             </div>
           )}
         </div>

@@ -475,7 +475,23 @@ export const smartImportStatement = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => SmartImportInput.parse(d))
   .handler(async ({ context, data }) => {
     const windowMs = data.match_window_days * 24 * 60 * 60 * 1000;
-    const dates = data.lines.map((l) => l.statement_date).sort();
+    const isValidIsoDate = (s: unknown): s is string =>
+      typeof s === "string" &&
+      /^\d{4}-\d{2}-\d{2}$/.test(s) &&
+      !isNaN(new Date(s + "T00:00:00Z").getTime());
+    const validLines = data.lines.filter((l) => isValidIsoDate(l.statement_date));
+    const skippedInvalid = data.lines.length - validLines.length;
+    if (validLines.length === 0) {
+      return {
+        imported: 0,
+        duplicates: 0,
+        matchedExisting: 0,
+        autoReconciled: 0,
+        pending: 0,
+        skippedInvalid,
+      };
+    }
+    const dates = validLines.map((l) => l.statement_date).sort();
     const minDate = dates[0];
     const maxDate = dates[dates.length - 1];
     const padDate = (iso: string, days: number) => {

@@ -123,6 +123,9 @@ function Conc() {
   const [selectedLines, setSelectedLines] = useState<Set<string>>(new Set());
   const [highlightLineIds, setHighlightLineIds] = useState<Set<string>>(new Set());
   const [promoting, setPromoting] = useState<PendingLine | null>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
+  const [processingFileName, setProcessingFileName] = useState<string | null>(null);
 
 
   // Filtro de período

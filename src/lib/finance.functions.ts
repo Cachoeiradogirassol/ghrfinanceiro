@@ -107,7 +107,7 @@ const TxInput = z.object({
     .object({
       kind: z.enum(["single", "installment", "recurring"]).default("single"),
       installments: z.number().int().min(2).max(120).optional(),
-      recurring_months: z.number().int().min(1).max(36).default(12).optional(),
+      recurring_months: z.number().int().min(1).max(60).default(12).optional(),
     })
     .default({ kind: "single" }),
 });
@@ -208,6 +208,7 @@ export const createTransaction = createServerFn({ method: "POST" })
       const groupId = crypto.randomUUID();
       const rows = Array.from({ length: months }, (_, i) => ({
         ...baseRow,
+        description: `${baseRow.description ?? ""} - Recorrente ${i + 1}/${months}`.trim(),
         due_date: addMonths(baseRow.due_date, i),
         is_recurring: true,
         recurrence_group_id: groupId,

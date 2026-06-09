@@ -181,11 +181,17 @@ export function extractFinalBalanceFromText(text: string): number | null {
 
   // Pass 1 (priority): scan top→bottom for "Saldo disponível / Saldo total" header (Banco Inter style).
   for (let i = 0; i < lines.length; i++) {
-    const scope = `${lines[i]} ${lines[i + 1] ?? ""} ${lines[i + 2] ?? ""}`.trim();
-    const normalized = normalizeText(scope);
+    const rawScope = `${lines[i]} ${lines[i + 1] ?? ""} ${lines[i + 2] ?? ""}`.trim();
+    const normalized = normalizeText(rawScope);
     if (!isPriorityBalanceLabel(normalized)) continue;
     if (/\bsaldo\s+(inicial|anterior)\b/.test(normalized)) continue;
-    const matches = Array.from(scope.matchAll(moneyTokenRegex()));
+    // Strip CPF/CNPJ tokens so company id digits aren't mistaken for the balance.
+    const scope = stripCpfCnpjTokens(rawScope);
+    // Cut everything BEFORE the "Saldo disponível/total/..." label so we only
+    // capture the value that follows it (Banco Inter header layout).
+    const labelIdx = scope.search(/saldo\s+(?:dispon[ií]vel|total|atual|em\s+conta)/i);
+    const tail = labelIdx >= 0 ? scope.slice(labelIdx) : scope;
+    const matches = Array.from(tail.matchAll(moneyTokenRegex()));
     if (matches.length === 0) continue;
     const parsed = parseMoneyMatch(matches[0]);
     if (Number.isNaN(parsed.value)) continue;
@@ -197,12 +203,13 @@ export function extractFinalBalanceFromText(text: string): number | null {
   for (let i = lines.length - 1; i >= 0; i--) {
     const current = lines[i];
     const next = lines[i + 1] ?? "";
-    const scope = `${current} ${next}`.trim();
-    const normalized = normalizeText(scope);
-    const isBalanceLine = isBalanceSummaryText(scope) && !/\bsaldo\s+(inicial|anterior)\b/.test(normalized);
+    const rawScope = `${current} ${next}`.trim();
+    const normalized = normalizeText(rawScope);
+    const isBalanceLine = isBalanceSummaryText(rawScope) && !/\bsaldo\s+(inicial|anterior)\b/.test(normalized);
 
     if (!isBalanceLine) continue;
 
+    const scope = stripCpfCnpjTokens(rawScope);
     const matches = Array.from(scope.matchAll(moneyTokenRegex()));
     if (matches.length === 0) continue;
 

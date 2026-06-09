@@ -483,12 +483,12 @@ export const smartImportStatement = createServerFn({ method: "POST" })
     const skippedInvalid = data.lines.length - validLines.length;
     if (validLines.length === 0) {
       return {
-        imported: 0,
+        total: data.lines.length,
         duplicates: 0,
-        matchedExisting: 0,
-        autoReconciled: 0,
-        pending: 0,
-        skippedInvalid,
+        matched_existing: 0,
+        pending_categorization: 0,
+        line_ids: [] as string[],
+        skipped_invalid: skippedInvalid,
       };
     }
     const dates = validLines.map((l) => l.statement_date).sort();

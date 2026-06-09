@@ -138,6 +138,7 @@ function Conc() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [processingFileName, setProcessingFileName] = useState<string | null>(null);
+  const [cashAudit, setCashAudit] = useState<CashAudit | null>(null);
 
 
   // Filtro de período
@@ -162,24 +163,31 @@ function Conc() {
     return inRange(d);
   });
 
-  const handleCSV = async (file: File) => {
+  const handleStatementFile = async (file: File) => {
+    setIsProcessing(true);
+    setProcessingFileName(file.name);
+    setHighlightLineIds(new Set());
+    setSelectedLines(new Set());
+    setCashAudit(null);
     if (!importBankId) {
       toast.error("Selecione uma conta bancária antes de enviar o arquivo");
+      setIsProcessing(false);
+      setProcessingFileName(null);
       return;
     }
     const name = file.name.toLowerCase();
-    const isPdf = name.endsWith(".pdf") || file.type === "application/pdf";
+    const isPdf = name.endsWith(".pdf") || file.type === "application/pdf" || file.type === "application/octet-stream";
     const isCsv = name.endsWith(".csv") || file.type === "text/csv";
     const isOfx = name.endsWith(".ofx");
     if (!isPdf && !isCsv && !isOfx) {
       toast.error("Formato não suportado. Envie PDF, CSV ou OFX.");
+      setIsProcessing(false);
+      setProcessingFileName(null);
       return;
     }
-    setIsProcessing(true);
-    setProcessingFileName(file.name);
-    setHighlightLineIds(new Set());
     try {
-      const rows = await parseStatementFile(file);
+      const parsed = await parseStatementDocument(file);
+      const rows = parsed.lines;
       if (rows.length === 0) {
         toast.error("Não foi possível extrair linhas do arquivo");
         return;
@@ -194,6 +202,29 @@ function Conc() {
       ].filter(Boolean);
       toast.success(`Extrato processado: ${parts.join(" • ")}`);
       setHighlightLineIds(new Set(res.line_ids));
+      const selectedBank = (banks.data ?? []).find((b) => b.id === importBankId);
+      if (isPdf && parsed.finalBalance !== null && selectedBank) {
+        const importedEntries = rows
+          .filter((row) => row.amount > 0)
+          .reduce((sum, row) => sum + row.amount, 0);
+        const importedExits = rows
+          .filter((row) => row.amount < 0)
+          .reduce((sum, row) => sum + Math.abs(row.amount), 0);
+        const systemBalance = Number(selectedBank.initial_balance ?? 0);
+        const calculatedFinalBalance = systemBalance + importedEntries - importedExits;
+        setCashAudit({
+          fileName: file.name,
+          bankName: selectedBank.name,
+          systemBalance,
+          finalBalance: parsed.finalBalance,
+          importedEntries,
+          importedExits,
+          calculatedFinalBalance,
+          difference: calculatedFinalBalance - parsed.finalBalance,
+        });
+      } else if (isPdf) {
+        toast.warning("PDF importado, mas o Saldo Final não foi localizado no texto do extrato.");
+      }
       qc.invalidateQueries({ queryKey: ["lines"] });
       qc.invalidateQueries({ queryKey: ["txs"] });
     } catch (e) {

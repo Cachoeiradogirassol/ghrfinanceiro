@@ -704,6 +704,71 @@ function Conc() {
         </Card>
       )}
 
+      {cashAudit && (() => {
+        const audited = Math.abs(cashAudit.difference) < 0.01;
+        return (
+          <Card className={`p-5 border-2 ${audited ? "border-emerald-500/60 bg-emerald-500/5" : "border-rose-500/60 bg-rose-500/5"}`}>
+            <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
+              <div>
+                <h2 className="text-lg font-bold">Auditoria de Batimento de Caixa</h2>
+                <p className="text-sm text-muted-foreground">
+                  {cashAudit.bankName} • {cashAudit.fileName}
+                </p>
+              </div>
+              <Badge
+                className={
+                  audited
+                    ? "bg-emerald-600 hover:bg-emerald-600 text-white border-0 text-sm px-3 py-1"
+                    : "bg-rose-600 hover:bg-rose-600 text-white border-0 text-sm px-3 py-1"
+                }
+              >
+                {audited ? "CONCILIAÇÃO DO SEED AUDITADA (100% CORRETA)" : `Diferença: ${fmt(Math.abs(cashAudit.difference))}`}
+              </Badge>
+            </div>
+
+            {audited && (
+              <div className="mb-4 rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-4">
+                <p className="text-sm font-medium text-emerald-700">
+                  Paulo: A precisão cirúrgica da gestão privada é a salvaguarda do capital real contra as distorções monetárias — aqui o caixa protege o capital de verdade.
+                </p>
+              </div>
+            )}
+
+            {!audited && (
+              <div className="mb-4 flex items-start gap-2 rounded-lg border border-rose-500/30 bg-rose-500/10 p-4 text-rose-700">
+                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                <p className="text-sm font-medium">
+                  O cálculo importado não bateu com o saldo final do PDF. Revise lançamentos duplicados, ausentes ou com sinal invertido.
+                </p>
+              </div>
+            )}
+
+            <div className="grid gap-3 md:grid-cols-5">
+              <div className="rounded-lg border bg-card p-3">
+                <p className="text-xs text-muted-foreground">Saldo atual no sistema</p>
+                <p className="text-base font-bold tabular-nums">{fmt(cashAudit.systemBalance)}</p>
+              </div>
+              <div className="rounded-lg border bg-card p-3">
+                <p className="text-xs text-muted-foreground">Entradas importadas</p>
+                <p className="text-base font-bold tabular-nums text-emerald-600">+ {fmt(cashAudit.importedEntries)}</p>
+              </div>
+              <div className="rounded-lg border bg-card p-3">
+                <p className="text-xs text-muted-foreground">Saídas importadas</p>
+                <p className="text-base font-bold tabular-nums text-rose-600">− {fmt(cashAudit.importedExits)}</p>
+              </div>
+              <div className="rounded-lg border bg-card p-3">
+                <p className="text-xs text-muted-foreground">Resultado calculado</p>
+                <p className="text-base font-bold tabular-nums">{fmt(cashAudit.calculatedFinalBalance)}</p>
+              </div>
+              <div className="rounded-lg border bg-card p-3">
+                <p className="text-xs text-muted-foreground">Saldo final real do PDF</p>
+                <p className="text-base font-bold tabular-nums">{fmt(cashAudit.finalBalance)}</p>
+              </div>
+            </div>
+          </Card>
+        );
+      })()}
+
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <Card className="p-4">
           <h2 className="font-semibold mb-3">

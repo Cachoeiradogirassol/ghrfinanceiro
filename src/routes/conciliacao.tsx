@@ -181,7 +181,10 @@ function Conc() {
     setIsProcessing(true);
 
     const toastId = `import-${Date.now()}`;
-    toast.loading(`Recebi "${file.name}". Paulo está auditando o extrato…`, { id: toastId, ...LOADING_TOAST });
+    toast.loading(`Recebi "${file.name}". Paulo está auditando o extrato…`, {
+      id: toastId,
+      ...LOADING_TOAST,
+    });
 
     const failUpload = (message: string) => {
       setUploadError(message);
@@ -190,7 +193,8 @@ function Conc() {
       setProcessingFileName(null);
     };
 
-    const effectiveBankId = importBankId || ((banks.data ?? [])[0]?.id as string | undefined) || "";
+    const effectiveBankId =
+      importBankId || ((banks.data ?? [])[0]?.id as string | undefined) || "";
     if (!effectiveBankId) {
       return failUpload("Nenhuma conta bancária disponível para receber o extrato.");
     }
@@ -205,7 +209,9 @@ function Conc() {
     const isOfx = ext === ".ofx";
 
     if (!isPdf && !isCsv && !isOfx) {
-      return failUpload(`Formato "${ext || file.type || "desconhecido"}" não suportado. Envie PDF, CSV ou OFX.`);
+      return failUpload(
+        `Formato "${ext || file.type || "desconhecido"}" não suportado. Envie PDF, CSV ou OFX.`,
+      );
     }
 
     let parsed: Awaited<ReturnType<typeof parseStatementDocument>>;
@@ -213,7 +219,9 @@ function Conc() {
       parsed = await parseStatementDocument(file);
     } catch (e) {
       console.error("[Conciliação] Falha ao ler o arquivo", e);
-      return failUpload(`Falha ao ler "${file.name}": ${e instanceof Error ? e.message : String(e)}`);
+      return failUpload(
+        `Falha ao ler "${file.name}": ${e instanceof Error ? e.message : String(e)}`,
+      );
     }
 
     const rows = parsed.lines;
@@ -256,7 +264,10 @@ function Conc() {
           difference: cents(calculatedFinalBalance - parsed.finalBalance),
         });
       } else if (isPdf) {
-        toast.warning("PDF importado, mas o Saldo Final não foi localizado no texto do extrato.", PERSISTENT_TOAST);
+        toast.warning(
+          "PDF importado, mas o Saldo Final não foi localizado no texto do extrato.",
+          PERSISTENT_TOAST,
+        );
       }
       qc.invalidateQueries({ queryKey: ["lines"] });
       qc.invalidateQueries({ queryKey: ["txs"] });

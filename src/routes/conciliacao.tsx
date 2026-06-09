@@ -180,7 +180,7 @@ function Conc() {
       return;
     }
     const name = file.name.toLowerCase();
-    const isPdf = name.endsWith(".pdf") || file.type === "application/pdf" || file.type === "application/octet-stream";
+    const isPdf = name.endsWith(".pdf") || file.type === "application/pdf";
     const isCsv = name.endsWith(".csv") || file.type === "text/csv";
     const isOfx = name.endsWith(".ofx");
     if (!isPdf && !isCsv && !isOfx) {

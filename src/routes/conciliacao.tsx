@@ -303,7 +303,7 @@ function Conc() {
       qc.invalidateQueries({ queryKey: ["lines"] });
       qc.invalidateQueries({ queryKey: ["txs"] });
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Erro");
+      toast.error(e instanceof Error ? e.message : "Erro", PERSISTENT_TOAST);
     }
   };
 
@@ -318,7 +318,7 @@ function Conc() {
       toast.success("Período encerrado. Lançamentos no intervalo estão bloqueados.");
       qc.invalidateQueries({ queryKey: ["periods"] });
     },
-    onError: (e) => toast.error(e instanceof Error ? e.message : "Erro"),
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Erro", PERSISTENT_TOAST),
   });
 
   const reopenPeriod = useMutation({
@@ -327,7 +327,7 @@ function Conc() {
       toast.success("Período reaberto");
       qc.invalidateQueries({ queryKey: ["periods"] });
     },
-    onError: (e) => toast.error(e instanceof Error ? e.message : "Erro"),
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Erro", PERSISTENT_TOAST),
   });
 
   const rangeLocked = (periods.data ?? []).some(
@@ -527,7 +527,10 @@ function Conc() {
             if (f) {
               void handleStatementFile(f);
             } else {
-              toast.error("Nenhum arquivo foi detectado no arrasto. Tente clicar na área para selecionar.");
+              toast.error(
+                "Nenhum arquivo foi detectado no arrasto. Tente clicar na área para selecionar.",
+                PERSISTENT_TOAST,
+              );
             }
           }}
           className={`relative flex flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed px-6 py-10 text-center transition-colors ${

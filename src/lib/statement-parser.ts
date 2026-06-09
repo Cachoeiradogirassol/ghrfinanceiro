@@ -433,6 +433,7 @@ export function parsePDFText(text: string): ParsedLine[] {
     const line = raw.trim();
     if (!line) continue;
     if (isBalanceSummaryText(line)) continue;
+    if (containsCpfCnpjLabel(line)) continue;
     const date = extractLeadingDate(line) ?? extractDate(line);
     if (!date) continue;
     const matches = Array.from(line.matchAll(moneyTokenRegex()));

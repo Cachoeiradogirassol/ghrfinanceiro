@@ -18,7 +18,7 @@ import {
   consolidateStatementRevenues,
   createUnverifiedExpenseDrafts,
 } from "@/lib/finance.functions";
-import { parseStatementFile } from "@/lib/statement-parser";
+import { parseStatementDocument } from "@/lib/statement-parser";
 import { PromoteLineDialog, type PendingLine } from "@/components/PromoteLineDialog";
 
 import { Card } from "@/components/ui/card";
@@ -51,7 +51,6 @@ import {
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/lib/auth";
-import { parseStatementDocument } from "@/lib/statement-parser";
 
 export const Route = createFileRoute("/conciliacao")({
   head: () => ({

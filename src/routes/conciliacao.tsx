@@ -324,7 +324,18 @@ function Conc() {
   };
 
   return (
-    <div className="p-8 space-y-6">
+    <div className="relative p-8 space-y-6">
+      {isProcessing && (
+        <div className="absolute inset-0 z-50 flex items-start justify-center rounded-xl bg-background/75 p-8 pt-40 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-xl border bg-card p-6 text-center shadow-xl">
+            <Loader2 className="mx-auto mb-3 h-9 w-9 animate-spin text-primary" />
+            <p className="text-base font-semibold">Processando PDF do extrato…</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              A conciliação ficará bloqueada até a leitura terminar{processingFileName ? `: ${processingFileName}` : ""}.
+            </p>
+          </div>
+        </div>
+      )}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold">Conciliação Bancária</h1>

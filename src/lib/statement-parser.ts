@@ -159,6 +159,20 @@ function isPriorityBalanceLabel(normalized: string) {
   return /\bsaldo\s+(disponivel|disponível|total|atual|em\s+conta)\b/.test(normalized);
 }
 
+// Strip CPF (000.000.000-00) and CNPJ (00.000.000/0000-00) tokens so their
+// digits cannot be mistaken for monetary values by the money regex.
+function stripCpfCnpjTokens(text: string): string {
+  return text
+    .replace(/\b\d{2}\.\d{3}\.\d{3}\/\d{4}-?\d{2}\b/g, " ")
+    .replace(/\b\d{3}\.\d{3}\.\d{3}-?\d{2}\b/g, " ")
+    .replace(/\b\d{14}\b/g, " ")
+    .replace(/\b\d{11}\b/g, " ");
+}
+
+function containsCpfCnpjLabel(text: string): boolean {
+  return /\b(cpf|cnpj)\b/i.test(normalizeText(text));
+}
+
 export function extractFinalBalanceFromText(text: string): number | null {
   const lines = text
     .split("\n")

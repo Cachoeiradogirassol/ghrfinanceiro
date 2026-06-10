@@ -54,6 +54,7 @@ import {
   FileSpreadsheet,
   ArrowDownCircle,
   ArrowUpCircle,
+  Grid3x3,
 } from "lucide-react";
 import { toast } from "sonner";
 import {

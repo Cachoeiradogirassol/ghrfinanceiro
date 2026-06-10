@@ -19,6 +19,7 @@ export const listProjections = createServerFn({ method: "GET" })
 // ---------- CREATE ----------
 const ProjectionInput = z.object({
   name: z.string().trim().min(2).max(120),
+  direction: z.enum(["inflow", "outflow"]).default("inflow"),
   cost_center_id: z.string().uuid(),
   account_id: z.string().uuid(),
   contact_id: z.string().uuid().nullable().optional(),
@@ -38,6 +39,7 @@ export const createProjection = createServerFn({ method: "POST" })
       .from("cash_projections")
       .insert({
         name: data.name,
+        direction: data.direction,
         cost_center_id: data.cost_center_id,
         account_id: data.account_id,
         contact_id: data.contact_id ?? null,
@@ -48,7 +50,7 @@ export const createProjection = createServerFn({ method: "POST" })
         horizon_months: data.horizon_months,
         notes: data.notes ?? null,
         created_by: context.userId,
-      })
+      } as never)
       .select("id")
       .single();
     if (error) throw new Error(error.message);
@@ -85,7 +87,7 @@ export const realizeProjectionMonth = createServerFn({ method: "POST" })
     // Load projection (RLS scopes ownership)
     const { data: proj, error: pErr } = await context.supabase
       .from("cash_projections")
-      .select("id, name, cost_center_id, account_id, contact_id")
+      .select("id, name, cost_center_id, account_id, contact_id, direction")
       .eq("id", data.projection_id)
       .maybeSingle();
     if (pErr) throw new Error(pErr.message);
@@ -95,6 +97,9 @@ export const realizeProjectionMonth = createServerFn({ method: "POST" })
         "Esta projeção não possui contato (pagador) padrão. Edite a projeção e defina um contato antes de realizar no caixa.",
       );
     }
+
+    const projDirection = (proj as { direction?: string }).direction ?? "inflow";
+    const txType = projDirection === "outflow" ? "payable" : "receivable";
 
     // Already realized?
     const { data: existing } = await context.supabase
@@ -113,7 +118,7 @@ export const realizeProjectionMonth = createServerFn({ method: "POST" })
         account_id: proj.account_id,
         bank_account_id: data.bank_account_id,
         contact_id: proj.contact_id,
-        type: "receivable",
+        type: txType,
         amount: data.realized_amount,
         description:
           data.description ??

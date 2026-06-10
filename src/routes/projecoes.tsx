@@ -43,8 +43,30 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { TrendingUp, Trash2, CheckCircle2, Sparkles } from "lucide-react";
+import {
+  TrendingUp,
+  Trash2,
+  CheckCircle2,
+  Sparkles,
+  FileDown,
+  FileSpreadsheet,
+  ArrowDownCircle,
+  ArrowUpCircle,
+} from "lucide-react";
 import { toast } from "sonner";
+import {
+  ResponsiveContainer,
+  LineChart,
+  Line,
+  CartesianGrid,
+  XAxis,
+  YAxis,
+  Tooltip,
+  Legend,
+} from "recharts";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
+import * as XLSX from "xlsx";
 
 export const Route = createFileRoute("/projecoes")({
   head: () => ({
@@ -58,7 +80,7 @@ export const Route = createFileRoute("/projecoes")({
       { property: "og:title", content: "Projeções e Simulador — CONTROLE.GHR" },
       {
         property: "og:description",
-        content: "Simulações preditivas de receitas com crescimento composto mês a mês.",
+        content: "Simulações preditivas de entradas e saídas com crescimento composto.",
       },
     ],
   }),
@@ -91,6 +113,7 @@ function fmtMonthLabel(iso: string) {
 type ProjectionRow = {
   id: string;
   name: string;
+  direction?: "inflow" | "outflow" | null;
   cost_center_id: string;
   account_id: string;
   contact_id: string | null;
@@ -101,7 +124,7 @@ type ProjectionRow = {
   horizon_months: number;
   notes: string | null;
   cost_centers: { code: string; name: string; enterprise: string } | null;
-  accounts: { name: string } | null;
+  accounts: { name: string; kind?: string } | null;
   contacts: { name: string } | null;
   bank_accounts: { name: string; bank: string } | null;
   realizations: Array<{
@@ -134,6 +157,7 @@ function ProjectionsPage() {
   });
 
   // Form state
+  const [direction, setDirection] = useState<"inflow" | "outflow">("inflow");
   const [name, setName] = useState("");
   const [ccId, setCcId] = useState("");
   const [accId, setAccId] = useState("");
@@ -151,16 +175,29 @@ function ProjectionsPage() {
     () => (ccs.data ?? []).filter((c) => SELECTABLE_CC.includes(c.enterprise ?? "")),
     [ccs.data],
   );
-  const receivableAccs = useMemo(
-    () => (accs.data ?? []).filter((a) => a.kind === "receivable"),
-    [accs.data],
-  );
+
+  // Fix: accounts kinds in DB are "revenue" / "expense" (not "receivable")
+  const filteredAccs = useMemo(() => {
+    const wanted = direction === "inflow" ? "revenue" : "expense";
+    const all = (accs.data ?? []) as Array<{
+      id: string;
+      name: string;
+      kind: string;
+      cost_center_id?: string;
+    }>;
+    let list = all.filter((a) => a.kind === wanted);
+    if (ccId) {
+      const scoped = list.filter((a) => a.cost_center_id === ccId);
+      if (scoped.length > 0) list = scoped;
+    }
+    return list;
+  }, [accs.data, direction, ccId]);
 
   const createMut = useMutation({
     mutationFn: async () => {
       if (!name.trim()) throw new Error("Informe um nome para a projeção.");
       if (!ccId) throw new Error("Selecione um centro de custo.");
-      if (!accId) throw new Error("Selecione uma conta contábil (receita).");
+      if (!accId) throw new Error("Selecione uma conta contábil.");
       const init = Number(initial.replace(",", "."));
       const r = Number(rate.replace(",", "."));
       if (!Number.isFinite(init) || init < 0) throw new Error("Valor inicial inválido.");
@@ -171,6 +208,7 @@ function ProjectionsPage() {
       return createFn({
         data: {
           name: name.trim(),
+          direction,
           cost_center_id: ccId,
           account_id: accId,
           contact_id: contactId || null,
@@ -202,6 +240,157 @@ function ProjectionsPage() {
     onError: (e: Error) => toast.error(e.message),
   });
 
+  // Consolidated series: align all projections on absolute month buckets
+  const consolidated = useMemo(() => {
+    type Row = {
+      mes: string;
+      entradas: number;
+      saidas: number;
+      liquido: number;
+      acumulado: number;
+    };
+    const rows = projs.data ?? [];
+    if (rows.length === 0) return [] as Row[];
+    const buckets = new Map<string, Row>();
+    for (const p of rows) {
+      const init = Number(p.initial_amount);
+      const r = Number(p.monthly_growth_rate) / 100;
+      const sign = (p.direction ?? "inflow") === "outflow" ? -1 : 1;
+      for (let i = 0; i < p.horizon_months; i++) {
+        const iso = addMonthsISO(p.start_date, i);
+        const key = iso.slice(0, 7);
+        const v = sign * init * Math.pow(1 + r, i);
+        let row = buckets.get(key);
+        if (!row) {
+          row = { mes: key, entradas: 0, saidas: 0, liquido: 0, acumulado: 0 };
+          buckets.set(key, row);
+        }
+        if (sign > 0) row.entradas += v;
+        else row.saidas += Math.abs(v);
+        row.liquido += v;
+      }
+    }
+    const arr = Array.from(buckets.values()).sort((a, b) => a.mes.localeCompare(b.mes));
+    let acc = 0;
+    for (const r of arr) {
+      acc += r.liquido;
+      r.acumulado = acc;
+    }
+    return arr;
+  }, [projs.data]);
+
+  function handleExportPDF() {
+    const rows = projs.data ?? [];
+    if (rows.length === 0) {
+      toast.error("Nenhuma projeção para exportar.");
+      return;
+    }
+    const doc = new jsPDF({ unit: "pt", format: "a4" });
+    const now = new Date();
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(16);
+    doc.text("CONTROLE.GHR — Projeções e Cenário Preditivo", 40, 50);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9);
+    doc.text(`Emitido em: ${now.toLocaleString("pt-BR")}`, 40, 68);
+
+    autoTable(doc, {
+      startY: 90,
+      head: [["Nome", "Tipo", "Centro de Custo", "Conta", "Inicial", "Taxa m.", "Horiz."]],
+      body: rows.map((p) => [
+        p.name,
+        (p.direction ?? "inflow") === "outflow" ? "Saída" : "Entrada",
+        p.cost_centers?.name ?? "—",
+        p.accounts?.name ?? "—",
+        fmt(Number(p.initial_amount)),
+        `${Number(p.monthly_growth_rate).toFixed(2)}%`,
+        `${p.horizon_months}m`,
+      ]),
+      styles: { fontSize: 9 },
+      headStyles: { fillColor: [60, 60, 60] },
+    });
+
+    if (consolidated.length > 0) {
+      autoTable(doc, {
+        startY: (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 20,
+        head: [["Mês", "Entradas", "Saídas", "Líquido", "Acumulado"]],
+        body: consolidated.map((c) => [
+          String(c.mes),
+          fmt(c.entradas as number),
+          fmt(c.saidas as number),
+          fmt(c.liquido as number),
+          fmt(c.acumulado as number),
+        ]),
+        styles: { fontSize: 8 },
+        headStyles: { fillColor: [40, 90, 160] },
+      });
+    }
+    doc.save(`Projecoes_GHR_${now.toISOString().slice(0, 10)}.pdf`);
+  }
+
+  function handleExportXLSX() {
+    const rows = projs.data ?? [];
+    if (rows.length === 0) {
+      toast.error("Nenhuma projeção para exportar.");
+      return;
+    }
+    const wb = XLSX.utils.book_new();
+
+    // Sheet 1: projections list
+    const sheet1 = XLSX.utils.json_to_sheet(
+      rows.map((p) => ({
+        Nome: p.name,
+        Tipo: (p.direction ?? "inflow") === "outflow" ? "Saída" : "Entrada",
+        "Centro de Custo": p.cost_centers?.name ?? "",
+        "Conta Contábil": p.accounts?.name ?? "",
+        "Valor Inicial": Number(p.initial_amount),
+        "Taxa Mensal (%)": Number(p.monthly_growth_rate),
+        "Mês Inicial": p.start_date,
+        Horizonte: p.horizon_months,
+      })),
+    );
+    XLSX.utils.book_append_sheet(wb, sheet1, "Projeções");
+
+    // Sheet 2: monthly grid per projection
+    const monthSet = new Set<string>();
+    const perProj: Array<Record<string, number | string>> = rows.map((p) => {
+      const init = Number(p.initial_amount);
+      const r = Number(p.monthly_growth_rate) / 100;
+      const sign = (p.direction ?? "inflow") === "outflow" ? -1 : 1;
+      const row: Record<string, number | string> = {
+        Projeção: p.name,
+        Tipo: sign > 0 ? "Entrada" : "Saída",
+      };
+      for (let i = 0; i < p.horizon_months; i++) {
+        const key = addMonthsISO(p.start_date, i).slice(0, 7);
+        monthSet.add(key);
+        row[key] = Number((sign * init * Math.pow(1 + r, i)).toFixed(2));
+      }
+      return row;
+    });
+    const months = Array.from(monthSet).sort();
+    const sheet2 = XLSX.utils.json_to_sheet(perProj, {
+      header: ["Projeção", "Tipo", ...months],
+    });
+    XLSX.utils.book_append_sheet(wb, sheet2, "Competências");
+
+    // Sheet 3: consolidated
+    if (consolidated.length > 0) {
+      const sheet3 = XLSX.utils.json_to_sheet(
+        consolidated.map((c) => ({
+          Mês: c.mes,
+          Entradas: Number((c.entradas as number).toFixed(2)),
+          Saídas: Number((c.saidas as number).toFixed(2)),
+          Líquido: Number((c.liquido as number).toFixed(2)),
+          Acumulado: Number((c.acumulado as number).toFixed(2)),
+        })),
+      );
+      XLSX.utils.book_append_sheet(wb, sheet3, "Consolidado");
+    }
+
+    XLSX.writeFile(wb, `Projecoes_GHR_${new Date().toISOString().slice(0, 10)}.xlsx`);
+  }
+
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
@@ -211,13 +400,21 @@ function ProjectionsPage() {
             Projeções e Simulador Preditivo
           </h1>
           <p className="text-muted-foreground">
-            Simulações de dividendos e recebimentos com crescimento composto · isoladas do
+            Simulações multilistas de entradas e saídas com crescimento composto · isoladas do
             fluxo real
           </p>
         </div>
-        <Button variant="outline" onClick={() => nav({ to: "/" })}>
-          ← Dashboard
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button variant="outline" onClick={handleExportPDF}>
+            <FileDown className="h-4 w-4 mr-1" /> Exportar Cenário (PDF)
+          </Button>
+          <Button variant="outline" onClick={handleExportXLSX}>
+            <FileSpreadsheet className="h-4 w-4 mr-1" /> Exportar Planilha (Excel)
+          </Button>
+          <Button variant="outline" onClick={() => nav({ to: "/" })}>
+            ← Dashboard
+          </Button>
+        </div>
       </div>
 
       <Card className="p-5 space-y-4">
@@ -227,11 +424,42 @@ function ProjectionsPage() {
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="space-y-2 md:col-span-2">
+            <Label>Tipo da Projeção *</Label>
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                variant={direction === "inflow" ? "default" : "outline"}
+                className="flex-1"
+                onClick={() => {
+                  setDirection("inflow");
+                  setAccId("");
+                }}
+              >
+                <ArrowUpCircle className="h-4 w-4 mr-1" /> Entrada (Recebimento)
+              </Button>
+              <Button
+                type="button"
+                variant={direction === "outflow" ? "default" : "outline"}
+                className="flex-1"
+                onClick={() => {
+                  setDirection("outflow");
+                  setAccId("");
+                }}
+              >
+                <ArrowDownCircle className="h-4 w-4 mr-1" /> Saída (Pagamento)
+              </Button>
+            </div>
+          </div>
+          <div className="space-y-2 md:col-span-2">
             <Label>Nome da Projeção *</Label>
             <Input
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="Ex: Dividendos Loteamento JK"
+              placeholder={
+                direction === "inflow"
+                  ? "Ex: Dividendos Loteamento JK"
+                  : "Ex: Pagamento Recorrente Fornecedor"
+              }
             />
           </div>
           <div className="space-y-2">
@@ -259,7 +487,7 @@ function ProjectionsPage() {
           </div>
           <div className="space-y-2">
             <Label>Centro de Custo *</Label>
-            <Select value={ccId} onValueChange={setCcId}>
+            <Select value={ccId} onValueChange={(v) => { setCcId(v); setAccId(""); }}>
               <SelectTrigger>
                 <SelectValue placeholder="Selecione…" />
               </SelectTrigger>
@@ -273,19 +501,33 @@ function ProjectionsPage() {
             </Select>
           </div>
           <div className="space-y-2">
-            <Label>Conta Contábil (Receita) *</Label>
+            <Label>
+              Conta Contábil ({direction === "inflow" ? "Receita" : "Despesa"}) *
+            </Label>
             <Select value={accId} onValueChange={setAccId}>
               <SelectTrigger>
-                <SelectValue placeholder="Selecione…" />
+                <SelectValue
+                  placeholder={
+                    filteredAccs.length === 0
+                      ? "Nenhuma conta disponível"
+                      : "Selecione…"
+                  }
+                />
               </SelectTrigger>
               <SelectContent>
-                {receivableAccs.map((a) => (
+                {filteredAccs.map((a) => (
                   <SelectItem key={a.id} value={a.id}>
                     {a.name}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
+            {filteredAccs.length === 0 && (
+              <p className="text-xs text-destructive">
+                Nenhuma conta {direction === "inflow" ? "de receita" : "de despesa"}{" "}
+                cadastrada{ccId ? " neste centro de custo" : ""}. Cadastre no Plano de Contas.
+              </p>
+            )}
           </div>
           <div className="space-y-2">
             <Label>Contato/Pagador (opcional, obrigatório p/ realizar)</Label>
@@ -352,6 +594,56 @@ function ProjectionsPage() {
         </div>
       </Card>
 
+      {consolidated.length > 0 && (
+        <Card className="p-5 space-y-3">
+          <h2 className="font-semibold">Curva Consolidada de Capital Futuro</h2>
+          <p className="text-xs text-muted-foreground">
+            Soma de todas as projeções ativas · entradas somam, saídas subtraem
+          </p>
+          <div className="h-72 w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={consolidated}>
+                <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
+                <XAxis dataKey="mes" tick={{ fontSize: 11 }} />
+                <YAxis
+                  tick={{ fontSize: 11 }}
+                  tickFormatter={(v) =>
+                    Number(v).toLocaleString("pt-BR", { notation: "compact" })
+                  }
+                />
+                <Tooltip
+                  formatter={(v: number) => fmt(Number(v))}
+                  labelFormatter={(l) => `Mês ${l}`}
+                />
+                <Legend />
+                <Line
+                  type="monotone"
+                  dataKey="entradas"
+                  stroke="hsl(142 71% 45%)"
+                  name="Entradas"
+                  dot={false}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="saidas"
+                  stroke="hsl(0 72% 51%)"
+                  name="Saídas"
+                  dot={false}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="acumulado"
+                  stroke="hsl(var(--primary))"
+                  name="Líquido Acumulado"
+                  strokeWidth={2}
+                  dot={false}
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        </Card>
+      )}
+
       <Card className="p-5">
         <h2 className="font-semibold mb-3">Projeções Ativas</h2>
         {projs.isLoading ? (
@@ -393,6 +685,7 @@ function ProjectionDetail({
 
   const initial = Number(proj.initial_amount);
   const rate = Number(proj.monthly_growth_rate) / 100;
+  const isOutflow = (proj.direction ?? "inflow") === "outflow";
   const realizedMap = new Map(
     proj.realizations.map((r) => [r.month_index, Number(r.realized_amount)]),
   );
@@ -414,7 +707,20 @@ function ProjectionDetail({
     <div className="border border-border rounded-lg p-4 space-y-3">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
-          <h3 className="font-semibold text-lg">{proj.name}</h3>
+          <div className="flex items-center gap-2">
+            <h3 className="font-semibold text-lg">{proj.name}</h3>
+            <Badge variant={isOutflow ? "destructive" : "secondary"} className="gap-1">
+              {isOutflow ? (
+                <>
+                  <ArrowDownCircle className="h-3 w-3" /> Saída
+                </>
+              ) : (
+                <>
+                  <ArrowUpCircle className="h-3 w-3" /> Entrada
+                </>
+              )}
+            </Badge>
+          </div>
           <p className="text-xs text-muted-foreground">
             {proj.cost_centers?.name} · {proj.accounts?.name} ·{" "}
             <span className="text-primary font-medium">
@@ -426,9 +732,7 @@ function ProjectionDetail({
           )}
         </div>
         <div className="flex items-center gap-2">
-          <Badge variant="outline">
-            Projetado: {fmt(totalProjected)}
-          </Badge>
+          <Badge variant="outline">Projetado: {fmt(totalProjected)}</Badge>
           <Badge>Realizado: {fmt(totalRealized)}</Badge>
           <Button
             variant="ghost"
@@ -456,9 +760,7 @@ function ProjectionDetail({
             {months.map((m) => (
               <TableRow key={m.index}>
                 <TableCell className="capitalize">{fmtMonthLabel(m.date)}</TableCell>
-                <TableCell className="text-right font-mono">
-                  {fmt(m.projected)}
-                </TableCell>
+                <TableCell className="text-right font-mono">{fmt(m.projected)}</TableCell>
                 <TableCell className="text-right font-mono">
                   {m.realized != null ? (
                     <span className="text-primary">{fmt(m.realized)}</span>
@@ -477,7 +779,7 @@ function ProjectionDetail({
                       variant="outline"
                       onClick={() => setDialogMonth(m.index)}
                     >
-                      Realizar no Caixa
+                      {isOutflow ? "Pagar do Caixa" : "Realizar no Caixa"}
                     </Button>
                   )}
                 </TableCell>
@@ -526,6 +828,7 @@ function RealizeDialog({
   const [bankId, setBankId] = useState(proj.default_bank_account_id ?? "");
   const [date, setDate] = useState(dueDate);
   const realizeFn = useServerFn(realizeProjectionMonth);
+  const isOutflow = (proj.direction ?? "inflow") === "outflow";
 
   const mut = useMutation({
     mutationFn: async () => {
@@ -553,7 +856,9 @@ function RealizeDialog({
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Realizar no Caixa — {fmtMonthLabel(dueDate)}</DialogTitle>
+          <DialogTitle>
+            {isOutflow ? "Pagar do Caixa" : "Realizar no Caixa"} — {fmtMonthLabel(dueDate)}
+          </DialogTitle>
         </DialogHeader>
         <div className="space-y-4">
           <div className="text-sm text-muted-foreground">
@@ -562,7 +867,7 @@ function RealizeDialog({
             Valor projetado: <strong>{fmt(projected)}</strong>
           </div>
           <div className="space-y-2">
-            <Label>Valor Real Recebido (R$)</Label>
+            <Label>{isOutflow ? "Valor Real Pago (R$)" : "Valor Real Recebido (R$)"}</Label>
             <Input
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
@@ -570,7 +875,7 @@ function RealizeDialog({
             />
           </div>
           <div className="space-y-2">
-            <Label>Banco de Destino</Label>
+            <Label>{isOutflow ? "Banco de Origem" : "Banco de Destino"}</Label>
             <Select value={bankId} onValueChange={setBankId}>
               <SelectTrigger>
                 <SelectValue placeholder="Selecione…" />
@@ -585,12 +890,8 @@ function RealizeDialog({
             </Select>
           </div>
           <div className="space-y-2">
-            <Label>Data do crédito</Label>
-            <Input
-              type="date"
-              value={date}
-              onChange={(e) => setDate(e.target.value)}
-            />
+            <Label>Data {isOutflow ? "do débito" : "do crédito"}</Label>
+            <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
           </div>
         </div>
         <DialogFooter>
@@ -598,7 +899,7 @@ function RealizeDialog({
             Cancelar
           </Button>
           <Button onClick={() => mut.mutate()} disabled={mut.isPending}>
-            {mut.isPending ? "Salvando…" : "Confirmar Realização"}
+            {mut.isPending ? "Salvando…" : "Confirmar"}
           </Button>
         </DialogFooter>
       </DialogContent>

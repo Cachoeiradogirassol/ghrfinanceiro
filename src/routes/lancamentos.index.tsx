@@ -421,6 +421,7 @@ function List() {
           </TableBody>
         </Table>
       </div>
+      )}
       <EditTransactionDialog
         tx={editing as never}
         open={!!editing}

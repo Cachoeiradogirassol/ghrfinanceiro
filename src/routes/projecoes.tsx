@@ -242,9 +242,16 @@ function ProjectionsPage() {
 
   // Consolidated series: align all projections on absolute month buckets
   const consolidated = useMemo(() => {
+    type Row = {
+      mes: string;
+      entradas: number;
+      saidas: number;
+      liquido: number;
+      acumulado: number;
+    };
     const rows = projs.data ?? [];
-    if (rows.length === 0) return [] as Array<Record<string, number | string>>;
-    const buckets = new Map<string, Record<string, number | string>>();
+    if (rows.length === 0) return [] as Row[];
+    const buckets = new Map<string, Row>();
     for (const p of rows) {
       const init = Number(p.initial_amount);
       const r = Number(p.monthly_growth_rate) / 100;
@@ -255,23 +262,21 @@ function ProjectionsPage() {
         const v = sign * init * Math.pow(1 + r, i);
         let row = buckets.get(key);
         if (!row) {
-          row = { mes: key, label: fmtMonthLabel(iso + "").slice(0, 8), entradas: 0, saidas: 0, liquido: 0 };
+          row = { mes: key, entradas: 0, saidas: 0, liquido: 0, acumulado: 0 };
           buckets.set(key, row);
         }
-        if (sign > 0) row.entradas = (row.entradas as number) + v;
-        else row.saidas = (row.saidas as number) + Math.abs(v);
-        row.liquido = (row.liquido as number) + v;
+        if (sign > 0) row.entradas += v;
+        else row.saidas += Math.abs(v);
+        row.liquido += v;
       }
     }
-    const arr = Array.from(buckets.values()).sort((a, b) =>
-      String(a.mes).localeCompare(String(b.mes)),
-    );
-    // running cumulative net
+    const arr = Array.from(buckets.values()).sort((a, b) => a.mes.localeCompare(b.mes));
     let acc = 0;
-    return arr.map((r) => {
-      acc += r.liquido as number;
-      return { ...r, acumulado: acc };
-    });
+    for (const r of arr) {
+      acc += r.liquido;
+      r.acumulado = acc;
+    }
+    return arr;
   }, [projs.data]);
 
   function handleExportPDF() {

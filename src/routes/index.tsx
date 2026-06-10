@@ -307,10 +307,19 @@ function Dashboard() {
 
         {/* Projeção D+90 */}
         <Card className="p-5">
-          <h2 className="font-semibold mb-3">Projeção de Caixa D+90</h2>
+          <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+            <h2 className="font-semibold">Projeção de Caixa D+90</h2>
+            <label className="flex items-center gap-2 text-sm cursor-pointer select-none">
+              <Checkbox
+                checked={showPredictive}
+                onCheckedChange={(c) => setShowPredictive(!!c)}
+              />
+              Visualizar Cenário Preditivo (Com Simulações)
+            </label>
+          </div>
           <div className="h-72">
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={proj.data?.series ?? []}>
+              <LineChart data={showPredictive ? predictiveSeries : (proj.data?.series ?? [])}>
                 <CartesianGrid strokeDasharray="3 3" opacity={0.2} />
                 <XAxis
                   dataKey="date"
@@ -335,9 +344,21 @@ function Dashboard() {
                   strokeDasharray="5 5"
                   dot={false}
                 />
+                {showPredictive && (
+                  <Line
+                    type="monotone"
+                    dataKey="predictive"
+                    name="Cenário Preditivo (Simulações)"
+                    stroke="hsl(var(--chart-2, 142 71% 45%))"
+                    strokeWidth={2}
+                    strokeDasharray="2 4"
+                    dot={false}
+                  />
+                )}
               </LineChart>
             </ResponsiveContainer>
           </div>
+
         </Card>
 
         {/* Contas bancárias filtradas */}

@@ -444,7 +444,10 @@ function ProjectionsPage() {
                 onClick={() => {
                   setDirection("outflow");
                   setAccId("");
+                  setContactId("");
+                  setBankId("");
                 }}
+
               >
                 <ArrowDownCircle className="h-4 w-4 mr-1" /> Saída (Pagamento)
               </Button>
@@ -529,36 +532,75 @@ function ProjectionsPage() {
               </p>
             )}
           </div>
-          <div className="space-y-2">
-            <Label>Contato/Pagador (opcional, obrigatório p/ realizar)</Label>
-            <Select value={contactId} onValueChange={setContactId}>
-              <SelectTrigger>
-                <SelectValue placeholder="Selecione…" />
-              </SelectTrigger>
-              <SelectContent>
-                {(contacts.data ?? []).map((c) => (
-                  <SelectItem key={c.id} value={c.id}>
-                    {c.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-2">
-            <Label>Banco padrão (opcional)</Label>
-            <Select value={bankId} onValueChange={setBankId}>
-              <SelectTrigger>
-                <SelectValue placeholder="Selecione…" />
-              </SelectTrigger>
-              <SelectContent>
-                {(banks.data ?? []).map((b) => (
-                  <SelectItem key={b.id} value={b.id}>
-                    {b.name} — {b.bank}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+          {direction === "inflow" ? (
+            <>
+              <div className="space-y-2">
+                <Label>Cliente/Pagador (obrigatório p/ realizar)</Label>
+                <Select value={contactId} onValueChange={setContactId}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione…" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(() => {
+                      const all = (contacts.data ?? []) as Array<{ id: string; name: string }>;
+                      const generals = all.filter((c) => /^CLIENTE GERAL|^VENDAS CONSOLIDADAS/i.test(c.name));
+                      const others = all.filter((c) => !/^CLIENTE GERAL|^VENDAS CONSOLIDADAS/i.test(c.name));
+                      return (
+                        <>
+                          {generals.length > 0 && (
+                            <>
+                              <div className="px-2 py-1 text-[10px] uppercase tracking-wide text-muted-foreground">
+                                Clientes Gerais
+                              </div>
+                              {generals.map((c) => (
+                                <SelectItem key={c.id} value={c.id}>
+                                  {c.name}
+                                </SelectItem>
+                              ))}
+                              <div className="px-2 py-1 mt-1 text-[10px] uppercase tracking-wide text-muted-foreground">
+                                Demais Contatos
+                              </div>
+                            </>
+                          )}
+                          {others.map((c) => (
+                            <SelectItem key={c.id} value={c.id}>
+                              {c.name}
+                            </SelectItem>
+                          ))}
+                        </>
+                      );
+                    })()}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Banco de Destino (opcional)</Label>
+                <Select value={bankId} onValueChange={setBankId}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione…" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(banks.data ?? []).map((b) => (
+                      <SelectItem key={b.id} value={b.id}>
+                        {b.name} — {b.bank}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </>
+          ) : (
+            <div className="space-y-2 md:col-span-2">
+              <Label>Caixa de Origem</Label>
+              <div className="rounded-md border border-dashed border-border bg-muted/30 p-3 text-sm text-muted-foreground">
+                <strong className="text-foreground">Definir por Liquidez (Automático)</strong> — o
+                banco de origem será escolhido somente no momento do pagamento efetivo, quando
+                você clicar em <em>Pagar do Caixa</em>. Pagador não é exigido: quem paga é a
+                própria estrutura conforme a saúde financeira do período.
+              </div>
+            </div>
+          )}
+
           <div className="space-y-2">
             <Label>Mês inicial *</Label>
             <Input

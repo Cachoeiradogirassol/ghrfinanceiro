@@ -87,7 +87,7 @@ export const realizeProjectionMonth = createServerFn({ method: "POST" })
     // Load projection (RLS scopes ownership)
     const { data: proj, error: pErr } = await context.supabase
       .from("cash_projections")
-      .select("id, name, cost_center_id, account_id, contact_id")
+      .select("id, name, cost_center_id, account_id, contact_id, direction")
       .eq("id", data.projection_id)
       .maybeSingle();
     if (pErr) throw new Error(pErr.message);
@@ -97,6 +97,9 @@ export const realizeProjectionMonth = createServerFn({ method: "POST" })
         "Esta projeção não possui contato (pagador) padrão. Edite a projeção e defina um contato antes de realizar no caixa.",
       );
     }
+
+    const projDirection = (proj as { direction?: string }).direction ?? "inflow";
+    const txType = projDirection === "outflow" ? "payable" : "receivable";
 
     // Already realized?
     const { data: existing } = await context.supabase
@@ -115,7 +118,7 @@ export const realizeProjectionMonth = createServerFn({ method: "POST" })
         account_id: proj.account_id,
         bank_account_id: data.bank_account_id,
         contact_id: proj.contact_id,
-        type: "receivable",
+        type: txType,
         amount: data.realized_amount,
         description:
           data.description ??

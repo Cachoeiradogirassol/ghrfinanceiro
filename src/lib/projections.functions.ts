@@ -19,6 +19,7 @@ export const listProjections = createServerFn({ method: "GET" })
 // ---------- CREATE ----------
 const ProjectionInput = z.object({
   name: z.string().trim().min(2).max(120),
+  direction: z.enum(["inflow", "outflow"]).default("inflow"),
   cost_center_id: z.string().uuid(),
   account_id: z.string().uuid(),
   contact_id: z.string().uuid().nullable().optional(),

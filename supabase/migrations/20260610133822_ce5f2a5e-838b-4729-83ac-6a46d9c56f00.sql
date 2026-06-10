@@ -1,0 +1,1 @@
+ALTER TABLE public.cash_projections ADD COLUMN IF NOT EXISTS direction text NOT NULL DEFAULT 'inflow' CHECK (direction IN ('inflow','outflow'));

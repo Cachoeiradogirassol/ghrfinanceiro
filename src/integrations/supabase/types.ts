@@ -195,6 +195,7 @@ export type Database = {
           created_at: string
           created_by: string | null
           default_bank_account_id: string | null
+          direction: string
           horizon_months: number
           id: string
           initial_amount: number
@@ -211,6 +212,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           default_bank_account_id?: string | null
+          direction?: string
           horizon_months?: number
           id?: string
           initial_amount: number
@@ -227,6 +229,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           default_bank_account_id?: string | null
+          direction?: string
           horizon_months?: number
           id?: string
           initial_amount?: number

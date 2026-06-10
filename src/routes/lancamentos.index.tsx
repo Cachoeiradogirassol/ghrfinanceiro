@@ -296,6 +296,7 @@ function List() {
         />
       )}
 
+      {!gridMode && (
       <div className="rounded-md border">
         <Table>
           <TableHeader>

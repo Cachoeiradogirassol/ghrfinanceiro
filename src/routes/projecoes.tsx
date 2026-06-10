@@ -13,7 +13,9 @@ import {
   createProjection,
   deleteProjection,
   realizeProjectionMonth,
+  bulkCreateProjections,
 } from "@/lib/projections.functions";
+import { QuickGrid, type GridColumnDef } from "@/components/QuickGrid";
 import { useMemo, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";

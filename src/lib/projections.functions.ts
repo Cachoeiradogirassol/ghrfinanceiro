@@ -39,6 +39,7 @@ export const createProjection = createServerFn({ method: "POST" })
       .from("cash_projections")
       .insert({
         name: data.name,
+        direction: data.direction,
         cost_center_id: data.cost_center_id,
         account_id: data.account_id,
         contact_id: data.contact_id ?? null,
@@ -49,7 +50,7 @@ export const createProjection = createServerFn({ method: "POST" })
         horizon_months: data.horizon_months,
         notes: data.notes ?? null,
         created_by: context.userId,
-      })
+      } as never)
       .select("id")
       .single();
     if (error) throw new Error(error.message);

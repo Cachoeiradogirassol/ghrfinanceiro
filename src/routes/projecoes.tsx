@@ -444,7 +444,10 @@ function ProjectionsPage() {
                 onClick={() => {
                   setDirection("outflow");
                   setAccId("");
+                  setContactId("");
+                  setBankId("");
                 }}
+
               >
                 <ArrowDownCircle className="h-4 w-4 mr-1" /> Saída (Pagamento)
               </Button>

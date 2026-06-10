@@ -108,6 +108,7 @@ function Dashboard() {
   const bkFn = useServerFn(listBankAccounts);
   const projFn = useServerFn(buildProjection);
   const dreFn = useServerFn(buildDRE);
+  const projectionsFn = useServerFn(listProjections);
 
   const txs = useQuery({ queryKey: ["txs"], queryFn: () => txFn() });
   const banks = useQuery({ queryKey: ["banks"], queryFn: () => bkFn() });
@@ -119,6 +120,11 @@ function Dashboard() {
     queryKey: ["dre", enterprise],
     queryFn: () => dreFn({ data: { enterprise, months: 6 } }),
   });
+  const projections = useQuery({
+    queryKey: ["projections"],
+    queryFn: () => projectionsFn() as never,
+  });
+  const [showPredictive, setShowPredictive] = useState(false);
 
   const today = new Date().toISOString().slice(0, 10);
   const visibleEnterprises = ENTERPRISES.filter((e) => isMaster || !e.masterOnly);

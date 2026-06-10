@@ -232,6 +232,70 @@ export const createTransaction = createServerFn({ method: "POST" })
     return row;
   });
 
+// ---------- BULK CREATE TRANSACTIONS (Modo Grade Rápida) ----------
+const BulkTxRow = z.object({
+  cost_center_id: z.string().uuid(),
+  account_id: z.string().uuid(),
+  contact_id: z.string().uuid().nullable().optional(),
+  type: z.enum(["payable", "receivable"]),
+  amount: z.number().positive(),
+  due_date: z.string(),
+  description: z.string().max(500).nullable().optional(),
+});
+
+export const bulkCreateTransactions = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({ rows: z.array(BulkTxRow).min(1).max(500) }).parse(d))
+  .handler(async ({ context, data }) => {
+    // Resolve default contact for rows missing one
+    let defaultContactId: string | null = null;
+    const needsDefault = data.rows.some((r) => !r.contact_id);
+    if (needsDefault) {
+      const { data: existing } = await context.supabase
+        .from("contacts")
+        .select("id")
+        .ilike("name", "Lançamento via Grade")
+        .maybeSingle();
+      if (existing) {
+        defaultContactId = existing.id;
+      } else {
+        const docNum = String(Date.now()).padStart(11, "0").slice(-11);
+        const { data: created, error: cErr } = await context.supabase
+          .from("contacts")
+          .insert({
+            name: "Lançamento via Grade",
+            type: "FORNECEDOR",
+            document_type: "PF",
+            document_number: docNum,
+            master_only: false,
+          } as never)
+          .select("id")
+          .single();
+        if (cErr) throw new Error("Falha ao criar contato padrão: " + cErr.message);
+        defaultContactId = created.id;
+      }
+    }
+
+    const rows = data.rows.map((r) => ({
+      cost_center_id: r.cost_center_id,
+      account_id: r.account_id,
+      contact_id: r.contact_id ?? defaultContactId!,
+      type: r.type,
+      amount: r.amount,
+      due_date: r.due_date,
+      description: r.description ?? null,
+      status: "pending" as const,
+      is_batch: false,
+      created_by: context.userId,
+    }));
+    const { data: inserted, error } = await context.supabase
+      .from("transactions")
+      .insert(rows)
+      .select("id");
+    if (error) throw new Error("Falha no bulk insert: " + error.message);
+    return { created: inserted?.length ?? 0 };
+  });
+
 // ---------- CONTACTS ----------
 export const listContacts = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])

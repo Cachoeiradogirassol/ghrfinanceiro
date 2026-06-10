@@ -57,6 +57,46 @@ export const createProjection = createServerFn({ method: "POST" })
     return row;
   });
 
+// ---------- BULK CREATE (Modo Grade Rápida) ----------
+const BulkProjRow = z.object({
+  name: z.string().trim().min(2).max(120),
+  direction: z.enum(["inflow", "outflow"]).default("inflow"),
+  cost_center_id: z.string().uuid(),
+  account_id: z.string().uuid(),
+  initial_amount: z.number().nonnegative(),
+  start_date: z.string(),
+  monthly_growth_rate: z.number().min(-100).max(100).default(0),
+  horizon_months: z.number().int().min(1).max(120).default(12),
+});
+
+export const bulkCreateProjections = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) =>
+    z.object({ rows: z.array(BulkProjRow).min(1).max(500) }).parse(d),
+  )
+  .handler(async ({ context, data }) => {
+    const rows = data.rows.map((r) => ({
+      name: r.name,
+      direction: r.direction,
+      cost_center_id: r.cost_center_id,
+      account_id: r.account_id,
+      contact_id: null,
+      default_bank_account_id: null,
+      initial_amount: r.initial_amount,
+      monthly_growth_rate: r.monthly_growth_rate,
+      start_date: r.start_date,
+      horizon_months: r.horizon_months,
+      notes: null,
+      created_by: context.userId,
+    }));
+    const { data: inserted, error } = await context.supabase
+      .from("cash_projections")
+      .insert(rows as never)
+      .select("id");
+    if (error) throw new Error("Falha no bulk insert: " + error.message);
+    return { created: inserted?.length ?? 0 };
+  });
+
 // ---------- DELETE ----------
 export const deleteProjection = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])

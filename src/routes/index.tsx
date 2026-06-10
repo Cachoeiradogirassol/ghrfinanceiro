@@ -8,6 +8,8 @@ import {
   buildProjection,
   buildDRE,
 } from "@/lib/finance.functions";
+import { listProjections } from "@/lib/projections.functions";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {

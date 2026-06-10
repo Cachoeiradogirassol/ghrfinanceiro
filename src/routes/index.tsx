@@ -8,6 +8,8 @@ import {
   buildProjection,
   buildDRE,
 } from "@/lib/finance.functions";
+import { listProjections } from "@/lib/projections.functions";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
@@ -106,6 +108,7 @@ function Dashboard() {
   const bkFn = useServerFn(listBankAccounts);
   const projFn = useServerFn(buildProjection);
   const dreFn = useServerFn(buildDRE);
+  const projectionsFn = useServerFn(listProjections);
 
   const txs = useQuery({ queryKey: ["txs"], queryFn: () => txFn() });
   const banks = useQuery({ queryKey: ["banks"], queryFn: () => bkFn() });
@@ -117,6 +120,11 @@ function Dashboard() {
     queryKey: ["dre", enterprise],
     queryFn: () => dreFn({ data: { enterprise, months: 6 } }),
   });
+  const projections = useQuery({
+    queryKey: ["projections"],
+    queryFn: () => projectionsFn() as never,
+  });
+  const [showPredictive, setShowPredictive] = useState(false);
 
   const today = new Date().toISOString().slice(0, 10);
   const visibleEnterprises = ENTERPRISES.filter((e) => isMaster || !e.masterOnly);
@@ -140,6 +148,47 @@ function Dashboard() {
   const filteredBanks = (banks.data ?? []).filter(
     (b) => !enterpriseSet || enterpriseSet.has(b.enterprise),
   );
+
+  // Predictive overlay: aggregate unrealized projected months by date inside the D+90 window
+  const predictiveSeries = useMemo(() => {
+    const base = proj.data?.series ?? [];
+    if (base.length === 0) return base;
+    type Proj = {
+      id: string;
+      start_date: string;
+      initial_amount: number | string;
+      monthly_growth_rate: number | string;
+      horizon_months: number;
+      cost_centers: { enterprise: string } | null;
+      realizations: Array<{ month_index: number }>;
+    };
+    const list = ((projections.data as Proj[] | undefined) ?? []).filter((p) => {
+      if (!enterpriseSet) return true;
+      const e = p.cost_centers?.enterprise;
+      return !!e && enterpriseSet.has(e);
+    });
+    const additions = new Map<string, number>();
+    for (const p of list) {
+      const init = Number(p.initial_amount);
+      const rate = Number(p.monthly_growth_rate) / 100;
+      const realized = new Set(p.realizations.map((r) => r.month_index));
+      for (let i = 0; i < p.horizon_months; i++) {
+        if (realized.has(i)) continue;
+        const d = new Date(p.start_date + "T00:00:00");
+        d.setMonth(d.getMonth() + i);
+        const ds = d.toISOString().slice(0, 10);
+        const amt = init * Math.pow(1 + rate, i);
+        additions.set(ds, (additions.get(ds) ?? 0) + amt);
+      }
+    }
+    // Build cumulative predictive line over base series
+    let cum = 0;
+    return base.map((row) => {
+      cum += additions.get(row.date) ?? 0;
+      return { ...row, predictive: Math.round((row.real + cum) * 100) / 100 };
+    });
+  }, [proj.data, projections.data, enterpriseSet]);
+
 
   return (
     <div className="p-6 grid grid-cols-1 xl:grid-cols-[1fr_360px] gap-6">
@@ -258,10 +307,19 @@ function Dashboard() {
 
         {/* Projeção D+90 */}
         <Card className="p-5">
-          <h2 className="font-semibold mb-3">Projeção de Caixa D+90</h2>
+          <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+            <h2 className="font-semibold">Projeção de Caixa D+90</h2>
+            <label className="flex items-center gap-2 text-sm cursor-pointer select-none">
+              <Checkbox
+                checked={showPredictive}
+                onCheckedChange={(c) => setShowPredictive(!!c)}
+              />
+              Visualizar Cenário Preditivo (Com Simulações)
+            </label>
+          </div>
           <div className="h-72">
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={proj.data?.series ?? []}>
+              <LineChart data={showPredictive ? predictiveSeries : (proj.data?.series ?? [])}>
                 <CartesianGrid strokeDasharray="3 3" opacity={0.2} />
                 <XAxis
                   dataKey="date"
@@ -286,9 +344,21 @@ function Dashboard() {
                   strokeDasharray="5 5"
                   dot={false}
                 />
+                {showPredictive && (
+                  <Line
+                    type="monotone"
+                    dataKey="predictive"
+                    name="Cenário Preditivo (Simulações)"
+                    stroke="hsl(var(--chart-2, 142 71% 45%))"
+                    strokeWidth={2}
+                    strokeDasharray="2 4"
+                    dot={false}
+                  />
+                )}
               </LineChart>
             </ResponsiveContainer>
           </div>
+
         </Card>
 
         {/* Contas bancárias filtradas */}

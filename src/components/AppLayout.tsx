@@ -15,7 +15,7 @@ import {
   Landmark,
   FileBarChart,
   BarChart3,
-
+  Sparkles,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -62,6 +62,7 @@ export function AppLayout({ children }: { children?: React.ReactNode }) {
         { to: "/", label: "Dashboard + DRE + IA", icon: LayoutDashboard },
         { to: "/lancamentos", label: "Lançamentos", icon: ListChecks },
         { to: "/conciliacao", label: "Conciliação", icon: GitMerge },
+        { to: "/projecoes", label: "Projeções e Simulador", icon: Sparkles },
       ],
     },
     {

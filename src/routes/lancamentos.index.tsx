@@ -195,7 +195,60 @@ function List() {
     onError: (e) => toast.error(e instanceof Error ? e.message : "Erro"),
   });
   const [editing, setEditing] = useState<null | Record<string, unknown>>(null);
+  const [gridMode, setGridMode] = useState(false);
 
+  // Carrega CCs e Accounts apenas quando grade está ativa
+  const ccFn = useServerFn(listCostCenters);
+  const accFn = useServerFn(listAccounts);
+  const bulkFn = useServerFn(bulkCreateTransactions);
+  const ccs = useQuery({ queryKey: ["ccs"], queryFn: () => ccFn(), enabled: gridMode });
+  const accs = useQuery({ queryKey: ["accs"], queryFn: () => accFn(), enabled: gridMode });
+
+  const gridColumns = useMemo<GridColumnDef[]>(() => {
+    const SELECTABLE = ["turismo", "restaurante", "vinhedo", "ghr_aldeia", "ghr_jk"];
+    const ccOpts = (ccs.data ?? [])
+      .filter((c) => SELECTABLE.includes(c.enterprise ?? ""))
+      .map((c) => ({ value: c.id, label: `${c.code} - ${c.name}` }));
+    const accOpts = (accs.data ?? []).map((a: { id: string; name: string }) => ({
+      value: a.id,
+      label: a.name,
+    }));
+    return [
+      { key: "due_date", label: "Vencimento", type: "date", width: "150px" },
+      { key: "type", label: "Tipo", type: "select", width: "130px", options: [
+        { value: "payable", label: "Saída (Pagar)" },
+        { value: "receivable", label: "Entrada (Receber)" },
+      ] },
+      { key: "cost_center_id", label: "Centro de Custo", type: "select", width: "200px", options: ccOpts },
+      { key: "account_id", label: "Conta Contábil", type: "select", width: "200px", options: accOpts },
+      { key: "amount", label: "Valor (R$)", type: "number", width: "130px", placeholder: "0,00" },
+      { key: "description", label: "Descrição", type: "text", width: "260px" },
+    ];
+  }, [ccs.data, accs.data]);
+
+  const handleBulkSave = async (rows: Record<string, string>[]) => {
+    const parsed = rows.map((r, i) => {
+      const amountRaw = (r.amount ?? "").replace(",", ".");
+      const amount = Number(amountRaw);
+      if (!r.due_date) throw new Error(`Linha ${i + 1}: vencimento obrigatório.`);
+      if (!r.cost_center_id) throw new Error(`Linha ${i + 1}: centro de custo obrigatório.`);
+      if (!r.account_id) throw new Error(`Linha ${i + 1}: conta contábil obrigatória.`);
+      if (!r.type) throw new Error(`Linha ${i + 1}: tipo obrigatório.`);
+      if (!Number.isFinite(amount) || amount <= 0)
+        throw new Error(`Linha ${i + 1}: valor inválido.`);
+      return {
+        cost_center_id: r.cost_center_id,
+        account_id: r.account_id,
+        type: r.type as "payable" | "receivable",
+        amount: Math.abs(amount),
+        due_date: r.due_date,
+        description: r.description?.trim() || null,
+      };
+    });
+    const res = await bulkFn({ data: { rows: parsed } });
+    qc.invalidateQueries({ queryKey: ["txs"] });
+    return res;
+  };
 
   return (
     <div className="p-8 space-y-6">
@@ -205,6 +258,13 @@ function List() {
           <p className="text-muted-foreground">Contas a Pagar e Receber</p>
         </div>
         <div className="flex gap-2">
+          <Button
+            variant={gridMode ? "default" : "outline"}
+            onClick={() => setGridMode((v) => !v)}
+          >
+            <Grid3x3 className="h-4 w-4 mr-2" />
+            {gridMode ? "Sair da Grade" : "Modo Grade Rápida"}
+          </Button>
           <Button
             variant="outline"
             onClick={() => exportPagar((data ?? []) as unknown as Tx[])}
@@ -226,6 +286,15 @@ function List() {
           </Link>
         </div>
       </div>
+
+      {gridMode && (
+        <QuickGrid
+          columns={gridColumns}
+          initialRows={6}
+          onSave={handleBulkSave}
+          saveLabel="Salvar Lote no Caixa Real"
+        />
+      )}
 
       <div className="rounded-md border">
         <Table>

@@ -92,14 +92,17 @@ export const realizeProjectionMonth = createServerFn({ method: "POST" })
       .maybeSingle();
     if (pErr) throw new Error(pErr.message);
     if (!proj) throw new Error("Projeção não encontrada.");
-    if (!proj.contact_id) {
-      throw new Error(
-        "Esta projeção não possui contato (pagador) padrão. Edite a projeção e defina um contato antes de realizar no caixa.",
-      );
-    }
 
     const projDirection = (proj as { direction?: string }).direction ?? "inflow";
     const txType = projDirection === "outflow" ? "payable" : "receivable";
+
+    // Inflow exige contato (pagador/cliente); outflow não — quem paga é a própria estrutura.
+    if (projDirection === "inflow" && !proj.contact_id) {
+      throw new Error(
+        "Esta projeção de entrada não possui contato (cliente) padrão. Edite a projeção e defina um contato antes de realizar no caixa.",
+      );
+    }
+
 
     // Already realized?
     const { data: existing } = await context.supabase

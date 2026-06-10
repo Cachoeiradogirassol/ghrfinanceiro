@@ -149,6 +149,47 @@ function Dashboard() {
     (b) => !enterpriseSet || enterpriseSet.has(b.enterprise),
   );
 
+  // Predictive overlay: aggregate unrealized projected months by date inside the D+90 window
+  const predictiveSeries = useMemo(() => {
+    const base = proj.data?.series ?? [];
+    if (base.length === 0) return base;
+    type Proj = {
+      id: string;
+      start_date: string;
+      initial_amount: number | string;
+      monthly_growth_rate: number | string;
+      horizon_months: number;
+      cost_centers: { enterprise: string } | null;
+      realizations: Array<{ month_index: number }>;
+    };
+    const list = ((projections.data as Proj[] | undefined) ?? []).filter((p) => {
+      if (!enterpriseSet) return true;
+      const e = p.cost_centers?.enterprise;
+      return !!e && enterpriseSet.has(e);
+    });
+    const additions = new Map<string, number>();
+    for (const p of list) {
+      const init = Number(p.initial_amount);
+      const rate = Number(p.monthly_growth_rate) / 100;
+      const realized = new Set(p.realizations.map((r) => r.month_index));
+      for (let i = 0; i < p.horizon_months; i++) {
+        if (realized.has(i)) continue;
+        const d = new Date(p.start_date + "T00:00:00");
+        d.setMonth(d.getMonth() + i);
+        const ds = d.toISOString().slice(0, 10);
+        const amt = init * Math.pow(1 + rate, i);
+        additions.set(ds, (additions.get(ds) ?? 0) + amt);
+      }
+    }
+    // Build cumulative predictive line over base series
+    let cum = 0;
+    return base.map((row) => {
+      cum += additions.get(row.date) ?? 0;
+      return { ...row, predictive: Math.round((row.real + cum) * 100) / 100 };
+    });
+  }, [proj.data, projections.data, enterpriseSet]);
+
+
   return (
     <div className="p-6 grid grid-cols-1 xl:grid-cols-[1fr_360px] gap-6">
       <div className="space-y-6">

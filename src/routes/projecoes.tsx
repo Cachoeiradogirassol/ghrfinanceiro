@@ -463,6 +463,13 @@ function ProjectionsPage() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          <Button
+            variant={gridMode ? "default" : "outline"}
+            onClick={() => setGridMode((v) => !v)}
+          >
+            <Grid3x3 className="h-4 w-4 mr-1" />
+            {gridMode ? "Sair da Grade" : "Modo Grade Rápida"}
+          </Button>
           <Button variant="outline" onClick={handleExportPDF}>
             <FileDown className="h-4 w-4 mr-1" /> Exportar Cenário (PDF)
           </Button>
@@ -474,6 +481,22 @@ function ProjectionsPage() {
           </Button>
         </div>
       </div>
+
+      {gridMode && (
+        <Card className="p-4">
+          <QuickGrid
+            columns={gridColumns}
+            initialRows={5}
+            onSave={handleBulkSave}
+            saveLabel="Salvar Projeções em Lote"
+            emptyRow={{
+              direction: "inflow",
+              monthly_growth_rate: "0.7",
+              horizon_months: "12",
+            }}
+          />
+        </Card>
+      )}
 
       <Card className="p-5 space-y-4">
         <div className="flex items-center gap-2">

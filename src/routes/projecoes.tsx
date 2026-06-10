@@ -243,7 +243,62 @@ function ProjectionsPage() {
     onError: (e: Error) => toast.error(e.message),
   });
 
-  // Consolidated series: align all projections on absolute month buckets
+  // ----- Modo Grade Rápida -----
+  const [gridMode, setGridMode] = useState(false);
+  const bulkFn = useServerFn(bulkCreateProjections);
+  const gridColumns = useMemo<GridColumnDef[]>(() => {
+    const ccOpts = selectableCCs.map((c) => ({
+      value: c.id,
+      label: `${c.code} - ${c.name}`,
+    }));
+    const accOpts = ((accs.data ?? []) as Array<{ id: string; name: string }>).map((a) => ({
+      value: a.id,
+      label: a.name,
+    }));
+    return [
+      { key: "name", label: "Nome da Projeção", type: "text", width: "220px" },
+      { key: "direction", label: "Tipo", type: "select", width: "130px", options: [
+        { value: "inflow", label: "Entrada" },
+        { value: "outflow", label: "Saída" },
+      ] },
+      { key: "cost_center_id", label: "Centro de Custo", type: "select", width: "200px", options: ccOpts },
+      { key: "account_id", label: "Conta", type: "select", width: "200px", options: accOpts },
+      { key: "start_date", label: "Início (Vencimento)", type: "date", width: "160px" },
+      { key: "initial_amount", label: "Valor (R$)", type: "number", width: "130px" },
+      { key: "monthly_growth_rate", label: "Taxa %/mês", type: "number", width: "110px" },
+      { key: "horizon_months", label: "Horizonte (m)", type: "number", width: "110px" },
+    ];
+  }, [selectableCCs, accs.data]);
+
+  const handleBulkSave = async (rows: Record<string, string>[]) => {
+    const parsed = rows.map((r, i) => {
+      const init = Number((r.initial_amount ?? "").replace(",", "."));
+      const rate = r.monthly_growth_rate
+        ? Number(r.monthly_growth_rate.replace(",", "."))
+        : 0;
+      const horizon = r.horizon_months ? parseInt(r.horizon_months, 10) : 12;
+      if (!r.name?.trim()) throw new Error(`Linha ${i + 1}: nome obrigatório.`);
+      if (!r.cost_center_id) throw new Error(`Linha ${i + 1}: centro de custo obrigatório.`);
+      if (!r.account_id) throw new Error(`Linha ${i + 1}: conta obrigatória.`);
+      if (!r.start_date) throw new Error(`Linha ${i + 1}: data de início obrigatória.`);
+      if (!Number.isFinite(init) || init < 0)
+        throw new Error(`Linha ${i + 1}: valor inválido.`);
+      return {
+        name: r.name.trim(),
+        direction: (r.direction || "inflow") as "inflow" | "outflow",
+        cost_center_id: r.cost_center_id,
+        account_id: r.account_id,
+        initial_amount: init,
+        monthly_growth_rate: rate,
+        start_date: r.start_date,
+        horizon_months: horizon,
+      };
+    });
+    const res = await bulkFn({ data: { rows: parsed } });
+    qc.invalidateQueries({ queryKey: ["projections"] });
+    return res;
+  };
+
   const consolidated = useMemo(() => {
     type Row = {
       mes: string;

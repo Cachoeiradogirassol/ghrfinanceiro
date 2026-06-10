@@ -142,6 +142,131 @@ export type Database = {
           },
         ]
       }
+      cash_projection_realizations: {
+        Row: {
+          created_by: string | null
+          id: string
+          month_index: number
+          projection_id: string
+          realized_amount: number
+          realized_at: string
+          transaction_id: string | null
+        }
+        Insert: {
+          created_by?: string | null
+          id?: string
+          month_index: number
+          projection_id: string
+          realized_amount: number
+          realized_at?: string
+          transaction_id?: string | null
+        }
+        Update: {
+          created_by?: string | null
+          id?: string
+          month_index?: number
+          projection_id?: string
+          realized_amount?: number
+          realized_at?: string
+          transaction_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cash_projection_realizations_projection_id_fkey"
+            columns: ["projection_id"]
+            isOneToOne: false
+            referencedRelation: "cash_projections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cash_projection_realizations_transaction_id_fkey"
+            columns: ["transaction_id"]
+            isOneToOne: false
+            referencedRelation: "transactions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      cash_projections: {
+        Row: {
+          account_id: string
+          contact_id: string | null
+          cost_center_id: string
+          created_at: string
+          created_by: string | null
+          default_bank_account_id: string | null
+          horizon_months: number
+          id: string
+          initial_amount: number
+          monthly_growth_rate: number
+          name: string
+          notes: string | null
+          start_date: string
+          updated_at: string
+        }
+        Insert: {
+          account_id: string
+          contact_id?: string | null
+          cost_center_id: string
+          created_at?: string
+          created_by?: string | null
+          default_bank_account_id?: string | null
+          horizon_months?: number
+          id?: string
+          initial_amount: number
+          monthly_growth_rate?: number
+          name: string
+          notes?: string | null
+          start_date?: string
+          updated_at?: string
+        }
+        Update: {
+          account_id?: string
+          contact_id?: string | null
+          cost_center_id?: string
+          created_at?: string
+          created_by?: string | null
+          default_bank_account_id?: string | null
+          horizon_months?: number
+          id?: string
+          initial_amount?: number
+          monthly_growth_rate?: number
+          name?: string
+          notes?: string | null
+          start_date?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cash_projections_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cash_projections_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cash_projections_cost_center_id_fkey"
+            columns: ["cost_center_id"]
+            isOneToOne: false
+            referencedRelation: "cost_centers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cash_projections_default_bank_account_id_fkey"
+            columns: ["default_bank_account_id"]
+            isOneToOne: false
+            referencedRelation: "bank_accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       contacts: {
         Row: {
           created_at: string

@@ -62,6 +62,7 @@ export function AppLayout({ children }: { children?: React.ReactNode }) {
         { to: "/", label: "Dashboard + DRE + IA", icon: LayoutDashboard },
         { to: "/lancamentos", label: "Lançamentos", icon: ListChecks },
         { to: "/conciliacao", label: "Conciliação", icon: GitMerge },
+        { to: "/projecoes", label: "Projeções e Simulador", icon: Sparkles },
       ],
     },
     {

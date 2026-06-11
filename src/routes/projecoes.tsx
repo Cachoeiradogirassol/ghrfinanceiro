@@ -179,7 +179,8 @@ function ProjectionsPage() {
     [ccs.data],
   );
 
-  // Fix: accounts kinds in DB are "revenue" / "expense" (not "receivable")
+  // Filtra contas APENAS por tipo (revenue/expense) — sem restringir por Centro de Custo,
+  // para que categorias como "Faturamento Vinhos" fiquem disponíveis independente do bloco.
   const filteredAccs = useMemo(() => {
     const wanted = direction === "inflow" ? "revenue" : "expense";
     const all = (accs.data ?? []) as Array<{
@@ -188,13 +189,17 @@ function ProjectionsPage() {
       kind: string;
       cost_center_id?: string;
     }>;
-    let list = all.filter((a) => a.kind === wanted);
-    if (ccId) {
-      const scoped = list.filter((a) => a.cost_center_id === ccId);
-      if (scoped.length > 0) list = scoped;
-    }
-    return list;
-  }, [accs.data, direction, ccId]);
+    // Deduplica por nome para evitar repetições visuais (mesma categoria em vários CCs).
+    const seen = new Set<string>();
+    return all
+      .filter((a) => a.kind === wanted)
+      .filter((a) => {
+        const key = a.name.trim().toLowerCase();
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+  }, [accs.data, direction]);
 
   const createMut = useMutation({
     mutationFn: async () => {

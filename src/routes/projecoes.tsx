@@ -362,11 +362,35 @@ function ProjectionsPage() {
         };
       });
 
-      const res = await bulkFn({ data: { rows: parsed } });
+      // FIX RLS: injetar created_by explicitamente em cada linha.
+      const { data: userData, error: userErr } = await supabase.auth.getUser();
+      if (userErr || !userData?.user) {
+        throw new Error("Sessão expirada. Faça login novamente para salvar projeções.");
+      }
+      const userId = userData.user.id;
+      const payload = parsed.map((r) => ({
+        ...r,
+        contact_id: null,
+        default_bank_account_id: null,
+        notes: null,
+        created_by: userId,
+      }));
+      console.log("Payload enviado:", payload);
+
+      const { data: inserted, error } = await supabase
+        .from("cash_projections")
+        .insert(payload)
+        .select("id");
+      if (error) {
+        console.error("Supabase insert error:", error);
+        const detail = [error.message, error.details, error.hint].filter(Boolean).join(" — ");
+        throw new Error("Banco rejeitou o lote: " + (detail || "erro desconhecido"));
+      }
+
       // Força refresh imediato da listagem + gráfico consolidado.
       await qc.invalidateQueries({ queryKey: ["projections"] });
       await qc.refetchQueries({ queryKey: ["projections"] });
-      const created = (res as { created?: number })?.created ?? parsed.length;
+      const created = inserted?.length ?? payload.length;
       toast.success(
         `${created} projeção(ões) salvas e atualizadas no banco com sucesso.`,
         { duration: 8000 },

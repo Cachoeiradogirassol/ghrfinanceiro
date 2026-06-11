@@ -295,7 +295,7 @@ function ProjectionsPage() {
       { key: "monthly_growth_rate", label: "Taxa %/mês", type: "number", width: "110px" },
       { key: "horizon_months", label: "Horizonte (m)", type: "number", width: "110px" },
     ];
-  }, [selectableCCs, accs.data]);
+  }, [selectableCCs, accs.data, ccs.data]);
 
   const handleBulkSave = async (rows: Record<string, string>[]) => {
     const parsed = rows.map((r, i) => {

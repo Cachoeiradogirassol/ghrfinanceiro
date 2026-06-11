@@ -58,16 +58,21 @@ export const createProjection = createServerFn({ method: "POST" })
   });
 
 // ---------- BULK CREATE (Modo Grade Rápida) ----------
-const BulkProjRow = z.object({
-  name: z.string().trim().min(2).max(120),
-  direction: z.enum(["inflow", "outflow"]).default("inflow"),
-  cost_center_id: z.string().uuid(),
-  account_id: z.string().uuid(),
-  initial_amount: z.number().nonnegative(),
-  start_date: z.string(),
-  monthly_growth_rate: z.number().min(-100).max(100).default(0),
-  horizon_months: z.number().int().min(1).max(120).default(12),
-});
+const BulkProjRow = z
+  .object({
+    name: z.string().trim().min(2).max(120),
+    direction: z.enum(["inflow", "outflow"]).default("inflow"),
+    cost_center_id: z.string().uuid().nullable().optional(),
+    account_id: z.string().uuid(),
+    initial_amount: z.number().nonnegative(),
+    start_date: z.string(),
+    monthly_growth_rate: z.number().min(-100).max(100).default(0),
+    horizon_months: z.number().int().min(1).max(120).default(12),
+  })
+  .refine((r) => r.direction === "outflow" || !!r.cost_center_id, {
+    message: "Centro de Custo é obrigatório para linhas de Entrada.",
+    path: ["cost_center_id"],
+  });
 
 export const bulkCreateProjections = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -78,7 +83,7 @@ export const bulkCreateProjections = createServerFn({ method: "POST" })
     const rows = data.rows.map((r) => ({
       name: r.name,
       direction: r.direction,
-      cost_center_id: r.cost_center_id,
+      cost_center_id: r.cost_center_id ?? null,
       account_id: r.account_id,
       contact_id: null,
       default_bank_account_id: null,
@@ -96,6 +101,7 @@ export const bulkCreateProjections = createServerFn({ method: "POST" })
     if (error) throw new Error("Falha no bulk insert: " + error.message);
     return { created: inserted?.length ?? 0 };
   });
+
 
 // ---------- DELETE ----------
 export const deleteProjection = createServerFn({ method: "POST" })
@@ -143,6 +149,11 @@ export const realizeProjectionMonth = createServerFn({ method: "POST" })
       );
     }
 
+    if (!proj.cost_center_id) {
+      throw new Error(
+        "Esta projeção não tem Centro de Custo definido. Edite a projeção e selecione um centro de custo antes de realizar no caixa.",
+      );
+    }
 
     // Already realized?
     const { data: existing } = await context.supabase
@@ -158,6 +169,7 @@ export const realizeProjectionMonth = createServerFn({ method: "POST" })
       .from("transactions")
       .insert({
         cost_center_id: proj.cost_center_id,
+
         account_id: proj.account_id,
         bank_account_id: data.bank_account_id,
         contact_id: proj.contact_id,

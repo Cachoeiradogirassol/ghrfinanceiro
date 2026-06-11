@@ -12,7 +12,10 @@ export type GridColumnDef = {
   width?: string;
   options?: Array<{ value: string; label: string }>;
   placeholder?: string;
+  /** Optional per-row disabled rule. Returning true greys out the cell and clears its value on save. */
+  disabledWhen?: (row: GridRow) => boolean;
 };
+
 
 export type GridRow = Record<string, string>;
 
@@ -160,17 +163,23 @@ export function QuickGrid({
             {rows.map((row, rIdx) => (
               <tr key={rIdx} className={cn("border-t", isRowFilled(row) && "bg-primary/[0.02]")}>
                 <td className="px-2 py-1 text-xs text-muted-foreground">{rIdx + 1}</td>
-                {columns.map((c, cIdx) => (
+                {columns.map((c, cIdx) => {
+                  const isDisabled = c.disabledWhen?.(row) ?? false;
+                  return (
                   <td key={c.key} className="px-1 py-1">
                     {c.type === "select" ? (
                       <select
                         data-cell={`${rIdx}-${cIdx}`}
-                        value={row[c.key] ?? ""}
+                        value={isDisabled ? "" : (row[c.key] ?? "")}
+                        disabled={isDisabled}
                         onChange={(e) => updateCell(rIdx, c.key, e.target.value)}
                         onKeyDown={(e) => handleKey(e, rIdx, cIdx)}
-                        className="h-8 w-full rounded border border-input bg-transparent px-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+                        className={cn(
+                          "h-8 w-full rounded border border-input bg-transparent px-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring",
+                          isDisabled && "bg-muted/40 text-muted-foreground cursor-not-allowed",
+                        )}
                       >
-                        <option value="">—</option>
+                        <option value="">{isDisabled ? "—  (opcional)" : "—"}</option>
                         {(c.options ?? []).map((o) => (
                           <option key={o.value} value={o.value}>
                             {o.label}
@@ -182,15 +191,18 @@ export function QuickGrid({
                         data-cell={`${rIdx}-${cIdx}`}
                         type={c.type === "number" ? "number" : c.type === "date" ? "date" : "text"}
                         step={c.type === "number" ? "0.01" : undefined}
-                        value={row[c.key] ?? ""}
-                        placeholder={c.placeholder}
+                        value={isDisabled ? "" : (row[c.key] ?? "")}
+                        disabled={isDisabled}
+                        placeholder={isDisabled ? "(opcional)" : c.placeholder}
                         onChange={(e) => updateCell(rIdx, c.key, e.target.value)}
                         onKeyDown={(e) => handleKey(e, rIdx, cIdx)}
-                        className="h-8"
+                        className={cn("h-8", isDisabled && "bg-muted/40 text-muted-foreground")}
                       />
                     )}
                   </td>
-                ))}
+                  );
+                })}
+
                 <td className="px-1 py-1">
                   <Button
                     size="icon"

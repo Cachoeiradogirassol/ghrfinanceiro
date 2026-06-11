@@ -1,0 +1,1 @@
+ALTER TABLE public.cash_projections ALTER COLUMN cost_center_id DROP NOT NULL;

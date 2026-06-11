@@ -191,7 +191,7 @@ export type Database = {
         Row: {
           account_id: string
           contact_id: string | null
-          cost_center_id: string
+          cost_center_id: string | null
           created_at: string
           created_by: string | null
           default_bank_account_id: string | null
@@ -208,7 +208,7 @@ export type Database = {
         Insert: {
           account_id: string
           contact_id?: string | null
-          cost_center_id: string
+          cost_center_id?: string | null
           created_at?: string
           created_by?: string | null
           default_bank_account_id?: string | null
@@ -225,7 +225,7 @@ export type Database = {
         Update: {
           account_id?: string
           contact_id?: string | null
-          cost_center_id?: string
+          cost_center_id?: string | null
           created_at?: string
           created_by?: string | null
           default_bank_account_id?: string | null

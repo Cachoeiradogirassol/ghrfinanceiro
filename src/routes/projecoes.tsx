@@ -261,7 +261,16 @@ function ProjectionsPage() {
         { value: "inflow", label: "Entrada" },
         { value: "outflow", label: "Saída" },
       ] },
-      { key: "cost_center_id", label: "Centro de Custo", type: "select", width: "200px", options: ccOpts },
+      {
+        key: "cost_center_id",
+        label: "Centro de Custo",
+        type: "select",
+        width: "200px",
+        options: ccOpts,
+        // Em Saídas (Contas a Pagar futuras) o centro de custo é opcional.
+        disabledWhen: (row) => row.direction === "outflow",
+      },
+
       { key: "account_id", label: "Conta", type: "select", width: "200px", options: accOpts },
       { key: "start_date", label: "Início (Vencimento)", type: "date", width: "160px" },
       { key: "initial_amount", label: "Valor (R$)", type: "number", width: "130px" },

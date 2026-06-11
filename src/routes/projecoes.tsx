@@ -247,13 +247,23 @@ function ProjectionsPage() {
       value: c.id,
       label: `${c.code} - ${c.name}`,
     }));
-    const allAccs = (accs.data ?? []) as Array<{ id: string; name: string; kind: string }>;
+    const allAccs = (accs.data ?? []) as Array<{
+      id: string;
+      name: string;
+      kind: string;
+      cost_center_id?: string;
+    }>;
+    const ccById = new Map((ccs.data ?? []).map((c) => [c.id, c]));
+    const labelOf = (a: { name: string; cost_center_id?: string }) => {
+      const cc = a.cost_center_id ? ccById.get(a.cost_center_id) : null;
+      return cc ? `${a.name} · ${cc.code}` : a.name;
+    };
     const revenueOpts = allAccs
       .filter((a) => a.kind === "revenue")
-      .map((a) => ({ value: a.id, label: a.name }));
+      .map((a) => ({ value: a.id, label: labelOf(a) }));
     const expenseOpts = allAccs
       .filter((a) => a.kind === "expense")
-      .map((a) => ({ value: a.id, label: a.name }));
+      .map((a) => ({ value: a.id, label: labelOf(a) }));
     return [
       { key: "name", label: "Nome da Projeção", type: "text", width: "220px" },
       { key: "direction", label: "Tipo", type: "select", width: "130px", options: [

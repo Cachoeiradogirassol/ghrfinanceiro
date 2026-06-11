@@ -143,6 +143,11 @@ export const realizeProjectionMonth = createServerFn({ method: "POST" })
       );
     }
 
+    if (!proj.cost_center_id) {
+      throw new Error(
+        "Esta projeção não tem Centro de Custo definido. Edite a projeção e selecione um centro de custo antes de realizar no caixa.",
+      );
+    }
 
     // Already realized?
     const { data: existing } = await context.supabase
@@ -158,6 +163,7 @@ export const realizeProjectionMonth = createServerFn({ method: "POST" })
       .from("transactions")
       .insert({
         cost_center_id: proj.cost_center_id,
+
         account_id: proj.account_id,
         bank_account_id: data.bank_account_id,
         contact_id: proj.contact_id,

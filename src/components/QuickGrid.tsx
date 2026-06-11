@@ -12,7 +12,10 @@ export type GridColumnDef = {
   width?: string;
   options?: Array<{ value: string; label: string }>;
   placeholder?: string;
+  /** Optional per-row disabled rule. Returning true greys out the cell and clears its value on save. */
+  disabledWhen?: (row: GridRow) => boolean;
 };
+
 
 export type GridRow = Record<string, string>;
 

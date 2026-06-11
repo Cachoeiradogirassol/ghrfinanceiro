@@ -286,16 +286,18 @@ function ProjectionsPage() {
         ? Number(r.monthly_growth_rate.replace(",", "."))
         : 0;
       const horizon = r.horizon_months ? parseInt(r.horizon_months, 10) : 12;
+      const isOutflow = (r.direction || "inflow") === "outflow";
       if (!r.name?.trim()) throw new Error(`Linha ${i + 1}: nome obrigatório.`);
-      if (!r.cost_center_id) throw new Error(`Linha ${i + 1}: centro de custo obrigatório.`);
+      if (!isOutflow && !r.cost_center_id)
+        throw new Error(`Linha ${i + 1}: centro de custo obrigatório para Entradas.`);
       if (!r.account_id) throw new Error(`Linha ${i + 1}: conta obrigatória.`);
       if (!r.start_date) throw new Error(`Linha ${i + 1}: data de início obrigatória.`);
       if (!Number.isFinite(init) || init < 0)
         throw new Error(`Linha ${i + 1}: valor inválido.`);
       return {
         name: r.name.trim(),
-        direction: (r.direction || "inflow") as "inflow" | "outflow",
-        cost_center_id: r.cost_center_id,
+        direction: isOutflow ? ("outflow" as const) : ("inflow" as const),
+        cost_center_id: isOutflow ? null : r.cost_center_id,
         account_id: r.account_id,
         initial_amount: init,
         monthly_growth_rate: rate,
@@ -307,6 +309,7 @@ function ProjectionsPage() {
     qc.invalidateQueries({ queryKey: ["projections"] });
     return res;
   };
+
 
   const consolidated = useMemo(() => {
     type Row = {

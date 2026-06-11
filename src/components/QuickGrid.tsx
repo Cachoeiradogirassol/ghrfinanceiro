@@ -12,6 +12,8 @@ export type GridColumnDef = {
   width?: string;
   options?: Array<{ value: string; label: string }>;
   placeholder?: string;
+  /** Optional per-row dynamic options. When provided, overrides `options` for that row. */
+  optionsFor?: (row: GridRow) => Array<{ value: string; label: string }>;
   /** Optional per-row disabled rule. Returning true greys out the cell and clears its value on save. */
   disabledWhen?: (row: GridRow) => boolean;
 };

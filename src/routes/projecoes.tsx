@@ -362,8 +362,15 @@ function ProjectionsPage() {
       });
 
       const res = await bulkFn({ data: { rows: parsed } });
-      qc.invalidateQueries({ queryKey: ["projections"] });
-      return res;
+      // Força refresh imediato da listagem + gráfico consolidado.
+      await qc.invalidateQueries({ queryKey: ["projections"] });
+      await qc.refetchQueries({ queryKey: ["projections"] });
+      const created = (res as { created?: number })?.created ?? parsed.length;
+      toast.success(
+        `${created} projeção(ões) salvas e atualizadas no banco com sucesso.`,
+        { duration: 8000 },
+      );
+      return { created };
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Falha desconhecida no lote.";
       toast.error(msg, { duration: 12000 });

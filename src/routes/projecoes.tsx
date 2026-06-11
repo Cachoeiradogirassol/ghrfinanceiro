@@ -298,34 +298,78 @@ function ProjectionsPage() {
   }, [selectableCCs, accs.data, ccs.data]);
 
   const handleBulkSave = async (rows: Record<string, string>[]) => {
-    const parsed = rows.map((r, i) => {
-      const init = Number((r.initial_amount ?? "").replace(",", "."));
-      const rate = r.monthly_growth_rate
-        ? Number(r.monthly_growth_rate.replace(",", "."))
-        : 0;
-      const horizon = r.horizon_months ? parseInt(r.horizon_months, 10) : 12;
-      const isOutflow = (r.direction || "inflow") === "outflow";
-      if (!r.name?.trim()) throw new Error(`Linha ${i + 1}: nome obrigatório.`);
-      if (!isOutflow && !r.cost_center_id)
-        throw new Error(`Linha ${i + 1}: centro de custo obrigatório para Entradas.`);
-      if (!r.account_id) throw new Error(`Linha ${i + 1}: conta obrigatória.`);
-      if (!r.start_date) throw new Error(`Linha ${i + 1}: data de início obrigatória.`);
-      if (!Number.isFinite(init) || init < 0)
-        throw new Error(`Linha ${i + 1}: valor inválido.`);
-      return {
-        name: r.name.trim(),
-        direction: isOutflow ? ("outflow" as const) : ("inflow" as const),
-        cost_center_id: isOutflow ? null : r.cost_center_id,
-        account_id: r.account_id,
-        initial_amount: init,
-        monthly_growth_rate: rate,
-        start_date: r.start_date,
-        horizon_months: horizon,
-      };
-    });
-    const res = await bulkFn({ data: { rows: parsed } });
-    qc.invalidateQueries({ queryKey: ["projections"] });
-    return res;
+    try {
+      // 1) Descartar linhas em branco (sem nome E sem valor) ANTES de validar.
+      const meaningful = rows.filter((r) => {
+        const hasName = (r.name ?? "").trim().length > 0;
+        const hasAmount = (r.initial_amount ?? "").trim().length > 0;
+        const hasAnyOther =
+          (r.cost_center_id ?? "").trim() !== "" ||
+          (r.account_id ?? "").trim() !== "" ||
+          (r.start_date ?? "").trim() !== "";
+        return hasName || hasAmount || hasAnyOther;
+      });
+      if (meaningful.length === 0) {
+        toast.error("Nenhuma linha preenchida para salvar.", { duration: 8000 });
+        return { created: 0 };
+      }
+
+      // 2) Validação explícita com mensagem por linha.
+      const parsed = meaningful.map((r, i) => {
+        const lineNo = i + 1;
+        const init = Number((r.initial_amount ?? "").replace(",", "."));
+        const rate = r.monthly_growth_rate
+          ? Number(r.monthly_growth_rate.replace(",", "."))
+          : 0;
+        const horizon = r.horizon_months ? parseInt(r.horizon_months, 10) : 12;
+        const isOutflow = (r.direction || "inflow") === "outflow";
+
+        // Sanitiza IDs (apenas o UUID, sem sufixos visuais).
+        const accountId = (r.account_id ?? "").trim();
+        const ccRaw = (r.cost_center_id ?? "").trim();
+        const ccId = ccRaw === "" ? null : ccRaw;
+
+        if (!r.name?.trim())
+          throw new Error(`Linha ${lineNo}: preencha o Nome da Projeção.`);
+        if (!accountId)
+          throw new Error(
+            `Linha ${lineNo}: preencha a Conta Contábil (Categoria de ${isOutflow ? "Despesa" : "Receita"}).`,
+          );
+        if (!isOutflow && !ccId)
+          throw new Error(
+            `Linha ${lineNo}: Centro de Custo é obrigatório para Entradas.`,
+          );
+        if (!r.start_date)
+          throw new Error(`Linha ${lineNo}: informe a Data de Início (Vencimento).`);
+        if (!Number.isFinite(init) || init < 0)
+          throw new Error(`Linha ${lineNo}: Valor (R$) inválido.`);
+        if (!Number.isFinite(rate))
+          throw new Error(`Linha ${lineNo}: Taxa %/mês inválida.`);
+        if (!Number.isFinite(horizon) || horizon < 1 || horizon > 120)
+          throw new Error(`Linha ${lineNo}: Horizonte deve estar entre 1 e 120 meses.`);
+
+        return {
+          name: r.name.trim(),
+          direction: isOutflow ? ("outflow" as const) : ("inflow" as const),
+          // Saídas aceitam CC nulo (definição por liquidez).
+          cost_center_id: isOutflow ? null : ccId,
+          account_id: accountId,
+          initial_amount: init,
+          monthly_growth_rate: rate,
+          start_date: r.start_date,
+          horizon_months: horizon,
+        };
+      });
+
+      const res = await bulkFn({ data: { rows: parsed } });
+      qc.invalidateQueries({ queryKey: ["projections"] });
+      return res;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Falha desconhecida no lote.";
+      toast.error(msg, { duration: 12000 });
+      // Re-lança para o QuickGrid manter botão liberado e estado consistente.
+      throw err;
+    }
   };
 
 

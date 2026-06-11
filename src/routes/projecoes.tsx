@@ -619,11 +619,16 @@ function ProjectionsPage() {
                 />
               </SelectTrigger>
               <SelectContent>
-                {filteredAccs.map((a) => (
-                  <SelectItem key={a.id} value={a.id}>
-                    {a.name}
-                  </SelectItem>
-                ))}
+                {filteredAccs.map((a) => {
+                  const cc = (ccs.data ?? []).find((c) => c.id === a.cost_center_id);
+                  const suffix = cc ? ` · ${cc.code}` : "";
+                  return (
+                    <SelectItem key={a.id} value={a.id}>
+                      {a.name}
+                      {suffix}
+                    </SelectItem>
+                  );
+                })}
               </SelectContent>
             </Select>
             {filteredAccs.length === 0 && (

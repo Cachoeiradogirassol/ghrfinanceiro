@@ -179,7 +179,8 @@ function ProjectionsPage() {
     [ccs.data],
   );
 
-  // Fix: accounts kinds in DB are "revenue" / "expense" (not "receivable")
+  // Filtra contas APENAS por tipo (revenue/expense) — sem restringir por Centro de Custo,
+  // para que categorias como "Faturamento Vinhos" fiquem disponíveis independente do bloco.
   const filteredAccs = useMemo(() => {
     const wanted = direction === "inflow" ? "revenue" : "expense";
     const all = (accs.data ?? []) as Array<{
@@ -188,13 +189,8 @@ function ProjectionsPage() {
       kind: string;
       cost_center_id?: string;
     }>;
-    let list = all.filter((a) => a.kind === wanted);
-    if (ccId) {
-      const scoped = list.filter((a) => a.cost_center_id === ccId);
-      if (scoped.length > 0) list = scoped;
-    }
-    return list;
-  }, [accs.data, direction, ccId]);
+    return all.filter((a) => a.kind === wanted);
+  }, [accs.data, direction]);
 
   const createMut = useMutation({
     mutationFn: async () => {
@@ -251,13 +247,23 @@ function ProjectionsPage() {
       value: c.id,
       label: `${c.code} - ${c.name}`,
     }));
-    const allAccs = (accs.data ?? []) as Array<{ id: string; name: string; kind: string }>;
+    const allAccs = (accs.data ?? []) as Array<{
+      id: string;
+      name: string;
+      kind: string;
+      cost_center_id?: string;
+    }>;
+    const ccById = new Map((ccs.data ?? []).map((c) => [c.id, c]));
+    const labelOf = (a: { name: string; cost_center_id?: string }) => {
+      const cc = a.cost_center_id ? ccById.get(a.cost_center_id) : null;
+      return cc ? `${a.name} · ${cc.code}` : a.name;
+    };
     const revenueOpts = allAccs
       .filter((a) => a.kind === "revenue")
-      .map((a) => ({ value: a.id, label: a.name }));
+      .map((a) => ({ value: a.id, label: labelOf(a) }));
     const expenseOpts = allAccs
       .filter((a) => a.kind === "expense")
-      .map((a) => ({ value: a.id, label: a.name }));
+      .map((a) => ({ value: a.id, label: labelOf(a) }));
     return [
       { key: "name", label: "Nome da Projeção", type: "text", width: "220px" },
       { key: "direction", label: "Tipo", type: "select", width: "130px", options: [
@@ -289,7 +295,7 @@ function ProjectionsPage() {
       { key: "monthly_growth_rate", label: "Taxa %/mês", type: "number", width: "110px" },
       { key: "horizon_months", label: "Horizonte (m)", type: "number", width: "110px" },
     ];
-  }, [selectableCCs, accs.data]);
+  }, [selectableCCs, accs.data, ccs.data]);
 
   const handleBulkSave = async (rows: Record<string, string>[]) => {
     const parsed = rows.map((r, i) => {
@@ -623,11 +629,16 @@ function ProjectionsPage() {
                 />
               </SelectTrigger>
               <SelectContent>
-                {filteredAccs.map((a) => (
-                  <SelectItem key={a.id} value={a.id}>
-                    {a.name}
-                  </SelectItem>
-                ))}
+                {filteredAccs.map((a) => {
+                  const cc = (ccs.data ?? []).find((c) => c.id === a.cost_center_id);
+                  const suffix = cc ? ` · ${cc.code}` : "";
+                  return (
+                    <SelectItem key={a.id} value={a.id}>
+                      {a.name}
+                      {suffix}
+                    </SelectItem>
+                  );
+                })}
               </SelectContent>
             </Select>
             {filteredAccs.length === 0 && (

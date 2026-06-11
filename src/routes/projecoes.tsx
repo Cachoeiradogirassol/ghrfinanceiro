@@ -189,16 +189,7 @@ function ProjectionsPage() {
       kind: string;
       cost_center_id?: string;
     }>;
-    // Deduplica por nome para evitar repetições visuais (mesma categoria em vários CCs).
-    const seen = new Set<string>();
-    return all
-      .filter((a) => a.kind === wanted)
-      .filter((a) => {
-        const key = a.name.trim().toLowerCase();
-        if (seen.has(key)) return false;
-        seen.add(key);
-        return true;
-      });
+    return all.filter((a) => a.kind === wanted);
   }, [accs.data, direction]);
 
   const createMut = useMutation({

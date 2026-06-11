@@ -251,10 +251,13 @@ function ProjectionsPage() {
       value: c.id,
       label: `${c.code} - ${c.name}`,
     }));
-    const accOpts = ((accs.data ?? []) as Array<{ id: string; name: string }>).map((a) => ({
-      value: a.id,
-      label: a.name,
-    }));
+    const allAccs = (accs.data ?? []) as Array<{ id: string; name: string; kind: string }>;
+    const revenueOpts = allAccs
+      .filter((a) => a.kind === "revenue")
+      .map((a) => ({ value: a.id, label: a.name }));
+    const expenseOpts = allAccs
+      .filter((a) => a.kind === "expense")
+      .map((a) => ({ value: a.id, label: a.name }));
     return [
       { key: "name", label: "Nome da Projeção", type: "text", width: "220px" },
       { key: "direction", label: "Tipo", type: "select", width: "130px", options: [
@@ -271,7 +274,16 @@ function ProjectionsPage() {
         disabledWhen: (row) => row.direction === "outflow",
       },
 
-      { key: "account_id", label: "Conta", type: "select", width: "200px", options: accOpts },
+      {
+        key: "account_id",
+        label: "Conta (Receita/Despesa)",
+        type: "select",
+        width: "220px",
+        options: revenueOpts,
+        // Filtro dinâmico: Entrada → receitas; Saída → despesas.
+        optionsFor: (row) =>
+          (row.direction || "inflow") === "outflow" ? expenseOpts : revenueOpts,
+      },
       { key: "start_date", label: "Início (Vencimento)", type: "date", width: "160px" },
       { key: "initial_amount", label: "Valor (R$)", type: "number", width: "130px" },
       { key: "monthly_growth_rate", label: "Taxa %/mês", type: "number", width: "110px" },

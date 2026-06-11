@@ -12,6 +12,8 @@ export type GridColumnDef = {
   width?: string;
   options?: Array<{ value: string; label: string }>;
   placeholder?: string;
+  /** Optional per-row dynamic options. When provided, overrides `options` for that row. */
+  optionsFor?: (row: GridRow) => Array<{ value: string; label: string }>;
   /** Optional per-row disabled rule. Returning true greys out the cell and clears its value on save. */
   disabledWhen?: (row: GridRow) => boolean;
 };
@@ -168,24 +170,31 @@ export function QuickGrid({
                   return (
                   <td key={c.key} className="px-1 py-1">
                     {c.type === "select" ? (
-                      <select
-                        data-cell={`${rIdx}-${cIdx}`}
-                        value={isDisabled ? "" : (row[c.key] ?? "")}
-                        disabled={isDisabled}
-                        onChange={(e) => updateCell(rIdx, c.key, e.target.value)}
-                        onKeyDown={(e) => handleKey(e, rIdx, cIdx)}
-                        className={cn(
-                          "h-8 w-full rounded border border-input bg-transparent px-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring",
-                          isDisabled && "bg-muted/40 text-muted-foreground cursor-not-allowed",
-                        )}
-                      >
-                        <option value="">{isDisabled ? "—  (opcional)" : "—"}</option>
-                        {(c.options ?? []).map((o) => (
-                          <option key={o.value} value={o.value}>
-                            {o.label}
-                          </option>
-                        ))}
-                      </select>
+                      (() => {
+                        const opts = c.optionsFor ? c.optionsFor(row) : (c.options ?? []);
+                        const currentVal = row[c.key] ?? "";
+                        const validVal = opts.some((o) => o.value === currentVal) ? currentVal : "";
+                        return (
+                          <select
+                            data-cell={`${rIdx}-${cIdx}`}
+                            value={isDisabled ? "" : validVal}
+                            disabled={isDisabled}
+                            onChange={(e) => updateCell(rIdx, c.key, e.target.value)}
+                            onKeyDown={(e) => handleKey(e, rIdx, cIdx)}
+                            className={cn(
+                              "h-8 w-full rounded border border-input bg-transparent px-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring",
+                              isDisabled && "bg-muted/40 text-muted-foreground cursor-not-allowed",
+                            )}
+                          >
+                            <option value="">{isDisabled ? "—  (opcional)" : "—"}</option>
+                            {opts.map((o) => (
+                              <option key={o.value} value={o.value}>
+                                {o.label}
+                              </option>
+                            ))}
+                          </select>
+                        );
+                      })()
                     ) : (
                       <Input
                         data-cell={`${rIdx}-${cIdx}`}

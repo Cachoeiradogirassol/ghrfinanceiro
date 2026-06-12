@@ -950,7 +950,7 @@ async function loadFinanceData(supabase: {
     select: (s: string) => Promise<{ data: unknown; error: { message: string } | null }>;
   };
 }) {
-  const [{ data: banks }, { data: ccs }, { data: txs }, { data: allocs }] = (await Promise.all([
+  const [{ data: banks }, { data: ccs }, { data: txs }, { data: allocs }, { data: accts }] = (await Promise.all([
     supabase.from("bank_accounts").select("id, name, initial_balance, enterprise"),
     supabase.from("cost_centers").select("id, enterprise"),
     supabase
@@ -961,6 +961,7 @@ async function loadFinanceData(supabase: {
     supabase
       .from("transaction_allocations")
       .select("transaction_id, cost_center_id, amount"),
+    supabase.from("accounts").select("id, kind, is_administrative"),
   ])) as unknown as [
     { data: Array<{ id: string; name: string; initial_balance: number; enterprise: EnterpriseValue }> },
     { data: Array<{ id: string; enterprise: EnterpriseValue }> },
@@ -980,10 +981,12 @@ async function loadFinanceData(supabase: {
       }>;
     },
     { data: Array<{ transaction_id: string; cost_center_id: string; amount: number }> },
+    { data: Array<{ id: string; kind: string; is_administrative: boolean }> },
   ];
 
   const ccById = new Map(ccs?.map((c) => [c.id, c.enterprise]) ?? []);
   const bankById = new Map(banks?.map((b) => [b.id, b]) ?? []);
+  const acctById = new Map(accts?.map((a) => [a.id, a]) ?? []);
 
   // Para cada transação, gerar lista de alocações efetivas
   const allocByTx = new Map<string, AllocRow[]>();
@@ -995,7 +998,7 @@ async function loadFinanceData(supabase: {
     allocByTx.set(a.transaction_id, arr);
   }
 
-  return { banks: banks ?? [], txs: txs ?? [], ccById, bankById, allocByTx };
+  return { banks: banks ?? [], txs: txs ?? [], ccById, bankById, allocByTx, acctById };
 }
 
 function effectiveAllocs(

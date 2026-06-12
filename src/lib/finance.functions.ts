@@ -1024,7 +1024,7 @@ export const buildDRE = createServerFn({ method: "POST" })
       .parse(d ?? {}),
   )
   .handler(async ({ context, data }) => {
-    const { txs, ccById, bankById, allocByTx } = await loadFinanceData(
+    const { txs, ccById, bankById, allocByTx, acctById } = await loadFinanceData(
       context.supabase as never,
     );
     const filter = data.enterprise;
@@ -1037,6 +1037,8 @@ export const buildDRE = createServerFn({ method: "POST" })
     type Bucket = {
       revenue: number;
       expense: number;
+      directExpense: number;
+      adminExpense: number;
       aporteRecebido: number;
       aporteConcedido: number;
     };
@@ -1044,7 +1046,14 @@ export const buildDRE = createServerFn({ method: "POST" })
     const ensure = (k: string) => {
       let b = months.get(k);
       if (!b) {
-        b = { revenue: 0, expense: 0, aporteRecebido: 0, aporteConcedido: 0 };
+        b = {
+          revenue: 0,
+          expense: 0,
+          directExpense: 0,
+          adminExpense: 0,
+          aporteRecebido: 0,
+          aporteConcedido: 0,
+        };
         months.set(k, b);
       }
       return b;
@@ -1063,20 +1072,25 @@ export const buildDRE = createServerFn({ method: "POST" })
       const bank = tx.bank_account_id ? bankById.get(tx.bank_account_id) : undefined;
       const bankEnt = bank?.enterprise ?? null;
       const allocs = effectiveAllocs(tx, ccById, allocByTx);
+      const acct = tx.account_id ? acctById.get(tx.account_id) : undefined;
+      const isAdmin = !!acct?.is_administrative;
       for (const a of allocs) {
         const include = matchesFilter(set, a.cc_enterprise);
         if (include) {
           const b = ensure(key);
-          if (tx.type === "receivable") b.revenue += a.amount;
-          else b.expense += a.amount;
+          if (tx.type === "receivable") {
+            b.revenue += a.amount;
+          } else {
+            b.expense += a.amount;
+            if (isAdmin) b.adminExpense += a.amount;
+            else b.directExpense += a.amount;
+          }
         }
         // Aportes cruzados
         if (bankEnt && bankEnt !== a.cc_enterprise && tx.type === "payable") {
-          // CC enterprise recebeu aporte de bankEnt
           if (matchesFilter(set, a.cc_enterprise)) {
             ensure(key).aporteRecebido += a.amount;
           }
-          // bankEnt concedeu aporte
           if (matchesFilter(set, bankEnt)) {
             ensure(key).aporteConcedido += a.amount;
           }
@@ -1089,6 +1103,7 @@ export const buildDRE = createServerFn({ method: "POST" })
       .map(([month, b]) => ({
         month,
         ...b,
+        grossProfit: b.revenue - b.directExpense,
         net: b.revenue - b.expense,
       }));
 
@@ -1096,13 +1111,29 @@ export const buildDRE = createServerFn({ method: "POST" })
       (acc, m) => ({
         revenue: acc.revenue + m.revenue,
         expense: acc.expense + m.expense,
+        directExpense: acc.directExpense + m.directExpense,
+        adminExpense: acc.adminExpense + m.adminExpense,
         aporteRecebido: acc.aporteRecebido + m.aporteRecebido,
         aporteConcedido: acc.aporteConcedido + m.aporteConcedido,
       }),
-      { revenue: 0, expense: 0, aporteRecebido: 0, aporteConcedido: 0 },
+      {
+        revenue: 0,
+        expense: 0,
+        directExpense: 0,
+        adminExpense: 0,
+        aporteRecebido: 0,
+        aporteConcedido: 0,
+      },
     );
 
-    return { series, totals: { ...totals, net: totals.revenue - totals.expense } };
+    return {
+      series,
+      totals: {
+        ...totals,
+        grossProfit: totals.revenue - totals.directExpense,
+        net: totals.revenue - totals.expense,
+      },
+    };
   });
 
 export const buildProjection = createServerFn({ method: "POST" })

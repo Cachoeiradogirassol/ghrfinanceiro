@@ -591,8 +591,8 @@ function PeriodLockCard() {
 
   const reopen = useMutation({
     mutationFn: reopenFn,
-    onSuccess: (_d, vars) => {
-      toast.success(`Período ${String(vars.data.month).padStart(2, "0")}/${vars.data.year} reaberto.`);
+    onSuccess: () => {
+      toast.success(`Período ${String(month).padStart(2, "0")}/${year} reaberto.`);
       qc.invalidateQueries({ queryKey: ["closed-months"] });
     },
     onError: (e: Error) => toast.error(e.message),

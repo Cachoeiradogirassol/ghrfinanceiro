@@ -30,7 +30,12 @@ import {
   Bot,
   Send,
   BarChart3,
+  Lock,
+  Unlock,
+  CalendarRange,
 } from "lucide-react";
+import { toast } from "sonner";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { exportDREPdf } from "@/lib/pdf-export";
 import { enterpriseLabel } from "@/lib/enterprises";
 import { CostsByEnterpriseTab } from "@/components/reports/CostsByEnterpriseTab";

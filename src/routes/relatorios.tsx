@@ -262,6 +262,10 @@ function ComparativeTab() {
             ))}
           </select>
         </div>
+        <Button onClick={exportPdf} disabled={!dre.data}>
+          <FileDown className="h-4 w-4 mr-2" /> Exportar PDF Oficial
+        </Button>
+      </div>
 
       {t && (
         <Card className="p-5">
@@ -295,10 +299,6 @@ function ComparativeTab() {
         </Card>
       )}
 
-        <Button onClick={exportPdf} disabled={!dre.data}>
-          <FileDown className="h-4 w-4 mr-2" /> Exportar PDF Oficial
-        </Button>
-      </div>
 
       <Card className="p-5">
         <h2 className="font-semibold mb-3">

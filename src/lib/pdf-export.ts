@@ -5,6 +5,9 @@ interface DRESeriesRow {
   month: string;
   revenue: number;
   expense: number;
+  directExpense: number;
+  adminExpense: number;
+  grossProfit: number;
   aporteRecebido: number;
   aporteConcedido: number;
   net: number;
@@ -15,6 +18,9 @@ export interface DREExportData {
   totals: {
     revenue: number;
     expense: number;
+    directExpense: number;
+    adminExpense: number;
+    grossProfit: number;
     aporteRecebido: number;
     aporteConcedido: number;
     net: number;

@@ -87,18 +87,12 @@ export function exportDREPdf(data: DREExportData, opts: DREExportOptions) {
     key: keyof DRESeriesRow;
     tkey: keyof DREExportData["totals"];
   }> = [
-    { label: "Receitas", key: "revenue", tkey: "revenue" },
-    { label: "Custos / Despesas", key: "expense", tkey: "expense" },
-    {
-      label: "Aportes Recebidos",
-      key: "aporteRecebido",
-      tkey: "aporteRecebido",
-    },
-    {
-      label: "Aportes Concedidos",
-      key: "aporteConcedido",
-      tkey: "aporteConcedido",
-    },
+    { label: "(+) Receitas", key: "revenue", tkey: "revenue" },
+    { label: "(-) Custos Diretos Operacionais", key: "directExpense", tkey: "directExpense" },
+    { label: "(=) Margem de Contribuição / Lucro Bruto", key: "grossProfit", tkey: "grossProfit" },
+    { label: "(-) Despesas Administrativas / Fixas", key: "adminExpense", tkey: "adminExpense" },
+    { label: "Aportes Recebidos", key: "aporteRecebido", tkey: "aporteRecebido" },
+    { label: "Aportes Concedidos", key: "aporteConcedido", tkey: "aporteConcedido" },
   ];
   const body = rowDefs.map((r) => [
     r.label,
@@ -106,7 +100,7 @@ export function exportDREPdf(data: DREExportData, opts: DREExportOptions) {
     fmt(data.totals[r.tkey] as number),
   ]);
   body.push([
-    "Resultado Líquido",
+    "(=) Lucro Líquido Realizado",
     ...data.series.map((m) => fmt(m.net)),
     fmt(data.totals.net),
   ]);

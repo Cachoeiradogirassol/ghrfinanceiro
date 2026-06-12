@@ -522,3 +522,156 @@ function IATab() {
     </Card>
   );
 }
+
+// ---------- Helpers: Waterfall + PeriodLock ----------
+type WaterfallTone =
+  | "positive"
+  | "negative"
+  | "subtotal-positive"
+  | "subtotal-negative"
+  | "muted";
+
+function WaterfallRow({
+  label,
+  value,
+  tone,
+  emphasis,
+  final,
+}: {
+  label: string;
+  value: number;
+  tone: WaterfallTone;
+  emphasis?: boolean;
+  final?: boolean;
+}) {
+  const toneClass =
+    tone === "positive"
+      ? "text-primary"
+      : tone === "negative"
+        ? "text-destructive"
+        : tone === "subtotal-positive"
+          ? "text-primary"
+          : tone === "subtotal-negative"
+            ? "text-destructive"
+            : "text-muted-foreground";
+  const rowClass = emphasis
+    ? `flex items-center justify-between border-y border-border ${final ? "border-y-2 bg-muted/40" : "bg-muted/20"} px-2 py-2 font-semibold`
+    : "flex items-center justify-between py-1 px-2";
+  return (
+    <div className={rowClass}>
+      <span className={emphasis ? "uppercase tracking-wide" : ""}>{label}</span>
+      <span className={`font-mono ${toneClass} ${emphasis ? "text-base" : ""}`}>{fmt(value)}</span>
+    </div>
+  );
+}
+
+function PeriodLockCard() {
+  const qc = useQueryClient();
+  const now = new Date();
+  const [year, setYear] = useState(now.getFullYear());
+  const [month, setMonth] = useState(now.getMonth() + 1);
+
+  const listFn = useServerFn(listClosedMonths);
+  const closeFn = useServerFn(closePeriodMonth);
+  const reopenFn = useServerFn(reopenPeriodMonth);
+
+  const closed = useQuery({
+    queryKey: ["closed-months"],
+    queryFn: () => listFn(),
+  });
+
+  const close = useMutation({
+    mutationFn: closeFn,
+    onSuccess: () => {
+      toast.success(`Período ${String(month).padStart(2, "0")}/${year} encerrado.`);
+      qc.invalidateQueries({ queryKey: ["closed-months"] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const reopen = useMutation({
+    mutationFn: reopenFn,
+    onSuccess: (_d, vars) => {
+      toast.success(`Período ${String(vars.data.month).padStart(2, "0")}/${vars.data.year} reaberto.`);
+      qc.invalidateQueries({ queryKey: ["closed-months"] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const isClosed = (closed.data ?? []).some(
+    (p) => (p.start_date as string).slice(0, 7) === `${year}-${String(month).padStart(2, "0")}`,
+  );
+
+  const years = Array.from({ length: 5 }, (_, i) => now.getFullYear() - 2 + i);
+  const monthNames = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
+
+  return (
+    <Card className="p-5">
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div className="flex items-center gap-2">
+          <CalendarRange className="h-5 w-5 text-primary" />
+          <div>
+            <h2 className="font-semibold">Encerramento de Período (Lock Global)</h2>
+            <p className="text-xs text-muted-foreground">
+              Trava criação/edição/exclusão em transações, conciliações e projeções daquele mês.
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <select
+            value={month}
+            onChange={(e) => setMonth(Number(e.target.value))}
+            className="border border-input bg-background rounded-md px-2 py-1 text-sm"
+            aria-label="Mês"
+          >
+            {monthNames.map((n, i) => (
+              <option key={n} value={i + 1}>{n}</option>
+            ))}
+          </select>
+          <select
+            value={year}
+            onChange={(e) => setYear(Number(e.target.value))}
+            className="border border-input bg-background rounded-md px-2 py-1 text-sm"
+            aria-label="Ano"
+          >
+            {years.map((y) => (
+              <option key={y} value={y}>{y}</option>
+            ))}
+          </select>
+          {isClosed ? (
+            <Button
+              variant="outline"
+              onClick={() => reopen.mutate({ data: { year, month } })}
+              disabled={reopen.isPending}
+            >
+              <Unlock className="h-4 w-4 mr-2" /> Reabrir Período (Master)
+            </Button>
+          ) : (
+            <Button
+              onClick={() => close.mutate({ data: { year, month } })}
+              disabled={close.isPending}
+            >
+              <Lock className="h-4 w-4 mr-2" /> Encerrar Período
+            </Button>
+          )}
+        </div>
+      </div>
+
+      {(closed.data ?? []).length > 0 && (
+        <div className="mt-4 flex flex-wrap gap-2">
+          {(closed.data ?? []).map((p) => {
+            const ym = (p.start_date as string).slice(0, 7);
+            return (
+              <span
+                key={ym}
+                className="inline-flex items-center gap-1 rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium"
+              >
+                <Lock className="h-3 w-3" /> {ym}
+              </span>
+            );
+          })}
+        </div>
+      )}
+    </Card>
+  );
+}

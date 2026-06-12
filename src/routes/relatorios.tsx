@@ -240,8 +240,12 @@ function ComparativeTab() {
     });
   };
 
+  const t = dre.data?.totals;
+
   return (
     <div className="space-y-4">
+      <PeriodLockCard />
+
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div className="flex items-center gap-2">
           <label className="text-sm text-muted-foreground">Últimos</label>
@@ -258,6 +262,39 @@ function ComparativeTab() {
             ))}
           </select>
         </div>
+
+      {t && (
+        <Card className="p-5">
+          <h2 className="font-semibold mb-3">
+            DRE em Cascata — Totais do Período ({months} meses)
+          </h2>
+          <div className="space-y-1.5 text-sm">
+            <WaterfallRow label="(+) Faturamento Bruto (Receitas)" value={t.revenue} tone="positive" />
+            <WaterfallRow label="(-) Custos Diretos Operacionais" value={-t.directExpense} tone="negative" />
+            <WaterfallRow
+              label="(=) MARGEM DE CONTRIBUIÇÃO / LUCRO BRUTO"
+              value={t.grossProfit}
+              tone={t.grossProfit >= 0 ? "subtotal-positive" : "subtotal-negative"}
+              emphasis
+            />
+            <WaterfallRow label="(-) Despesas Administrativas / Fixas" value={-t.adminExpense} tone="negative" />
+            <WaterfallRow
+              label="(=) LUCRO LÍQUIDO REALIZADO DO PERÍODO"
+              value={t.net}
+              tone={t.net >= 0 ? "subtotal-positive" : "subtotal-negative"}
+              emphasis
+              final
+            />
+            {(t.aporteRecebido > 0 || t.aporteConcedido > 0) && (
+              <div className="pt-2 mt-2 border-t border-border/60 text-xs text-muted-foreground space-y-1">
+                <WaterfallRow label="Aportes Recebidos (não operacional)" value={t.aporteRecebido} tone="muted" />
+                <WaterfallRow label="Aportes Concedidos (não operacional)" value={-t.aporteConcedido} tone="muted" />
+              </div>
+            )}
+          </div>
+        </Card>
+      )}
+
         <Button onClick={exportPdf} disabled={!dre.data}>
           <FileDown className="h-4 w-4 mr-2" /> Exportar PDF Oficial
         </Button>

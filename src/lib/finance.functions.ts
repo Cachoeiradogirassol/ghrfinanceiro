@@ -1306,6 +1306,49 @@ export const reopenReconciliationPeriod = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+// ---------- MONTH LOCK (Encerrar Período / Reabrir Período) ----------
+export const closePeriodMonth = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) =>
+    z
+      .object({ year: z.number().int().min(2020).max(2100), month: z.number().int().min(1).max(12) })
+      .parse(d),
+  )
+  .handler(async ({ context, data }) => {
+    const { data: id, error } = await (context.supabase as never as {
+      rpc: (n: string, args: Record<string, unknown>) => Promise<{ data: string | null; error: { message: string } | null }>;
+    }).rpc("close_period_month", { _year: data.year, _month: data.month });
+    if (error) throw new Error(error.message);
+    return { id };
+  });
+
+export const reopenPeriodMonth = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) =>
+    z
+      .object({ year: z.number().int().min(2020).max(2100), month: z.number().int().min(1).max(12) })
+      .parse(d),
+  )
+  .handler(async ({ context, data }) => {
+    const { error } = await (context.supabase as never as {
+      rpc: (n: string, args: Record<string, unknown>) => Promise<{ data: unknown; error: { message: string } | null }>;
+    }).rpc("reopen_period_month", { _year: data.year, _month: data.month });
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
+export const listClosedMonths = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { data, error } = await context.supabase
+      .from("reconciliation_periods")
+      .select("start_date, end_date, status, closed_at, closed_by")
+      .eq("status", "CLOSED")
+      .order("start_date", { ascending: false });
+    if (error) throw new Error(error.message);
+    return data ?? [];
+  });
+
 // ---------- AUDIT USERS MAP (master only) ----------
 const MASTER_EMAIL_AUDIT = "drs.cachoeira@gmail.com";
 export const listAuditUsers = createServerFn({ method: "GET" })

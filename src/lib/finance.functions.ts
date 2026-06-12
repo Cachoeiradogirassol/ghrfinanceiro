@@ -950,7 +950,7 @@ async function loadFinanceData(supabase: {
     select: (s: string) => Promise<{ data: unknown; error: { message: string } | null }>;
   };
 }) {
-  const [{ data: banks }, { data: ccs }, { data: txs }, { data: allocs }] = (await Promise.all([
+  const [{ data: banks }, { data: ccs }, { data: txs }, { data: allocs }, { data: accts }] = (await Promise.all([
     supabase.from("bank_accounts").select("id, name, initial_balance, enterprise"),
     supabase.from("cost_centers").select("id, enterprise"),
     supabase
@@ -961,6 +961,7 @@ async function loadFinanceData(supabase: {
     supabase
       .from("transaction_allocations")
       .select("transaction_id, cost_center_id, amount"),
+    supabase.from("accounts").select("id, kind, is_administrative"),
   ])) as unknown as [
     { data: Array<{ id: string; name: string; initial_balance: number; enterprise: EnterpriseValue }> },
     { data: Array<{ id: string; enterprise: EnterpriseValue }> },
@@ -980,10 +981,12 @@ async function loadFinanceData(supabase: {
       }>;
     },
     { data: Array<{ transaction_id: string; cost_center_id: string; amount: number }> },
+    { data: Array<{ id: string; kind: string; is_administrative: boolean }> },
   ];
 
   const ccById = new Map(ccs?.map((c) => [c.id, c.enterprise]) ?? []);
   const bankById = new Map(banks?.map((b) => [b.id, b]) ?? []);
+  const acctById = new Map(accts?.map((a) => [a.id, a]) ?? []);
 
   // Para cada transação, gerar lista de alocações efetivas
   const allocByTx = new Map<string, AllocRow[]>();
@@ -995,7 +998,7 @@ async function loadFinanceData(supabase: {
     allocByTx.set(a.transaction_id, arr);
   }
 
-  return { banks: banks ?? [], txs: txs ?? [], ccById, bankById, allocByTx };
+  return { banks: banks ?? [], txs: txs ?? [], ccById, bankById, allocByTx, acctById };
 }
 
 function effectiveAllocs(
@@ -1021,7 +1024,7 @@ export const buildDRE = createServerFn({ method: "POST" })
       .parse(d ?? {}),
   )
   .handler(async ({ context, data }) => {
-    const { txs, ccById, bankById, allocByTx } = await loadFinanceData(
+    const { txs, ccById, bankById, allocByTx, acctById } = await loadFinanceData(
       context.supabase as never,
     );
     const filter = data.enterprise;
@@ -1034,6 +1037,8 @@ export const buildDRE = createServerFn({ method: "POST" })
     type Bucket = {
       revenue: number;
       expense: number;
+      directExpense: number;
+      adminExpense: number;
       aporteRecebido: number;
       aporteConcedido: number;
     };
@@ -1041,7 +1046,14 @@ export const buildDRE = createServerFn({ method: "POST" })
     const ensure = (k: string) => {
       let b = months.get(k);
       if (!b) {
-        b = { revenue: 0, expense: 0, aporteRecebido: 0, aporteConcedido: 0 };
+        b = {
+          revenue: 0,
+          expense: 0,
+          directExpense: 0,
+          adminExpense: 0,
+          aporteRecebido: 0,
+          aporteConcedido: 0,
+        };
         months.set(k, b);
       }
       return b;
@@ -1060,20 +1072,25 @@ export const buildDRE = createServerFn({ method: "POST" })
       const bank = tx.bank_account_id ? bankById.get(tx.bank_account_id) : undefined;
       const bankEnt = bank?.enterprise ?? null;
       const allocs = effectiveAllocs(tx, ccById, allocByTx);
+      const acct = tx.account_id ? acctById.get(tx.account_id) : undefined;
+      const isAdmin = !!acct?.is_administrative;
       for (const a of allocs) {
         const include = matchesFilter(set, a.cc_enterprise);
         if (include) {
           const b = ensure(key);
-          if (tx.type === "receivable") b.revenue += a.amount;
-          else b.expense += a.amount;
+          if (tx.type === "receivable") {
+            b.revenue += a.amount;
+          } else {
+            b.expense += a.amount;
+            if (isAdmin) b.adminExpense += a.amount;
+            else b.directExpense += a.amount;
+          }
         }
         // Aportes cruzados
         if (bankEnt && bankEnt !== a.cc_enterprise && tx.type === "payable") {
-          // CC enterprise recebeu aporte de bankEnt
           if (matchesFilter(set, a.cc_enterprise)) {
             ensure(key).aporteRecebido += a.amount;
           }
-          // bankEnt concedeu aporte
           if (matchesFilter(set, bankEnt)) {
             ensure(key).aporteConcedido += a.amount;
           }
@@ -1086,6 +1103,7 @@ export const buildDRE = createServerFn({ method: "POST" })
       .map(([month, b]) => ({
         month,
         ...b,
+        grossProfit: b.revenue - b.directExpense,
         net: b.revenue - b.expense,
       }));
 
@@ -1093,13 +1111,29 @@ export const buildDRE = createServerFn({ method: "POST" })
       (acc, m) => ({
         revenue: acc.revenue + m.revenue,
         expense: acc.expense + m.expense,
+        directExpense: acc.directExpense + m.directExpense,
+        adminExpense: acc.adminExpense + m.adminExpense,
         aporteRecebido: acc.aporteRecebido + m.aporteRecebido,
         aporteConcedido: acc.aporteConcedido + m.aporteConcedido,
       }),
-      { revenue: 0, expense: 0, aporteRecebido: 0, aporteConcedido: 0 },
+      {
+        revenue: 0,
+        expense: 0,
+        directExpense: 0,
+        adminExpense: 0,
+        aporteRecebido: 0,
+        aporteConcedido: 0,
+      },
     );
 
-    return { series, totals: { ...totals, net: totals.revenue - totals.expense } };
+    return {
+      series,
+      totals: {
+        ...totals,
+        grossProfit: totals.revenue - totals.directExpense,
+        net: totals.revenue - totals.expense,
+      },
+    };
   });
 
 export const buildProjection = createServerFn({ method: "POST" })
@@ -1270,6 +1304,49 @@ export const reopenReconciliationPeriod = createServerFn({ method: "POST" })
       .eq("id", data.id);
     if (error) throw new Error(error.message);
     return { ok: true };
+  });
+
+// ---------- MONTH LOCK (Encerrar Período / Reabrir Período) ----------
+export const closePeriodMonth = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) =>
+    z
+      .object({ year: z.number().int().min(2020).max(2100), month: z.number().int().min(1).max(12) })
+      .parse(d),
+  )
+  .handler(async ({ context, data }) => {
+    const { data: id, error } = await (context.supabase as never as {
+      rpc: (n: string, args: Record<string, unknown>) => Promise<{ data: string | null; error: { message: string } | null }>;
+    }).rpc("close_period_month", { _year: data.year, _month: data.month });
+    if (error) throw new Error(error.message);
+    return { id };
+  });
+
+export const reopenPeriodMonth = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) =>
+    z
+      .object({ year: z.number().int().min(2020).max(2100), month: z.number().int().min(1).max(12) })
+      .parse(d),
+  )
+  .handler(async ({ context, data }) => {
+    const { error } = await (context.supabase as never as {
+      rpc: (n: string, args: Record<string, unknown>) => Promise<{ data: unknown; error: { message: string } | null }>;
+    }).rpc("reopen_period_month", { _year: data.year, _month: data.month });
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
+export const listClosedMonths = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { data, error } = await context.supabase
+      .from("reconciliation_periods")
+      .select("start_date, end_date, status, closed_at, closed_by")
+      .eq("status", "CLOSED")
+      .order("start_date", { ascending: false });
+    if (error) throw new Error(error.message);
+    return data ?? [];
   });
 
 // ---------- AUDIT USERS MAP (master only) ----------

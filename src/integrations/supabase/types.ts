@@ -20,6 +20,7 @@ export type Database = {
           created_at: string
           id: string
           is_active: boolean
+          is_administrative: boolean
           kind: string
           name: string
         }
@@ -28,6 +29,7 @@ export type Database = {
           created_at?: string
           id?: string
           is_active?: boolean
+          is_administrative?: boolean
           kind?: string
           name: string
         }
@@ -36,6 +38,7 @@ export type Database = {
           created_at?: string
           id?: string
           is_active?: boolean
+          is_administrative?: boolean
           kind?: string
           name?: string
         }
@@ -560,6 +563,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      close_period_month: {
+        Args: { _month: number; _year: number }
+        Returns: string
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
@@ -569,6 +576,10 @@ export type Database = {
       }
       is_date_locked: { Args: { _date: string }; Returns: boolean }
       is_master: { Args: never; Returns: boolean }
+      reopen_period_month: {
+        Args: { _month: number; _year: number }
+        Returns: boolean
+      }
     }
     Enums: {
       app_role: "master" | "user"

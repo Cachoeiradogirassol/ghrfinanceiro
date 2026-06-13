@@ -358,6 +358,7 @@ function ProjectionsPage() {
           // Saídas aceitam CC nulo (definição por liquidez).
           cost_center_id: isOutflow ? null : ccId,
           account_id: accountId,
+          default_bank_account_id: (r.default_bank_account_id ?? "").trim() || null,
           initial_amount: init,
           monthly_growth_rate: rate,
           start_date: r.start_date,
@@ -374,7 +375,7 @@ function ProjectionsPage() {
       const payload = parsed.map((r) => ({
         ...r,
         contact_id: null,
-        default_bank_account_id: (r.default_bank_account_id ?? "").trim() || null,
+        default_bank_account_id: r.default_bank_account_id,
         notes: null,
         created_by: userId,
       }));

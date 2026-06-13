@@ -67,72 +67,111 @@ const downloadCSV = (filename: string, rows: string[][]) => {
 
 function exportPagar(txs: Tx[]) {
   const header = [
-    "ID","Fornecedor","Data Emissão","Data Vencimento","Data Liquidação",
-    "Valor documento","Saldo","Situação","Número documento","Categoria",
-    "Histórico","Pago","Competencia","Forma Pagamento","Chave PIX/Código boleto",
+    "ID",
+    "Fornecedor",
+    "Data Emissão",
+    "Data Vencimento",
+    "Data Liquidação",
+    "Valor documento",
+    "Saldo",
+    "Situação",
+    "Número documento",
+    "Categoria",
+    "Histórico",
+    "Pago",
+    "Competencia",
+    "Forma Pagamento",
+    "Chave PIX/Código boleto",
   ];
-  const rows = txs.filter((t) => t.type === "payable").map((t) => {
-    const paid = t.status === "paid" || t.status === "reconciled";
-    const amount = Number(t.amount);
-    const categoria = [
-      t.cost_centers ? `${t.cost_centers.code ?? ""} - ${t.cost_centers.name ?? ""}` : "",
-      t.accounts?.name ?? "",
-    ].filter(Boolean).join(" / ");
-    return [
-      t.id,
-      t.contacts?.name ?? "",
-      fmtDateBR(t.document_datetime),
-      fmtDateBR(t.due_date),
-      fmtDateBR(t.paid_at),
-      fmtNum(amount),
-      fmtNum(paid ? 0 : amount),
-      paid ? "Paga" : "Em aberto",
-      "",
-      categoria,
-      t.description ?? "",
-      paid ? "Sim" : "Não",
-      fmtCompetencia(t.document_datetime ?? t.due_date),
-      t.payment_method ?? "",
-      "",
-    ];
-  });
-  if (!rows.length) { toast.info("Sem contas a pagar para exportar"); return; }
+  const rows = txs
+    .filter((t) => t.type === "payable")
+    .map((t) => {
+      const paid = t.status === "paid" || t.status === "reconciled";
+      const amount = Number(t.amount);
+      const categoria = [
+        t.cost_centers ? `${t.cost_centers.code ?? ""} - ${t.cost_centers.name ?? ""}` : "",
+        t.accounts?.name ?? "",
+      ]
+        .filter(Boolean)
+        .join(" / ");
+      return [
+        t.id,
+        t.contacts?.name ?? "",
+        fmtDateBR(t.document_datetime),
+        fmtDateBR(t.due_date),
+        fmtDateBR(t.paid_at),
+        fmtNum(amount),
+        fmtNum(paid ? 0 : amount),
+        paid ? "Paga" : "Em aberto",
+        "",
+        categoria,
+        t.description ?? "",
+        paid ? "Sim" : "Não",
+        fmtCompetencia(t.document_datetime ?? t.due_date),
+        t.payment_method ?? "",
+        "",
+      ];
+    });
+  if (!rows.length) {
+    toast.info("Sem contas a pagar para exportar");
+    return;
+  }
   downloadCSV(`contas_pagar_${new Date().toISOString().slice(0, 10)}.csv`, [header, ...rows]);
 }
 
 function exportReceber(txs: Tx[]) {
   const header = [
-    "ID","Cliente","Data Emissão","Data Vencimento","Data Liquidação",
-    "Valor documento","Saldo","Situação","Número documento","Número no banco",
-    "Categoria","Histórico","Forma de recebimento","Meio de recebimento","Taxas","Competência",
+    "ID",
+    "Cliente",
+    "Data Emissão",
+    "Data Vencimento",
+    "Data Liquidação",
+    "Valor documento",
+    "Saldo",
+    "Situação",
+    "Número documento",
+    "Número no banco",
+    "Categoria",
+    "Histórico",
+    "Forma de recebimento",
+    "Meio de recebimento",
+    "Taxas",
+    "Competência",
   ];
-  const rows = txs.filter((t) => t.type === "receivable").map((t) => {
-    const paid = t.status === "paid" || t.status === "reconciled";
-    const amount = Number(t.amount);
-    const categoria = [
-      t.cost_centers ? `${t.cost_centers.code ?? ""} - ${t.cost_centers.name ?? ""}` : "",
-      t.accounts?.name ?? "",
-    ].filter(Boolean).join(" / ");
-    return [
-      t.id,
-      t.contacts?.name ?? "",
-      fmtDateBR(t.document_datetime),
-      fmtDateBR(t.due_date),
-      fmtDateBR(t.paid_at),
-      fmtNum(amount),
-      fmtNum(paid ? 0 : amount),
-      paid ? "Paga" : "Em aberto",
-      "",
-      "",
-      categoria,
-      t.description ?? "",
-      t.payment_method ?? "",
-      t.payment_method ?? "",
-      fmtNum(0),
-      fmtCompetencia(t.document_datetime ?? t.due_date),
-    ];
-  });
-  if (!rows.length) { toast.info("Sem contas a receber para exportar"); return; }
+  const rows = txs
+    .filter((t) => t.type === "receivable")
+    .map((t) => {
+      const paid = t.status === "paid" || t.status === "reconciled";
+      const amount = Number(t.amount);
+      const categoria = [
+        t.cost_centers ? `${t.cost_centers.code ?? ""} - ${t.cost_centers.name ?? ""}` : "",
+        t.accounts?.name ?? "",
+      ]
+        .filter(Boolean)
+        .join(" / ");
+      return [
+        t.id,
+        t.contacts?.name ?? "",
+        fmtDateBR(t.document_datetime),
+        fmtDateBR(t.due_date),
+        fmtDateBR(t.paid_at),
+        fmtNum(amount),
+        fmtNum(paid ? 0 : amount),
+        paid ? "Paga" : "Em aberto",
+        "",
+        "",
+        categoria,
+        t.description ?? "",
+        t.payment_method ?? "",
+        t.payment_method ?? "",
+        fmtNum(0),
+        fmtCompetencia(t.document_datetime ?? t.due_date),
+      ];
+    });
+  if (!rows.length) {
+    toast.info("Sem contas a receber para exportar");
+    return;
+  }
   downloadCSV(`contas_receber_${new Date().toISOString().slice(0, 10)}.csv`, [header, ...rows]);
 }
 
@@ -206,8 +245,14 @@ function List() {
 
   const gridColumns = useMemo<GridColumnDef[]>(() => {
     const SELECTABLE = ["turismo", "restaurante", "vinhedo", "ghr_aldeia", "ghr_jk"];
-    const selectableCenters = (ccs.data ?? []).filter((c) => SELECTABLE.includes(c.enterprise ?? ""));
-    const allAccounts = (accs.data ?? []) as Array<{ id: string; name: string; cost_center_id?: string | null }>;
+    const selectableCenters = (ccs.data ?? []).filter((c) =>
+      SELECTABLE.includes(c.enterprise ?? ""),
+    );
+    const allAccounts = (accs.data ?? []) as Array<{
+      id: string;
+      name: string;
+      cost_center_id?: string | null;
+    }>;
     const accOpts = allAccounts.map((a) => ({
       value: a.id,
       label: a.name,
@@ -221,26 +266,50 @@ function List() {
     };
     const groupedCenters = (row: Record<string, string>) => {
       const account = allAccounts.find((item) => item.id === row.account_id);
-      const accountCenter = selectableCenters.find((center) => center.id === account?.cost_center_id);
+      const accountCenter = selectableCenters.find(
+        (center) => center.id === account?.cost_center_id,
+      );
       const localEnterprise = accountCenter?.enterprise ?? "turismo";
       return [...selectableCenters]
-        .sort((a, b) => Number(b.enterprise === localEnterprise) - Number(a.enterprise === localEnterprise))
+        .sort(
+          (a, b) =>
+            Number(b.enterprise === localEnterprise) - Number(a.enterprise === localEnterprise),
+        )
         .map((center) => ({
           value: center.id,
           label: `${center.code} - ${center.name}`,
-          group: center.enterprise === localEnterprise
-            ? `Centros de Custo Locais (${enterpriseName[localEnterprise] ?? localEnterprise})`
-            : "Outros Empreendimentos (Intercompany)",
+          group:
+            center.enterprise === localEnterprise
+              ? `Centros de Custo Locais (${enterpriseName[localEnterprise] ?? localEnterprise})`
+              : "Outros Empreendimentos (Intercompany)",
         }));
     };
     return [
       { key: "due_date", label: "Vencimento", type: "date", width: "150px" },
-      { key: "type", label: "Tipo", type: "select", width: "130px", options: [
-        { value: "payable", label: "Saída (Pagar)" },
-        { value: "receivable", label: "Entrada (Receber)" },
-      ] },
-      { key: "cost_center_id", label: "Centro de Custo", type: "select", width: "200px", optionsFor: groupedCenters },
-      { key: "account_id", label: "Conta Contábil", type: "select", width: "200px", options: accOpts },
+      {
+        key: "type",
+        label: "Tipo",
+        type: "select",
+        width: "130px",
+        options: [
+          { value: "payable", label: "Saída (Pagar)" },
+          { value: "receivable", label: "Entrada (Receber)" },
+        ],
+      },
+      {
+        key: "cost_center_id",
+        label: "Centro de Custo",
+        type: "select",
+        width: "200px",
+        optionsFor: groupedCenters,
+      },
+      {
+        key: "account_id",
+        label: "Conta Contábil",
+        type: "select",
+        width: "200px",
+        options: accOpts,
+      },
       { key: "amount", label: "Valor (R$)", type: "number", width: "130px", placeholder: "0,00" },
       { key: "description", label: "Descrição", type: "text", width: "260px" },
     ];
@@ -278,10 +347,7 @@ function List() {
           <p className="text-muted-foreground">Contas a Pagar e Receber</p>
         </div>
         <div className="flex gap-2">
-          <Button
-            variant={gridMode ? "default" : "outline"}
-            onClick={() => setGridMode((v) => !v)}
-          >
+          <Button variant={gridMode ? "default" : "outline"} onClick={() => setGridMode((v) => !v)}>
             <Grid3x3 className="h-4 w-4 mr-2" />
             {gridMode ? "Sair da Grade" : "Modo Grade Rápida"}
           </Button>
@@ -317,135 +383,135 @@ function List() {
       )}
 
       {!gridMode && (
-      <div className="rounded-md border">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Vencimento</TableHead>
-              <TableHead>Bloco</TableHead>
-              <TableHead>Conta</TableHead>
-              <TableHead>Beneficiário</TableHead>
-              <TableHead>Descrição</TableHead>
-              <TableHead>Pgto</TableHead>
-              <TableHead>Tipo</TableHead>
-              <TableHead className="text-right">Valor</TableHead>
-              <TableHead>Status</TableHead>
-              {isMaster && <TableHead className="text-xs">Auditoria</TableHead>}
-              <TableHead></TableHead>
-            </TableRow>
-
-          </TableHeader>
-          <TableBody>
-            {isLoading && (
+        <div className="rounded-md border">
+          <Table>
+            <TableHeader>
               <TableRow>
-                <TableCell colSpan={isMaster ? 11 : 10} className="text-center text-muted-foreground py-8">
-                  Carregando...
-                </TableCell>
+                <TableHead>Vencimento</TableHead>
+                <TableHead>Bloco</TableHead>
+                <TableHead>Conta</TableHead>
+                <TableHead>Beneficiário</TableHead>
+                <TableHead>Descrição</TableHead>
+                <TableHead>Pgto</TableHead>
+                <TableHead>Tipo</TableHead>
+                <TableHead className="text-right">Valor</TableHead>
+                <TableHead>Status</TableHead>
+                {isMaster && <TableHead className="text-xs">Auditoria</TableHead>}
+                <TableHead></TableHead>
               </TableRow>
-            )}
-            {(data ?? []).map((t) => (
-              <TableRow key={t.id}>
-                <TableCell className="font-mono text-xs">
-                  {new Date(t.due_date).toLocaleDateString("pt-BR")}
-                </TableCell>
-                <TableCell className="text-xs">
-                  {t.cost_centers?.code} - {t.cost_centers?.name}
-                </TableCell>
-                <TableCell className="text-xs">{t.accounts?.name}</TableCell>
-                <TableCell className="text-xs">
-                  {t.contacts?.name ?? "—"}
-                </TableCell>
-                <TableCell className="text-xs max-w-xs truncate">
-                  {t.description}
-                  {t.is_batch && (
-                    <Badge variant="outline" className="ml-2">
-                      <Layers className="h-3 w-3 mr-1" /> Lote
-                    </Badge>
-                  )}
-                </TableCell>
-                <TableCell className="text-xs capitalize">
-                  {t.payment_method?.replace("_", " ") ?? "—"}
-                </TableCell>
-                <TableCell>
-                  <Badge
-                    variant={t.type === "receivable" ? "default" : "secondary"}
+            </TableHeader>
+            <TableBody>
+              {isLoading && (
+                <TableRow>
+                  <TableCell
+                    colSpan={isMaster ? 11 : 10}
+                    className="text-center text-muted-foreground py-8"
                   >
-                    {t.type === "receivable" ? "Receber" : "Pagar"}
-                  </Badge>
-                </TableCell>
-                <TableCell className="text-right font-mono">
-                  {fmt(Number(t.amount))}
-                </TableCell>
-                <TableCell>
-                  <Badge
-                    variant={
-                      t.status === "reconciled"
-                        ? "default"
-                        : t.status === "paid"
-                          ? "secondary"
-                          : "outline"
-                    }
-                  >
-                    {t.status}
-                  </Badge>
-                </TableCell>
-                {isMaster && (
-                  <TableCell className="text-[11px] text-muted-foreground">
-                    <div className="flex items-center gap-1">
-                      <User className="h-3 w-3" />
-                      <span className="truncate max-w-[140px]">
-                        {(t as { created_by?: string }).created_by
-                          ? (userMap.get((t as { created_by: string }).created_by) ?? "—")
-                          : "—"}
-                      </span>
-                    </div>
-                    {(t as { updated_by?: string }).updated_by &&
-                      (t as { updated_by?: string }).updated_by !==
-                        (t as { created_by?: string }).created_by && (
-                        <div className="text-[10px] opacity-70 truncate max-w-[140px]">
-                          edit: {userMap.get((t as { updated_by: string }).updated_by) ?? "—"}
-                        </div>
-                      )}
+                    Carregando...
                   </TableCell>
-                )}
-                <TableCell>
-                  <div className="flex gap-1">
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      aria-label="Editar lançamento"
-                      onClick={() => setEditing(t as unknown as Record<string, unknown>)}
+                </TableRow>
+              )}
+              {(data ?? []).map((t) => (
+                <TableRow key={t.id}>
+                  <TableCell className="font-mono text-xs">
+                    {new Date(t.due_date).toLocaleDateString("pt-BR")}
+                  </TableCell>
+                  <TableCell className="text-xs">
+                    {t.cost_centers?.code} - {t.cost_centers?.name}
+                  </TableCell>
+                  <TableCell className="text-xs">{t.accounts?.name}</TableCell>
+                  <TableCell className="text-xs">{t.contacts?.name ?? "—"}</TableCell>
+                  <TableCell className="text-xs max-w-xs truncate">
+                    {t.description}
+                    {t.is_batch && (
+                      <Badge variant="outline" className="ml-2">
+                        <Layers className="h-3 w-3 mr-1" /> Lote
+                      </Badge>
+                    )}
+                  </TableCell>
+                  <TableCell className="text-xs capitalize">
+                    {t.payment_method?.replace("_", " ") ?? "—"}
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant={t.type === "receivable" ? "default" : "secondary"}>
+                      {t.type === "receivable" ? "Receber" : "Pagar"}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-right font-mono">{fmt(Number(t.amount))}</TableCell>
+                  <TableCell>
+                    <Badge
+                      variant={
+                        t.status === "reconciled"
+                          ? "default"
+                          : t.status === "paid"
+                            ? "secondary"
+                            : "outline"
+                      }
                     >
-                      <Pencil className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      aria-label="Excluir lançamento"
-                      onClick={() => mut.mutate(t.id)}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </TableCell>
-
-              </TableRow>
-            ))}
-            {!isLoading && (data?.length ?? 0) === 0 && (
-              <TableRow>
-                <TableCell colSpan={isMaster ? 11 : 10} className="text-center text-muted-foreground py-8">
-                  Nenhum lançamento. Crie o primeiro.
-                </TableCell>
-              </TableRow>
-            )}
-          </TableBody>
-        </Table>
-      </div>
+                      {t.status}
+                    </Badge>
+                  </TableCell>
+                  {isMaster && (
+                    <TableCell className="text-[11px] text-muted-foreground">
+                      <div className="flex items-center gap-1">
+                        <User className="h-3 w-3" />
+                        <span className="truncate max-w-[140px]">
+                          {(t as { created_by?: string }).created_by
+                            ? (userMap.get((t as { created_by: string }).created_by) ?? "—")
+                            : "—"}
+                        </span>
+                      </div>
+                      {(t as { updated_by?: string }).updated_by &&
+                        (t as { updated_by?: string }).updated_by !==
+                          (t as { created_by?: string }).created_by && (
+                          <div className="text-[10px] opacity-70 truncate max-w-[140px]">
+                            edit: {userMap.get((t as { updated_by: string }).updated_by) ?? "—"}
+                          </div>
+                        )}
+                    </TableCell>
+                  )}
+                  <TableCell>
+                    <div className="flex gap-1">
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        aria-label="Editar lançamento"
+                        onClick={() => setEditing(t as unknown as Record<string, unknown>)}
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        aria-label="Excluir lançamento"
+                        onClick={() => mut.mutate(t.id)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))}
+              {!isLoading && (data?.length ?? 0) === 0 && (
+                <TableRow>
+                  <TableCell
+                    colSpan={isMaster ? 11 : 10}
+                    className="text-center text-muted-foreground py-8"
+                  >
+                    Nenhum lançamento. Crie o primeiro.
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </div>
       )}
       <EditTransactionDialog
         tx={editing as never}
         open={!!editing}
-        onOpenChange={(v) => { if (!v) setEditing(null); }}
+        onOpenChange={(v) => {
+          if (!v) setEditing(null);
+        }}
       />
     </div>
   );

@@ -4,19 +4,108 @@ import { Input } from "@/components/ui/input";
 import { Save, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import { Check, ChevronsUpDown } from "lucide-react";
+
+export type GridOption = { value: string; label: string; group?: string };
 
 export type GridColumnDef = {
   key: string;
   label: string;
   type: "text" | "number" | "date" | "select";
   width?: string;
-  options?: Array<{ value: string; label: string }>;
+  options?: GridOption[];
   placeholder?: string;
   /** Optional per-row dynamic options. When provided, overrides `options` for that row. */
-  optionsFor?: (row: GridRow) => Array<{ value: string; label: string }>;
+  optionsFor?: (row: GridRow) => GridOption[];
   /** Optional per-row disabled rule. Returning true greys out the cell and clears its value on save. */
   disabledWhen?: (row: GridRow) => boolean;
 };
+
+function SearchableSelectCell({
+  options,
+  value,
+  disabled,
+  cell,
+  onChange,
+}: {
+  options: GridOption[];
+  value: string;
+  disabled: boolean;
+  cell: string;
+  onChange: (value: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const selected = options.find((option) => option.value === value);
+  const groups = Array.from(new Set(options.map((option) => option.group ?? "Opções")));
+
+  return (
+    <Popover open={open} onOpenChange={(next) => { setOpen(next); if (!next) setSearch(""); }}>
+      <PopoverTrigger asChild>
+        <Button
+          data-cell={cell}
+          type="button"
+          variant="outline"
+          role="combobox"
+          aria-expanded={open}
+          disabled={disabled}
+          className="h-8 w-full justify-between px-2 font-normal"
+          onKeyDown={(event) => {
+            if (!disabled && event.key.length === 1 && !event.ctrlKey && !event.metaKey && !event.altKey) {
+              setSearch(event.key);
+              setOpen(true);
+            }
+          }}
+        >
+          <span className={cn("truncate", !selected && "text-muted-foreground")}>
+            {disabled ? "—  (opcional)" : selected?.label ?? "Pesquisar e selecionar…"}
+          </span>
+          <ChevronsUpDown className="ml-2 h-3.5 w-3.5 shrink-0 opacity-50" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-[340px] p-0" align="start">
+        <Command>
+          <CommandInput
+            autoFocus
+            value={search}
+            onValueChange={setSearch}
+            placeholder="Buscar centro de custo…"
+          />
+          <CommandList>
+            <CommandEmpty>Nenhum centro de custo encontrado.</CommandEmpty>
+            {groups.map((group) => (
+              <CommandGroup key={group} heading={group}>
+                {options.filter((option) => (option.group ?? "Opções") === group).map((option) => (
+                  <CommandItem
+                    key={option.value}
+                    value={`${option.label} ${option.value}`}
+                    onSelect={() => {
+                      onChange(option.value);
+                      setOpen(false);
+                      setSearch("");
+                    }}
+                  >
+                    <Check className={cn("h-4 w-4", value === option.value ? "opacity-100" : "opacity-0")} />
+                    <span>{option.label}</span>
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            ))}
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  );
+}
 
 
 export type GridRow = Record<string, string>;

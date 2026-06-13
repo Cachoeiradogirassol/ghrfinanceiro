@@ -255,8 +255,14 @@ function ProjectionsPage() {
       cost_center_id?: string;
     }>;
     const ccById = new Map((ccs.data ?? []).map((c) => [c.id, c]));
-    const centerOptions = selectableCCs.map((center) => ({ value: center.id, label: `${center.code} - ${center.name}` }));
-    const bankOptions = (banks.data ?? []).map((bank) => ({ value: bank.id, label: `${bank.name} — ${bank.bank}` }));
+    const centerOptions = selectableCCs.map((center) => ({
+      value: center.id,
+      label: `${center.code} - ${center.name}`,
+    }));
+    const bankOptions = (banks.data ?? []).map((bank) => ({
+      value: bank.id,
+      label: `${bank.name} — ${bank.bank}`,
+    }));
     const labelOf = (a: { name: string; cost_center_id?: string }) => {
       const cc = a.cost_center_id ? ccById.get(a.cost_center_id) : null;
       return cc ? `${a.name} · ${cc.code}` : a.name;
@@ -288,7 +294,13 @@ function ProjectionsPage() {
         // Em Saídas (Contas a Pagar futuras) o centro de custo é opcional.
         disabledWhen: (row) => row.direction === "outflow",
       },
-      { key: "default_bank_account_id", label: "Conta Bancária", type: "select", width: "200px", options: bankOptions },
+      {
+        key: "default_bank_account_id",
+        label: "Conta Bancária",
+        type: "select",
+        width: "200px",
+        options: bankOptions,
+      },
 
       {
         key: "account_id",
@@ -300,7 +312,11 @@ function ProjectionsPage() {
           const bank = (banks.data ?? []).find((item) => item.id === row.default_bank_account_id);
           const accounts = (row.direction || "inflow") === "outflow" ? expenseOpts : revenueOpts;
           const ids = new Set(accounts.map((item) => item.value));
-          return groupAccounts(allAccs.filter((item) => ids.has(item.id)), selectableCCs, bank?.enterprise ?? null);
+          return groupAccounts(
+            allAccs.filter((item) => ids.has(item.id)),
+            selectableCCs,
+            bank?.enterprise ?? null,
+          );
         },
         searchPlaceholder: "Buscar em todas as contas…",
         emptyMessage: "Nenhuma conta contábil encontrada.",

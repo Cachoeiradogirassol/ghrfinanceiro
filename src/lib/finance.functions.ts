@@ -37,10 +37,7 @@ function matchesFilter(set: Set<string> | null, value: string | null | undefined
 export const listCostCenters = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    const { data, error } = await context.supabase
-      .from("cost_centers")
-      .select("*")
-      .order("code");
+    const { data, error } = await context.supabase.from("cost_centers").select("*").order("code");
     if (error) throw new Error(error.message);
     return data;
   });
@@ -59,10 +56,7 @@ export const listAccounts = createServerFn({ method: "GET" })
 export const listBankAccounts = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    const { data, error } = await context.supabase
-      .from("bank_accounts")
-      .select("*")
-      .order("name");
+    const { data, error } = await context.supabase.from("bank_accounts").select("*").order("name");
     if (error) throw new Error(error.message);
     return data;
   });
@@ -80,7 +74,6 @@ export const listTransactions = createServerFn({ method: "GET" })
     if (error) throw new Error(error.message);
     return data;
   });
-
 
 // ---------- CREATE TRANSACTION (com rateio) ----------
 const AllocationInput = z.object({
@@ -302,10 +295,7 @@ export const bulkCreateTransactions = createServerFn({ method: "POST" })
 export const listContacts = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    const { data, error } = await context.supabase
-      .from("contacts")
-      .select("*")
-      .order("name");
+    const { data, error } = await context.supabase.from("contacts").select("*").order("name");
     if (error) throw new Error(error.message);
     return data;
   });
@@ -495,7 +485,9 @@ export const reconcile = createServerFn({ method: "POST" })
       throw new Error("Linhas de extrato inválidas");
     }
     if (data.statement_line_ids.length > 1 && !tx.is_batch) {
-      throw new Error("Múltiplas linhas só podem conciliar lançamentos marcados como lote (is_batch).");
+      throw new Error(
+        "Múltiplas linhas só podem conciliar lançamentos marcados como lote (is_batch).",
+      );
     }
     const sumLines = lines.reduce((s, l) => s + Math.abs(Number(l.amount)), 0);
     const txAmount = Math.abs(Number(tx.amount));
@@ -679,12 +671,13 @@ export const promoteStatementLineToTransaction = createServerFn({ method: "POST"
   .handler(async ({ context, data }) => {
     const { data: line, error: lineErr } = await context.supabase
       .from("bank_statement_lines")
-      .select("id, bank_account_id, statement_date, amount, description, matched_transaction_id, reconciled")
+      .select(
+        "id, bank_account_id, statement_date, amount, description, matched_transaction_id, reconciled",
+      )
       .eq("id", data.statement_line_id)
       .single();
     if (lineErr || !line) throw new Error("Linha de extrato não encontrada");
-    if (line.reconciled || line.matched_transaction_id)
-      throw new Error("Linha já está conciliada");
+    if (line.reconciled || line.matched_transaction_id) throw new Error("Linha já está conciliada");
 
     const { data: cc } = await context.supabase
       .from("cost_centers")
@@ -753,29 +746,29 @@ async function pickBankDefaults(
   const supa = supabase as unknown as {
     from: (t: string) => {
       select: (s: string) => {
-        eq: (c: string, v: unknown) => {
+        eq: (
+          c: string,
+          v: unknown,
+        ) => {
           maybeSingle?: () => Promise<{ data: unknown }>;
           order?: (c: string) => { limit: (n: number) => Promise<{ data: unknown }> };
         };
       };
     };
   };
-  const bankRes = (await supa
-    .from("bank_accounts")
-    .select("id, name, enterprise")
-    .eq("id", bankId)
+  const bankRes = (await supa.from("bank_accounts").select("id, name, enterprise").eq("id", bankId)
     .maybeSingle!()) as { data: { id: string; name: string; enterprise: string } | null };
   if (!bankRes.data) return null;
   const ent = bankRes.data.enterprise;
-  const ccRes = (await supa
-    .from("cost_centers")
-    .select("id")
-    .eq("enterprise", ent)
-    .order!("code")
-    .limit(1)) as { data: Array<{ id: string }> };
+  const ccRes = (await supa.from("cost_centers").select("id").eq("enterprise", ent).order!(
+    "code",
+  ).limit(1)) as { data: Array<{ id: string }> };
   const ccId = ccRes.data?.[0]?.id;
   if (!ccId) return null;
-  const accRes = (await supa.from("accounts").select("id, name, kind").eq("cost_center_id", ccId)) as unknown as {
+  const accRes = (await supa
+    .from("accounts")
+    .select("id, name, kind")
+    .eq("cost_center_id", ccId)) as unknown as {
     data: Array<{ id: string; name: string; kind: string }> | null;
   };
   const accs = (accRes.data ?? []).filter((a) => a.kind === kind);
@@ -791,7 +784,9 @@ export const consolidateStatementRevenues = createServerFn({ method: "POST" })
   .handler(async ({ context, data }) => {
     let query = context.supabase
       .from("bank_statement_lines")
-      .select("id, bank_account_id, statement_date, amount, description, reconciled, matched_transaction_id")
+      .select(
+        "id, bank_account_id, statement_date, amount, description, reconciled, matched_transaction_id",
+      )
       .gte("statement_date", data.start_date)
       .lte("statement_date", data.end_date)
       .eq("reconciled", false)
@@ -869,7 +864,9 @@ export const createUnverifiedExpenseDrafts = createServerFn({ method: "POST" })
   .handler(async ({ context, data }) => {
     let query = context.supabase
       .from("bank_statement_lines")
-      .select("id, bank_account_id, statement_date, amount, description, reconciled, matched_transaction_id")
+      .select(
+        "id, bank_account_id, statement_date, amount, description, reconciled, matched_transaction_id",
+      )
       .gte("statement_date", data.start_date)
       .lte("statement_date", data.end_date)
       .eq("reconciled", false)
@@ -880,7 +877,10 @@ export const createUnverifiedExpenseDrafts = createServerFn({ method: "POST" })
     if (error) throw new Error(error.message);
     if (!lines || lines.length === 0) return { ok: true, created: 0 };
 
-    const cache = new Map<string, { cost_center_id: string; account_id: string; bank_name: string } | null>();
+    const cache = new Map<
+      string,
+      { cost_center_id: string; account_id: string; bank_name: string } | null
+    >();
     let created = 0;
     for (const l of lines) {
       const bankId = l.bank_account_id as string;
@@ -932,7 +932,6 @@ export const createUnverifiedExpenseDrafts = createServerFn({ method: "POST" })
     return { ok: true, created };
   });
 
-
 // ---------- DRE + PROJECTION (com filtro de empreendimento) ----------
 type EnterpriseValue =
   | "turismo"
@@ -954,7 +953,14 @@ async function loadFinanceData(supabase: {
     select: (s: string) => Promise<{ data: unknown; error: { message: string } | null }>;
   };
 }) {
-  const [{ data: banks }, { data: ccs }, { data: txs }, { data: allocs }, { data: accts }, { data: intercompany }] = (await Promise.all([
+  const [
+    { data: banks },
+    { data: ccs },
+    { data: txs },
+    { data: allocs },
+    { data: accts },
+    { data: intercompany },
+  ] = (await Promise.all([
     supabase.from("bank_accounts").select("id, name, initial_balance, enterprise"),
     supabase.from("cost_centers").select("id, enterprise"),
     supabase
@@ -962,15 +968,20 @@ async function loadFinanceData(supabase: {
       .select(
         "id, type, amount, due_date, document_datetime, status, account_id, cost_center_id, bank_account_id, accounts(name)",
       ),
-    supabase
-      .from("transaction_allocations")
-      .select("transaction_id, cost_center_id, amount"),
+    supabase.from("transaction_allocations").select("transaction_id, cost_center_id, amount"),
     supabase.from("accounts").select("id, kind, is_administrative"),
     supabase
       .from("v_dre_consolidada")
       .select("transaction_id, source_enterprise, target_enterprise, amount, competence_date"),
   ])) as unknown as [
-    { data: Array<{ id: string; name: string; initial_balance: number; enterprise: EnterpriseValue }> },
+    {
+      data: Array<{
+        id: string;
+        name: string;
+        initial_balance: number;
+        enterprise: EnterpriseValue;
+      }>;
+    },
     { data: Array<{ id: string; enterprise: EnterpriseValue }> },
     {
       data: Array<{
@@ -1088,7 +1099,8 @@ export const buildDRE = createServerFn({ method: "POST" })
     for (const tx of txs) {
       if (tx.status === "pending") continue; // DRE = realizado
       // Data de competência: prioriza document_datetime (data do fato/nota)
-      const competenceIso = (tx as { document_datetime?: string | null }).document_datetime ?? tx.due_date;
+      const competenceIso =
+        (tx as { document_datetime?: string | null }).document_datetime ?? tx.due_date;
       const d = new Date(competenceIso);
       if (d < from || d > today) continue;
       const key = competenceIso.slice(0, 7);
@@ -1338,13 +1350,21 @@ export const closePeriodMonth = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) =>
     z
-      .object({ year: z.number().int().min(2020).max(2100), month: z.number().int().min(1).max(12) })
+      .object({
+        year: z.number().int().min(2020).max(2100),
+        month: z.number().int().min(1).max(12),
+      })
       .parse(d),
   )
   .handler(async ({ context, data }) => {
-    const { data: id, error } = await (context.supabase as never as {
-      rpc: (n: string, args: Record<string, unknown>) => Promise<{ data: string | null; error: { message: string } | null }>;
-    }).rpc("close_period_month", { _year: data.year, _month: data.month });
+    const { data: id, error } = await (
+      context.supabase as never as {
+        rpc: (
+          n: string,
+          args: Record<string, unknown>,
+        ) => Promise<{ data: string | null; error: { message: string } | null }>;
+      }
+    ).rpc("close_period_month", { _year: data.year, _month: data.month });
     if (error) throw new Error(error.message);
     return { id };
   });
@@ -1353,13 +1373,21 @@ export const reopenPeriodMonth = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) =>
     z
-      .object({ year: z.number().int().min(2020).max(2100), month: z.number().int().min(1).max(12) })
+      .object({
+        year: z.number().int().min(2020).max(2100),
+        month: z.number().int().min(1).max(12),
+      })
       .parse(d),
   )
   .handler(async ({ context, data }) => {
-    const { error } = await (context.supabase as never as {
-      rpc: (n: string, args: Record<string, unknown>) => Promise<{ data: unknown; error: { message: string } | null }>;
-    }).rpc("reopen_period_month", { _year: data.year, _month: data.month });
+    const { error } = await (
+      context.supabase as never as {
+        rpc: (
+          n: string,
+          args: Record<string, unknown>,
+        ) => Promise<{ data: unknown; error: { message: string } | null }>;
+      }
+    ).rpc("reopen_period_month", { _year: data.year, _month: data.month });
     if (error) throw new Error(error.message);
     return { ok: true };
   });

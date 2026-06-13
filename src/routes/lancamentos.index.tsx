@@ -257,7 +257,10 @@ function List() {
       name: string;
       cost_center_id?: string | null;
     }>;
-    const centerOptions = selectableCenters.map((center) => ({ value: center.id, label: `${center.code} - ${center.name}` }));
+    const centerOptions = selectableCenters.map((center) => ({
+      value: center.id,
+      label: `${center.code} - ${center.name}`,
+    }));
     const bankOptions = (banks.data ?? []).map((bank) => ({ value: bank.id, label: bank.name }));
     const accountOptions = (row: Record<string, string>) => {
       const bank = (banks.data ?? []).find((item) => item.id === row.bank_account_id);
@@ -282,7 +285,13 @@ function List() {
         width: "200px",
         options: centerOptions,
       },
-      { key: "bank_account_id", label: "Conta Bancária", type: "select", width: "190px", options: bankOptions },
+      {
+        key: "bank_account_id",
+        label: "Conta Bancária",
+        type: "select",
+        width: "190px",
+        options: bankOptions,
+      },
       {
         key: "account_id",
         label: "Conta Contábil",

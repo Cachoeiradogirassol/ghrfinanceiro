@@ -290,8 +290,8 @@ export function QuickGrid({
                           disabled={isDisabled}
                           cell={`${rIdx}-${cIdx}`}
                           onChange={(value) => updateCell(rIdx, c.key, value)}
-                        searchPlaceholder={c.searchPlaceholder}
-                        emptyMessage={c.emptyMessage}
+                          searchPlaceholder={c.searchPlaceholder}
+                          emptyMessage={c.emptyMessage}
                         />
                       ) : c.type === "select" ? (
                         (() => {

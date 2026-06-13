@@ -38,8 +38,13 @@ export function groupAccounts(
     };
   });
   return decorated.sort((a, b) => {
-    const localDelta = Number(b.enterprise === localEnterprise) - Number(a.enterprise === localEnterprise);
-    return localDelta || a.group.localeCompare(b.group, "pt-BR") || a.label.localeCompare(b.label, "pt-BR");
+    const localDelta =
+      Number(b.enterprise === localEnterprise) - Number(a.enterprise === localEnterprise);
+    return (
+      localDelta ||
+      a.group.localeCompare(b.group, "pt-BR") ||
+      a.label.localeCompare(b.label, "pt-BR")
+    );
   });
 }
 
@@ -87,19 +92,26 @@ export function AccountCombobox({
             <CommandEmpty>Nenhuma conta contábil encontrada.</CommandEmpty>
             {groups.map((group) => (
               <CommandGroup key={group} heading={group}>
-                {options.filter((option) => option.group === group).map((option) => (
-                  <CommandItem
-                    key={option.value}
-                    value={`${option.label} ${option.group}`}
-                    onSelect={() => {
-                      onChange(option.value);
-                      setOpen(false);
-                    }}
-                  >
-                    <Check className={cn("h-4 w-4", value === option.value ? "opacity-100" : "opacity-0")} />
-                    <span>{option.label}</span>
-                  </CommandItem>
-                ))}
+                {options
+                  .filter((option) => option.group === group)
+                  .map((option) => (
+                    <CommandItem
+                      key={option.value}
+                      value={`${option.label} ${option.group}`}
+                      onSelect={() => {
+                        onChange(option.value);
+                        setOpen(false);
+                      }}
+                    >
+                      <Check
+                        className={cn(
+                          "h-4 w-4",
+                          value === option.value ? "opacity-100" : "opacity-0",
+                        )}
+                      />
+                      <span>{option.label}</span>
+                    </CommandItem>
+                  ))}
               </CommandGroup>
             ))}
           </CommandList>

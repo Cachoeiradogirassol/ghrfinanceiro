@@ -24,10 +24,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  RadioGroup,
-  RadioGroupItem,
-} from "@/components/ui/radio-group";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { toast } from "sonner";
 import { Layers, AlertTriangle, Search, UserPlus } from "lucide-react";
@@ -105,9 +102,7 @@ function Form() {
   const [amount, setAmount] = useState("");
   const [description, setDescription] = useState("");
   const [docDt, setDocDt] = useState("");
-  const [dueDate, setDueDate] = useState(
-    new Date().toISOString().slice(0, 10),
-  );
+  const [dueDate, setDueDate] = useState(new Date().toISOString().slice(0, 10));
   const [isBatch, setIsBatch] = useState(false);
   const [status, setStatus] = useState<"pending" | "paid">("pending");
 
@@ -116,7 +111,9 @@ function Form() {
   const [splits, setSplits] = useState<Record<string, string>>({}); // cost_center_id -> amount string
 
   // Schedule
-  const [scheduleKind, setScheduleKind] = useState<"single" | "installment" | "recurring">("single");
+  const [scheduleKind, setScheduleKind] = useState<"single" | "installment" | "recurring">(
+    "single",
+  );
   const [installments, setInstallments] = useState("2");
   const [recurringMonths, setRecurringMonths] = useState("12");
 
@@ -146,9 +143,7 @@ function Form() {
     if (!q) return (contacts.data ?? []).slice(0, 8);
     return (contacts.data ?? [])
       .filter(
-        (c) =>
-          c.name.toLowerCase().includes(q) ||
-          c.document_number.includes(q.replace(/\D/g, "")),
+        (c) => c.name.toLowerCase().includes(q) || c.document_number.includes(q.replace(/\D/g, "")),
       )
       .slice(0, 8);
   }, [contacts.data, contactSearch]);
@@ -165,13 +160,11 @@ function Form() {
   );
 
   const splitTotal = useMemo(
-    () =>
-      Object.values(splits).reduce((s, v) => s + (parseFloat(v) || 0), 0),
+    () => Object.values(splits).reduce((s, v) => s + (parseFloat(v) || 0), 0),
     [splits],
   );
   const totalAmount = parseFloat(amount) || 0;
-  const splitOk =
-    !rateio || (totalAmount > 0 && Math.abs(splitTotal - totalAmount) < 0.01);
+  const splitOk = !rateio || (totalAmount > 0 && Math.abs(splitTotal - totalAmount) < 0.01);
 
   // Aporte cruzado detection
   const selectedBank = useMemo(
@@ -319,7 +312,9 @@ function Form() {
           <div>
             <Label>Bloco (Centro de Custo)</Label>
             <Select value={costCenterId} onValueChange={setCostCenterId}>
-              <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
+              <SelectTrigger>
+                <SelectValue placeholder="Selecione" />
+              </SelectTrigger>
               <SelectContent>
                 {/* Bloco A: FAZENDA SERRA DOS PIRENEUS — header desabilitado + filhos selecionáveis */}
                 <SelectItem
@@ -330,7 +325,11 @@ function Form() {
                   FAZENDA SERRA DOS PIRENEUS
                 </SelectItem>
                 {(ccs.data ?? [])
-                  .filter((c) => ["turismo", "restaurante", "vinhedo"].includes(c.enterprise ?? "") && c.is_active !== false)
+                  .filter(
+                    (c) =>
+                      ["turismo", "restaurante", "vinhedo"].includes(c.enterprise ?? "") &&
+                      c.is_active !== false,
+                  )
                   .map((c) => (
                     <SelectItem key={c.id} value={c.id} className="pl-6">
                       {c.code} - {c.name}
@@ -346,7 +345,11 @@ function Form() {
                   GHR EMPREENDIMENTOS
                 </SelectItem>
                 {(ccs.data ?? [])
-                  .filter((c) => ["ghr_aldeia", "ghr_jk"].includes(c.enterprise ?? "") && c.is_active !== false)
+                  .filter(
+                    (c) =>
+                      ["ghr_aldeia", "ghr_jk"].includes(c.enterprise ?? "") &&
+                      c.is_active !== false,
+                  )
                   .map((c) => (
                     <SelectItem key={c.id} value={c.id} className="pl-6">
                       {c.code} - {c.name}
@@ -435,24 +438,20 @@ function Form() {
               )}
               {showNewContact && (
                 <Card className="mt-2 p-4 space-y-3 bg-muted/30">
-                  <div className="text-sm font-medium">
-                    Novo contato: {contactSearch}
-                  </div>
+                  <div className="text-sm font-medium">Novo contato: {contactSearch}</div>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <Label className="text-xs">Categoria</Label>
                       <Select
                         value={newContactType}
-                        onValueChange={(v) =>
-                          setNewContactType(v as "FORNECEDOR" | "COLABORADOR")
-                        }
+                        onValueChange={(v) => setNewContactType(v as "FORNECEDOR" | "COLABORADOR")}
                       >
-                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="FORNECEDOR">Fornecedor</SelectItem>
-                          <SelectItem value="COLABORADOR">
-                            Colaborador / Sócio
-                          </SelectItem>
+                          <SelectItem value="COLABORADOR">Colaborador / Sócio</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
@@ -466,7 +465,9 @@ function Form() {
                           setDuplicateAlert(null);
                         }}
                       >
-                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="PF">CPF (Pessoa Física)</SelectItem>
                           <SelectItem value="PJ">CNPJ (Pessoa Jurídica)</SelectItem>
@@ -475,15 +476,9 @@ function Form() {
                     </div>
                   </div>
                   <div>
-                    <Label className="text-xs">
-                      {newDocType === "PF" ? "CPF *" : "CNPJ *"}
-                    </Label>
+                    <Label className="text-xs">{newDocType === "PF" ? "CPF *" : "CNPJ *"}</Label>
                     <Input
-                      placeholder={
-                        newDocType === "PF"
-                          ? "000.000.000-00"
-                          : "00.000.000/0000-00"
-                      }
+                      placeholder={newDocType === "PF" ? "000.000.000-00" : "00.000.000/0000-00"}
                       value={newDoc}
                       onChange={(e) => {
                         setNewDoc(e.target.value);
@@ -501,19 +496,11 @@ function Form() {
                     <Button
                       size="sm"
                       onClick={() => contactMut.mutate()}
-                      disabled={
-                        !contactSearch.trim() ||
-                        !newDoc.trim() ||
-                        contactMut.isPending
-                      }
+                      disabled={!contactSearch.trim() || !newDoc.trim() || contactMut.isPending}
                     >
                       {contactMut.isPending ? "Salvando..." : "Cadastrar contato"}
                     </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => setShowNewContact(false)}
-                    >
+                    <Button size="sm" variant="outline" onClick={() => setShowNewContact(false)}>
                       Cancelar
                     </Button>
                   </div>
@@ -536,7 +523,9 @@ function Form() {
           <div>
             <Label>Conta Bancária</Label>
             <Select value={bankId} onValueChange={setBankId}>
-              <SelectTrigger><SelectValue placeholder="Opcional" /></SelectTrigger>
+              <SelectTrigger>
+                <SelectValue placeholder="Opcional" />
+              </SelectTrigger>
               <SelectContent>
                 {(banks.data ?? []).map((b) => (
                   <SelectItem key={b.id} value={b.id}>
@@ -552,7 +541,9 @@ function Form() {
           <div>
             <Label>Forma de Pagamento</Label>
             <Select value={paymentMethod} onValueChange={setPaymentMethod}>
-              <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
+              <SelectTrigger>
+                <SelectValue placeholder="Selecione" />
+              </SelectTrigger>
               <SelectContent>
                 <SelectItem value="pix">Pix</SelectItem>
                 <SelectItem value="boleto">Boleto</SelectItem>
@@ -564,7 +555,9 @@ function Form() {
           <div>
             <Label>Status</Label>
             <Select value={status} onValueChange={(v) => setStatus(v as "pending" | "paid")}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
               <SelectContent>
                 <SelectItem value="pending">Pendente</SelectItem>
                 <SelectItem value="paid">Pago</SelectItem>
@@ -579,11 +572,7 @@ function Form() {
               {docDtLabel}
               {docDtRequired ? " *" : " (opcional)"}
             </Label>
-            <Input
-              type="datetime-local"
-              value={docDt}
-              onChange={(e) => setDocDt(e.target.value)}
-            />
+            <Input type="datetime-local" value={docDt} onChange={(e) => setDocDt(e.target.value)} />
             {paymentOnly && (
               <p className="text-xs text-muted-foreground mt-1">
                 Categoria de pagamento — obrigatório apenas quando o status for "Pago".
@@ -592,11 +581,7 @@ function Form() {
           </div>
           <div>
             <Label>Vencimento</Label>
-            <Input
-              type="date"
-              value={dueDate}
-              onChange={(e) => setDueDate(e.target.value)}
-            />
+            <Input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
           </div>
         </div>
 
@@ -614,7 +599,9 @@ function Form() {
           <Alert>
             <AlertTriangle className="h-4 w-4" />
             <AlertDescription>
-              <strong>Aporte cruzado detectado:</strong> a conta bancária pertence a um empreendimento diferente do Centro de Custo. O sistema registrará automaticamente este pagamento como Aporte Concedido pelo banco e Aporte Recebido pelo CC nas DREs.
+              <strong>Aporte cruzado detectado:</strong> a conta bancária pertence a um
+              empreendimento diferente do Centro de Custo. O sistema registrará automaticamente este
+              pagamento como Aporte Concedido pelo banco e Aporte Recebido pelo CC nas DREs.
             </AlertDescription>
           </Alert>
         )}
@@ -622,8 +609,16 @@ function Form() {
         {/* Rateio */}
         <div className="space-y-3 p-3 rounded-md border bg-muted/20">
           <label className="flex items-center gap-3 cursor-pointer">
-            <Checkbox checked={rateio} onCheckedChange={(c) => { setRateio(Boolean(c)); if (!c) setSplits({}); }} />
-            <span className="text-sm font-medium">Ratear esta despesa entre múltiplos centros de custo</span>
+            <Checkbox
+              checked={rateio}
+              onCheckedChange={(c) => {
+                setRateio(Boolean(c));
+                if (!c) setSplits({});
+              }}
+            />
+            <span className="text-sm font-medium">
+              Ratear esta despesa entre múltiplos centros de custo
+            </span>
           </label>
           {rateio && (
             <div className="space-y-2 pl-7">
@@ -640,7 +635,9 @@ function Form() {
                         onCheckedChange={(v) => toggleSplit(cc.id, Boolean(v))}
                       />
                       <div className="flex-1 min-w-0">
-                        <p className="text-xs font-medium truncate">{cc.code} - {cc.name}</p>
+                        <p className="text-xs font-medium truncate">
+                          {cc.code} - {cc.name}
+                        </p>
                       </div>
                       <Input
                         type="number"
@@ -659,7 +656,9 @@ function Form() {
                 <Button type="button" size="sm" variant="outline" onClick={distributeEqually}>
                   Dividir por igual
                 </Button>
-                <div className={`text-xs font-mono ${splitOk ? "text-primary" : "text-destructive"}`}>
+                <div
+                  className={`text-xs font-mono ${splitOk ? "text-primary" : "text-destructive"}`}
+                >
                   Soma: R$ {splitTotal.toFixed(2)} / R$ {totalAmount.toFixed(2)}
                   {!splitOk && totalAmount > 0 && " — não fecha!"}
                 </div>
@@ -667,7 +666,6 @@ function Form() {
             </div>
           )}
         </div>
-
 
         <div className="space-y-3 p-3 rounded-md border bg-muted/20">
           <Label>
@@ -677,22 +675,26 @@ function Form() {
           </Label>
           <RadioGroup
             value={scheduleKind}
-            onValueChange={(v) =>
-              setScheduleKind(v as "single" | "installment" | "recurring")
-            }
+            onValueChange={(v) => setScheduleKind(v as "single" | "installment" | "recurring")}
             className="grid grid-cols-3 gap-2"
           >
             <div className="flex items-center gap-2">
               <RadioGroupItem value="single" id="sk-s" />
-              <Label htmlFor="sk-s" className="font-normal">Única</Label>
+              <Label htmlFor="sk-s" className="font-normal">
+                Única
+              </Label>
             </div>
             <div className="flex items-center gap-2">
               <RadioGroupItem value="installment" id="sk-i" />
-              <Label htmlFor="sk-i" className="font-normal">Parcelada</Label>
+              <Label htmlFor="sk-i" className="font-normal">
+                Parcelada
+              </Label>
             </div>
             <div className="flex items-center gap-2">
               <RadioGroupItem value="recurring" id="sk-r" />
-              <Label htmlFor="sk-r" className="font-normal">Recorrente (mensal)</Label>
+              <Label htmlFor="sk-r" className="font-normal">
+                Recorrente (mensal)
+              </Label>
             </div>
           </RadioGroup>
           {scheduleKind === "installment" && (
@@ -732,18 +734,14 @@ function Form() {
         </div>
 
         <label className="flex items-start gap-3 p-3 rounded-md border border-border bg-muted/30 cursor-pointer">
-          <Checkbox
-            checked={isBatch}
-            onCheckedChange={(c) => setIsBatch(Boolean(c))}
-          />
+          <Checkbox checked={isBatch} onCheckedChange={(c) => setIsBatch(Boolean(c))} />
           <div>
             <span className="text-sm font-medium flex items-center gap-2">
               <Layers className="h-4 w-4" />
               Este pagamento será fracionado no banco (Lote)
             </span>
             <p className="text-xs text-muted-foreground mt-1">
-              Permite conciliar este lançamento contra múltiplas saídas
-              menores no extrato bancário.
+              Permite conciliar este lançamento contra múltiplas saídas menores no extrato bancário.
             </p>
           </div>
         </label>

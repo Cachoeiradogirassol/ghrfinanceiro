@@ -77,9 +77,7 @@ const BulkProjRow = z
 
 export const bulkCreateProjections = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: unknown) =>
-    z.object({ rows: z.array(BulkProjRow).min(1).max(500) }).parse(d),
-  )
+  .inputValidator((d: unknown) => z.object({ rows: z.array(BulkProjRow).min(1).max(500) }).parse(d))
   .handler(async ({ context, data }) => {
     const rows = data.rows.map((r) => ({
       name: r.name,
@@ -103,16 +101,12 @@ export const bulkCreateProjections = createServerFn({ method: "POST" })
     return { created: inserted?.length ?? 0 };
   });
 
-
 // ---------- DELETE ----------
 export const deleteProjection = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => z.object({ id: z.string().uuid() }).parse(d))
   .handler(async ({ context, data }) => {
-    const { error } = await context.supabase
-      .from("cash_projections")
-      .delete()
-      .eq("id", data.id);
+    const { error } = await context.supabase.from("cash_projections").delete().eq("id", data.id);
     if (error) throw new Error(error.message);
     return { ok: true };
   });
@@ -177,8 +171,7 @@ export const realizeProjectionMonth = createServerFn({ method: "POST" })
         type: txType,
         amount: data.realized_amount,
         description:
-          data.description ??
-          `${proj.name} — realização preditiva (mês ${data.month_index + 1})`,
+          data.description ?? `${proj.name} — realização preditiva (mês ${data.month_index + 1})`,
         document_datetime: data.due_date,
         due_date: data.due_date,
         is_batch: false,
@@ -191,15 +184,13 @@ export const realizeProjectionMonth = createServerFn({ method: "POST" })
     if (txErr) throw new Error("Falha ao criar lançamento: " + txErr.message);
 
     // Register realization
-    const { error: rErr } = await context.supabase
-      .from("cash_projection_realizations")
-      .insert({
-        projection_id: data.projection_id,
-        month_index: data.month_index,
-        transaction_id: tx.id,
-        realized_amount: data.realized_amount,
-        created_by: context.userId,
-      });
+    const { error: rErr } = await context.supabase.from("cash_projection_realizations").insert({
+      projection_id: data.projection_id,
+      month_index: data.month_index,
+      transaction_id: tx.id,
+      realized_amount: data.realized_amount,
+      created_by: context.userId,
+    });
     if (rErr) {
       // try to rollback transaction
       await context.supabase.from("transactions").delete().eq("id", tx.id);

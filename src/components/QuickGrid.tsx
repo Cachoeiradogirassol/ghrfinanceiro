@@ -1,7 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Save, Plus, Trash2 } from "lucide-react";
+import { Check, ChevronsUpDown, Save, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -13,8 +13,6 @@ import {
   CommandItem,
   CommandList,
 } from "@/components/ui/command";
-import { Check, ChevronsUpDown } from "lucide-react";
-
 export type GridOption = { value: string; label: string; group?: string };
 
 export type GridColumnDef = {
@@ -258,7 +256,15 @@ export function QuickGrid({
                   const isDisabled = c.disabledWhen?.(row) ?? false;
                   return (
                   <td key={c.key} className="px-1 py-1">
-                    {c.type === "select" ? (
+                    {c.type === "select" && (c.optionsFor ? c.optionsFor(row) : c.options ?? []).some((option) => option.group) ? (
+                      <SearchableSelectCell
+                        options={c.optionsFor ? c.optionsFor(row) : (c.options ?? [])}
+                        value={isDisabled ? "" : (row[c.key] ?? "")}
+                        disabled={isDisabled}
+                        cell={`${rIdx}-${cIdx}`}
+                        onChange={(value) => updateCell(rIdx, c.key, value)}
+                      />
+                    ) : c.type === "select" ? (
                       (() => {
                         const opts = c.optionsFor ? c.optionsFor(row) : (c.options ?? []);
                         const currentVal = row[c.key] ?? "";

@@ -289,12 +289,10 @@ function ComparativeTab() {
               emphasis
               final
             />
-            {(t.aporteRecebido > 0 || t.aporteConcedido > 0) && (
-              <div className="pt-2 mt-2 border-t border-border/60 text-xs text-muted-foreground space-y-1">
-                <WaterfallRow label="Aportes Recebidos (não operacional)" value={t.aporteRecebido} tone="muted" />
-                <WaterfallRow label="Aportes Concedidos (não operacional)" value={-t.aporteConcedido} tone="muted" />
-              </div>
-            )}
+            <div className="pt-2 mt-2 border-t border-border/60 text-xs text-muted-foreground space-y-1">
+              <WaterfallRow label="[-] Aportes Concedidos a Subsidiárias" value={-t.aporteConcedido} tone="muted" />
+              <WaterfallRow label="[+] Aportes Recebidos de Controladora" value={t.aporteRecebido} tone="muted" />
+            </div>
           </div>
         </Card>
       )}

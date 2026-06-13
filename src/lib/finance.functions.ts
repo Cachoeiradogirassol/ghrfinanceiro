@@ -295,7 +295,10 @@ export const bulkCreateTransactions = createServerFn({ method: "POST" })
 export const listContacts = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    const { data, error } = await context.supabase.from("contacts").select("*").order("name");
+    const { data, error } = await context.supabase
+      .from("contacts")
+      .select("id, name, type, document_type, document_number, phone, master_only, created_at, updated_at")
+      .order("name", { ascending: true });
     if (error) throw new Error(error.message);
     return data;
   });
@@ -303,40 +306,49 @@ export const listContacts = createServerFn({ method: "GET" })
 const ContactInput = z.object({
   name: z.string().trim().min(1).max(200),
   type: z.enum(["FORNECEDOR", "COLABORADOR"]),
-  document_type: z.enum(["PF", "PJ"]),
-  document_number: z
-    .string()
-    .trim()
-    .min(11)
-    .max(20)
-    .regex(/^[0-9./-]+$/, "Documento inválido"),
+  document_type: z.enum(["PF", "PJ"]).nullable().optional(),
+  document_number: z.string().trim().max(20).nullable().optional(),
+  phone: z.string().trim().max(30).nullable().optional(),
   master_only: z.boolean().default(false),
 });
+
+function normalizeContact(data: z.infer<typeof ContactInput>) {
+  const digits = data.document_number?.replace(/\D/g, "") || null;
+  const documentType = digits ? data.document_type : null;
+  if (digits && documentType === "PF" && digits.length !== 11) {
+    throw new Error("CPF deve ter 11 dígitos");
+  }
+  if (digits && documentType === "PJ" && digits.length !== 14) {
+    throw new Error("CNPJ deve ter 14 dígitos");
+  }
+  return {
+    ...data,
+    document_type: documentType,
+    document_number: digits,
+    phone: data.phone?.trim() || null,
+  };
+}
 
 export const createContact = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => ContactInput.parse(d))
   .handler(async ({ context, data }) => {
-    const digits = data.document_number.replace(/\D/g, "");
-    if (data.document_type === "PF" && digits.length !== 11) {
-      throw new Error("CPF deve ter 11 dígitos");
-    }
-    if (data.document_type === "PJ" && digits.length !== 14) {
-      throw new Error("CNPJ deve ter 14 dígitos");
-    }
-    const { data: existing } = await context.supabase
-      .from("contacts")
-      .select("id, name")
-      .eq("document_number", digits)
-      .maybeSingle();
-    if (existing) {
-      throw new Error(
-        `Atenção: Este documento já está cadastrado para o contato "${existing.name}". Use o cadastro existente.`,
-      );
+    const normalized = normalizeContact(data);
+    if (normalized.document_number) {
+      const { data: existing } = await context.supabase
+        .from("contacts")
+        .select("id, name")
+        .eq("document_number", normalized.document_number)
+        .maybeSingle();
+      if (existing) {
+        throw new Error(
+          `Atenção: Este documento já está cadastrado para o contato "${existing.name}". Use o cadastro existente.`,
+        );
+      }
     }
     const { data: row, error } = await context.supabase
       .from("contacts")
-      .insert({ ...data, document_number: digits })
+      .insert(normalized)
       .select()
       .single();
     if (error) {
@@ -345,6 +357,34 @@ export const createContact = createServerFn({ method: "POST" })
       }
       throw new Error(error.message);
     }
+    return row;
+  });
+
+export const updateContact = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) =>
+    z.object({ id: z.string().uuid(), contact: ContactInput }).parse(d),
+  )
+  .handler(async ({ context, data }) => {
+    const normalized = normalizeContact(data.contact);
+    if (normalized.document_number) {
+      const { data: existing } = await context.supabase
+        .from("contacts")
+        .select("id, name")
+        .eq("document_number", normalized.document_number)
+        .neq("id", data.id)
+        .maybeSingle();
+      if (existing) {
+        throw new Error(`Atenção: Este documento já pertence ao contato "${existing.name}".`);
+      }
+    }
+    const { data: row, error } = await context.supabase
+      .from("contacts")
+      .update(normalized)
+      .eq("id", data.id)
+      .select()
+      .single();
+    if (error) throw new Error(error.message);
     return row;
   });
 

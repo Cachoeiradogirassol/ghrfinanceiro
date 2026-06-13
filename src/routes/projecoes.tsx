@@ -244,10 +244,6 @@ function ProjectionsPage() {
   const [gridMode, setGridMode] = useState(false);
   const bulkFn = useServerFn(bulkCreateProjections);
   const gridColumns = useMemo<GridColumnDef[]>(() => {
-    const ccOpts = selectableCCs.map((c) => ({
-      value: c.id,
-      label: `${c.code} - ${c.name}`,
-    }));
     const allAccs = (accs.data ?? []) as Array<{
       id: string;
       name: string;
@@ -255,6 +251,26 @@ function ProjectionsPage() {
       cost_center_id?: string;
     }>;
     const ccById = new Map((ccs.data ?? []).map((c) => [c.id, c]));
+    const enterpriseName: Record<string, string> = {
+      turismo: "Cachoeira",
+      restaurante: "Restaurante",
+      vinhedo: "Vinhedo",
+      ghr_jk: "Loteamento JK",
+      ghr_aldeia: "Loteamento Aldeia",
+    };
+    const groupedCenters = (row: Record<string, string>) => {
+      const account = allAccs.find((item) => item.id === row.account_id);
+      const localEnterprise = (account?.cost_center_id ? ccById.get(account.cost_center_id)?.enterprise : null) ?? "turismo";
+      return [...selectableCCs]
+        .sort((a, b) => Number(b.enterprise === localEnterprise) - Number(a.enterprise === localEnterprise))
+        .map((center) => ({
+          value: center.id,
+          label: `${center.code} - ${center.name}`,
+          group: center.enterprise === localEnterprise
+            ? `Centros de Custo Locais (${enterpriseName[localEnterprise] ?? localEnterprise})`
+            : "Outros Empreendimentos (Intercompany)",
+        }));
+    };
     const labelOf = (a: { name: string; cost_center_id?: string }) => {
       const cc = a.cost_center_id ? ccById.get(a.cost_center_id) : null;
       return cc ? `${a.name} · ${cc.code}` : a.name;
@@ -276,7 +292,7 @@ function ProjectionsPage() {
         label: "Centro de Custo",
         type: "select",
         width: "200px",
-        options: ccOpts,
+        optionsFor: groupedCenters,
         // Em Saídas (Contas a Pagar futuras) o centro de custo é opcional.
         disabledWhen: (row) => row.direction === "outflow",
       },

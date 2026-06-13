@@ -206,20 +206,40 @@ function List() {
 
   const gridColumns = useMemo<GridColumnDef[]>(() => {
     const SELECTABLE = ["turismo", "restaurante", "vinhedo", "ghr_aldeia", "ghr_jk"];
-    const ccOpts = (ccs.data ?? [])
-      .filter((c) => SELECTABLE.includes(c.enterprise ?? ""))
-      .map((c) => ({ value: c.id, label: `${c.code} - ${c.name}` }));
-    const accOpts = (accs.data ?? []).map((a: { id: string; name: string }) => ({
+    const selectableCenters = (ccs.data ?? []).filter((c) => SELECTABLE.includes(c.enterprise ?? ""));
+    const allAccounts = (accs.data ?? []) as Array<{ id: string; name: string; cost_center_id?: string | null }>;
+    const accOpts = allAccounts.map((a) => ({
       value: a.id,
       label: a.name,
     }));
+    const enterpriseName: Record<string, string> = {
+      turismo: "Cachoeira",
+      restaurante: "Restaurante",
+      vinhedo: "Vinhedo",
+      ghr_jk: "Loteamento JK",
+      ghr_aldeia: "Loteamento Aldeia",
+    };
+    const groupedCenters = (row: Record<string, string>) => {
+      const account = allAccounts.find((item) => item.id === row.account_id);
+      const accountCenter = selectableCenters.find((center) => center.id === account?.cost_center_id);
+      const localEnterprise = accountCenter?.enterprise ?? "turismo";
+      return [...selectableCenters]
+        .sort((a, b) => Number(b.enterprise === localEnterprise) - Number(a.enterprise === localEnterprise))
+        .map((center) => ({
+          value: center.id,
+          label: `${center.code} - ${center.name}`,
+          group: center.enterprise === localEnterprise
+            ? `Centros de Custo Locais (${enterpriseName[localEnterprise] ?? localEnterprise})`
+            : "Outros Empreendimentos (Intercompany)",
+        }));
+    };
     return [
       { key: "due_date", label: "Vencimento", type: "date", width: "150px" },
       { key: "type", label: "Tipo", type: "select", width: "130px", options: [
         { value: "payable", label: "Saída (Pagar)" },
         { value: "receivable", label: "Entrada (Receber)" },
       ] },
-      { key: "cost_center_id", label: "Centro de Custo", type: "select", width: "200px", options: ccOpts },
+      { key: "cost_center_id", label: "Centro de Custo", type: "select", width: "200px", optionsFor: groupedCenters },
       { key: "account_id", label: "Conta Contábil", type: "select", width: "200px", options: accOpts },
       { key: "amount", label: "Valor (R$)", type: "number", width: "130px", placeholder: "0,00" },
       { key: "description", label: "Descrição", type: "text", width: "260px" },

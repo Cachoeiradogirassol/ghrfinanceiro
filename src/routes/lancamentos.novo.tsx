@@ -31,6 +31,7 @@ import {
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { toast } from "sonner";
 import { Layers, AlertTriangle, Search, UserPlus } from "lucide-react";
+import { AccountCombobox } from "@/components/AccountCombobox";
 
 export const Route = createFileRoute("/lancamentos/novo")({
   head: () => ({
@@ -129,11 +130,12 @@ function Form() {
   const [duplicateAlert, setDuplicateAlert] = useState<string | null>(null);
 
   const filteredAccounts = useMemo(
-    () =>
-      (accs.data ?? []).filter(
-        (a) => a.cost_center_id === costCenterId && a.is_active !== false,
-      ),
-    [accs.data, costCenterId],
+    () => (accs.data ?? []).filter((a) => a.is_active !== false),
+    [accs.data],
+  );
+  const selectedBank = useMemo(
+    () => (banks.data ?? []).find((bank) => bank.id === bankId),
+    [banks.data, bankId],
   );
 
   const selectedAccount = useMemo(
@@ -360,20 +362,13 @@ function Form() {
           </div>
           <div>
             <Label>Subcategoria</Label>
-            <Select
+            <AccountCombobox
+              accounts={filteredAccounts}
+              costCenters={ccs.data ?? []}
+              localEnterprise={selectedBank?.enterprise ?? null}
               value={accountId}
-              onValueChange={setAccountId}
-              disabled={!costCenterId}
-            >
-              <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
-              <SelectContent>
-                {filteredAccounts.map((a) => (
-                  <SelectItem key={a.id} value={a.id}>
-                    {a.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+              onChange={setAccountId}
+            />
           </div>
         </div>
 

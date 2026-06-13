@@ -169,9 +169,7 @@ function ProjectionsPage() {
   const [bankId, setBankId] = useState("");
   const [initial, setInitial] = useState("");
   const [rate, setRate] = useState("0.7");
-  const [startDate, setStartDate] = useState(
-    new Date().toISOString().slice(0, 7) + "-01",
-  );
+  const [startDate, setStartDate] = useState(new Date().toISOString().slice(0, 7) + "-01");
   const [horizon, setHorizon] = useState("24");
   const [notes, setNotes] = useState("");
 
@@ -244,10 +242,6 @@ function ProjectionsPage() {
   const [gridMode, setGridMode] = useState(false);
   const bulkFn = useServerFn(bulkCreateProjections);
   const gridColumns = useMemo<GridColumnDef[]>(() => {
-    const ccOpts = selectableCCs.map((c) => ({
-      value: c.id,
-      label: `${c.code} - ${c.name}`,
-    }));
     const allAccs = (accs.data ?? []) as Array<{
       id: string;
       name: string;
@@ -255,6 +249,32 @@ function ProjectionsPage() {
       cost_center_id?: string;
     }>;
     const ccById = new Map((ccs.data ?? []).map((c) => [c.id, c]));
+    const enterpriseName: Record<string, string> = {
+      turismo: "Cachoeira",
+      restaurante: "Restaurante",
+      vinhedo: "Vinhedo",
+      ghr_jk: "Loteamento JK",
+      ghr_aldeia: "Loteamento Aldeia",
+    };
+    const groupedCenters = (row: Record<string, string>) => {
+      const account = allAccs.find((item) => item.id === row.account_id);
+      const localEnterprise =
+        (account?.cost_center_id ? ccById.get(account.cost_center_id)?.enterprise : null) ??
+        "turismo";
+      return [...selectableCCs]
+        .sort(
+          (a, b) =>
+            Number(b.enterprise === localEnterprise) - Number(a.enterprise === localEnterprise),
+        )
+        .map((center) => ({
+          value: center.id,
+          label: `${center.code} - ${center.name}`,
+          group:
+            center.enterprise === localEnterprise
+              ? `Centros de Custo Locais (${enterpriseName[localEnterprise] ?? localEnterprise})`
+              : "Outros Empreendimentos (Intercompany)",
+        }));
+    };
     const labelOf = (a: { name: string; cost_center_id?: string }) => {
       const cc = a.cost_center_id ? ccById.get(a.cost_center_id) : null;
       return cc ? `${a.name} · ${cc.code}` : a.name;
@@ -267,16 +287,22 @@ function ProjectionsPage() {
       .map((a) => ({ value: a.id, label: labelOf(a) }));
     return [
       { key: "name", label: "Nome da Projeção", type: "text", width: "220px" },
-      { key: "direction", label: "Tipo", type: "select", width: "130px", options: [
-        { value: "inflow", label: "Entrada" },
-        { value: "outflow", label: "Saída" },
-      ] },
+      {
+        key: "direction",
+        label: "Tipo",
+        type: "select",
+        width: "130px",
+        options: [
+          { value: "inflow", label: "Entrada" },
+          { value: "outflow", label: "Saída" },
+        ],
+      },
       {
         key: "cost_center_id",
         label: "Centro de Custo",
         type: "select",
         width: "200px",
-        options: ccOpts,
+        optionsFor: groupedCenters,
         // Em Saídas (Contas a Pagar futuras) o centro de custo é opcional.
         disabledWhen: (row) => row.direction === "outflow",
       },
@@ -319,9 +345,7 @@ function ProjectionsPage() {
       const parsed = meaningful.map((r, i) => {
         const lineNo = i + 1;
         const init = Number((r.initial_amount ?? "").replace(",", "."));
-        const rate = r.monthly_growth_rate
-          ? Number(r.monthly_growth_rate.replace(",", "."))
-          : 0;
+        const rate = r.monthly_growth_rate ? Number(r.monthly_growth_rate.replace(",", ".")) : 0;
         const horizon = r.horizon_months ? parseInt(r.horizon_months, 10) : 12;
         const isOutflow = (r.direction || "inflow") === "outflow";
 
@@ -330,22 +354,18 @@ function ProjectionsPage() {
         const ccRaw = (r.cost_center_id ?? "").trim();
         const ccId = ccRaw === "" ? null : ccRaw;
 
-        if (!r.name?.trim())
-          throw new Error(`Linha ${lineNo}: preencha o Nome da Projeção.`);
+        if (!r.name?.trim()) throw new Error(`Linha ${lineNo}: preencha o Nome da Projeção.`);
         if (!accountId)
           throw new Error(
             `Linha ${lineNo}: preencha a Conta Contábil (Categoria de ${isOutflow ? "Despesa" : "Receita"}).`,
           );
         if (!isOutflow && !ccId)
-          throw new Error(
-            `Linha ${lineNo}: Centro de Custo é obrigatório para Entradas.`,
-          );
+          throw new Error(`Linha ${lineNo}: Centro de Custo é obrigatório para Entradas.`);
         if (!r.start_date)
           throw new Error(`Linha ${lineNo}: informe a Data de Início (Vencimento).`);
         if (!Number.isFinite(init) || init < 0)
           throw new Error(`Linha ${lineNo}: Valor (R$) inválido.`);
-        if (!Number.isFinite(rate))
-          throw new Error(`Linha ${lineNo}: Taxa %/mês inválida.`);
+        if (!Number.isFinite(rate)) throw new Error(`Linha ${lineNo}: Taxa %/mês inválida.`);
         if (!Number.isFinite(horizon) || horizon < 1 || horizon > 120)
           throw new Error(`Linha ${lineNo}: Horizonte deve estar entre 1 e 120 meses.`);
 
@@ -391,10 +411,9 @@ function ProjectionsPage() {
       await qc.invalidateQueries({ queryKey: ["projections"] });
       await qc.refetchQueries({ queryKey: ["projections"] });
       const created = inserted?.length ?? payload.length;
-      toast.success(
-        `${created} projeção(ões) salvas e atualizadas no banco com sucesso.`,
-        { duration: 8000 },
-      );
+      toast.success(`${created} projeção(ões) salvas e atualizadas no banco com sucesso.`, {
+        duration: 8000,
+      });
       return { created };
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Falha desconhecida no lote.";
@@ -403,7 +422,6 @@ function ProjectionsPage() {
       throw err;
     }
   };
-
 
   const consolidated = useMemo(() => {
     type Row = {
@@ -564,15 +582,12 @@ function ProjectionsPage() {
             Projeções e Simulador Preditivo
           </h1>
           <p className="text-muted-foreground">
-            Simulações multilistas de entradas e saídas com crescimento composto · isoladas do
-            fluxo real
+            Simulações multilistas de entradas e saídas com crescimento composto · isoladas do fluxo
+            real
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Button
-            variant={gridMode ? "default" : "outline"}
-            onClick={() => setGridMode((v) => !v)}
-          >
+          <Button variant={gridMode ? "default" : "outline"} onClick={() => setGridMode((v) => !v)}>
             <Grid3x3 className="h-4 w-4 mr-1" />
             {gridMode ? "Sair da Grade" : "Modo Grade Rápida"}
           </Button>
@@ -634,7 +649,6 @@ function ProjectionsPage() {
                   setContactId("");
                   setBankId("");
                 }}
-
               >
                 <ArrowDownCircle className="h-4 w-4 mr-1" /> Saída (Pagamento)
               </Button>
@@ -677,7 +691,13 @@ function ProjectionsPage() {
           </div>
           <div className="space-y-2">
             <Label>Centro de Custo *</Label>
-            <Select value={ccId} onValueChange={(v) => { setCcId(v); setAccId(""); }}>
+            <Select
+              value={ccId}
+              onValueChange={(v) => {
+                setCcId(v);
+                setAccId("");
+              }}
+            >
               <SelectTrigger>
                 <SelectValue placeholder="Selecione…" />
               </SelectTrigger>
@@ -691,16 +711,12 @@ function ProjectionsPage() {
             </Select>
           </div>
           <div className="space-y-2">
-            <Label>
-              Conta Contábil ({direction === "inflow" ? "Receita" : "Despesa"}) *
-            </Label>
+            <Label>Conta Contábil ({direction === "inflow" ? "Receita" : "Despesa"}) *</Label>
             <Select value={accId} onValueChange={setAccId}>
               <SelectTrigger>
                 <SelectValue
                   placeholder={
-                    filteredAccs.length === 0
-                      ? "Nenhuma conta disponível"
-                      : "Selecione…"
+                    filteredAccs.length === 0 ? "Nenhuma conta disponível" : "Selecione…"
                   }
                 />
               </SelectTrigger>
@@ -719,8 +735,8 @@ function ProjectionsPage() {
             </Select>
             {filteredAccs.length === 0 && (
               <p className="text-xs text-destructive">
-                Nenhuma conta {direction === "inflow" ? "de receita" : "de despesa"}{" "}
-                cadastrada{ccId ? " neste centro de custo" : ""}. Cadastre no Plano de Contas.
+                Nenhuma conta {direction === "inflow" ? "de receita" : "de despesa"} cadastrada
+                {ccId ? " neste centro de custo" : ""}. Cadastre no Plano de Contas.
               </p>
             )}
           </div>
@@ -735,8 +751,12 @@ function ProjectionsPage() {
                   <SelectContent>
                     {(() => {
                       const all = (contacts.data ?? []) as Array<{ id: string; name: string }>;
-                      const generals = all.filter((c) => /^CLIENTE GERAL|^VENDAS CONSOLIDADAS/i.test(c.name));
-                      const others = all.filter((c) => !/^CLIENTE GERAL|^VENDAS CONSOLIDADAS/i.test(c.name));
+                      const generals = all.filter((c) =>
+                        /^CLIENTE GERAL|^VENDAS CONSOLIDADAS/i.test(c.name),
+                      );
+                      const others = all.filter(
+                        (c) => !/^CLIENTE GERAL|^VENDAS CONSOLIDADAS/i.test(c.name),
+                      );
                       return (
                         <>
                           {generals.length > 0 && (
@@ -786,20 +806,16 @@ function ProjectionsPage() {
               <Label>Caixa de Origem</Label>
               <div className="rounded-md border border-dashed border-border bg-muted/30 p-3 text-sm text-muted-foreground">
                 <strong className="text-foreground">Definir por Liquidez (Automático)</strong> — o
-                banco de origem será escolhido somente no momento do pagamento efetivo, quando
-                você clicar em <em>Pagar do Caixa</em>. Pagador não é exigido: quem paga é a
-                própria estrutura conforme a saúde financeira do período.
+                banco de origem será escolhido somente no momento do pagamento efetivo, quando você
+                clicar em <em>Pagar do Caixa</em>. Pagador não é exigido: quem paga é a própria
+                estrutura conforme a saúde financeira do período.
               </div>
             </div>
           )}
 
           <div className="space-y-2">
             <Label>Mês inicial *</Label>
-            <Input
-              type="date"
-              value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
-            />
+            <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
           </div>
           <div className="space-y-2">
             <Label>Horizonte (meses) *</Label>
@@ -841,9 +857,7 @@ function ProjectionsPage() {
                 <XAxis dataKey="mes" tick={{ fontSize: 11 }} />
                 <YAxis
                   tick={{ fontSize: 11 }}
-                  tickFormatter={(v) =>
-                    Number(v).toLocaleString("pt-BR", { notation: "compact" })
-                  }
+                  tickFormatter={(v) => Number(v).toLocaleString("pt-BR", { notation: "compact" })}
                 />
                 <Tooltip
                   formatter={(v: number) => fmt(Number(v))}
@@ -961,9 +975,7 @@ function ProjectionDetail({
               {Number(proj.monthly_growth_rate).toFixed(2)}% a.m. composto
             </span>
           </p>
-          {proj.notes && (
-            <p className="text-xs text-muted-foreground mt-1 italic">{proj.notes}</p>
-          )}
+          {proj.notes && <p className="text-xs text-muted-foreground mt-1 italic">{proj.notes}</p>}
         </div>
         <div className="flex items-center gap-2">
           <Badge variant="outline">Projetado: {fmt(totalProjected)}</Badge>
@@ -1008,11 +1020,7 @@ function ProjectionDetail({
                       <CheckCircle2 className="h-3 w-3" /> Realizado
                     </Badge>
                   ) : (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => setDialogMonth(m.index)}
-                    >
+                    <Button size="sm" variant="outline" onClick={() => setDialogMonth(m.index)}>
                       {isOutflow ? "Pagar do Caixa" : "Realizar no Caixa"}
                     </Button>
                   )}
@@ -1102,11 +1110,7 @@ function RealizeDialog({
           </div>
           <div className="space-y-2">
             <Label>{isOutflow ? "Valor Real Pago (R$)" : "Valor Real Recebido (R$)"}</Label>
-            <Input
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-              inputMode="decimal"
-            />
+            <Input value={amount} onChange={(e) => setAmount(e.target.value)} inputMode="decimal" />
           </div>
           <div className="space-y-2">
             <Label>{isOutflow ? "Banco de Origem" : "Banco de Destino"}</Label>

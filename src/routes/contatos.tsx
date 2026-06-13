@@ -19,7 +19,14 @@ export const Route = createFileRoute("/contatos")({
   component: () => <AppLayout><ContactsPage /></AppLayout>,
 });
 
-type Contact = Awaited<ReturnType<ReturnType<typeof useServerFn<typeof listContacts>>>>[number];
+type Contact = {
+  id: string;
+  name: string;
+  type: string;
+  document_type: string | null;
+  document_number: string | null;
+  phone: string | null;
+};
 type FormState = {
   name: string;
   type: "FORNECEDOR" | "COLABORADOR";

@@ -123,6 +123,7 @@ function Form() {
   const [showNewContact, setShowNewContact] = useState(false);
   const [newDocType, setNewDocType] = useState<"PF" | "PJ">("PF");
   const [newDoc, setNewDoc] = useState("");
+  const [newPhone, setNewPhone] = useState("");
   const [newContactType, setNewContactType] = useState<"FORNECEDOR" | "COLABORADOR">("FORNECEDOR");
   const [duplicateAlert, setDuplicateAlert] = useState<string | null>(null);
 
@@ -143,7 +144,10 @@ function Form() {
     if (!q) return (contacts.data ?? []).slice(0, 8);
     return (contacts.data ?? [])
       .filter(
-        (c) => c.name.toLowerCase().includes(q) || c.document_number.includes(q.replace(/\D/g, "")),
+        (c) =>
+          c.name.toLowerCase().includes(q) ||
+          (c.document_number ?? "").includes(q.replace(/\D/g, "")) ||
+          (c.phone ?? "").toLowerCase().includes(q),
       )
       .slice(0, 8);
   }, [contacts.data, contactSearch]);
@@ -208,7 +212,8 @@ function Form() {
           name: contactSearch.trim(),
           type: newContactType,
           document_type: newDocType,
-          document_number: newDoc,
+          document_number: newDoc || null,
+          phone: newPhone || null,
           master_only: false,
         },
       }),
@@ -217,6 +222,7 @@ function Form() {
       setContactId(row.id);
       setShowNewContact(false);
       setNewDoc("");
+      setNewPhone("");
       setDuplicateAlert(null);
       qc.invalidateQueries({ queryKey: ["contacts"] });
     },
@@ -476,7 +482,7 @@ function Form() {
                     </div>
                   </div>
                   <div>
-                    <Label className="text-xs">{newDocType === "PF" ? "CPF *" : "CNPJ *"}</Label>
+                    <Label className="text-xs">{newDocType === "PF" ? "CPF (opcional)" : "CNPJ (opcional)"}</Label>
                     <Input
                       placeholder={newDocType === "PF" ? "000.000.000-00" : "00.000.000/0000-00"}
                       value={newDoc}
@@ -484,6 +490,15 @@ function Form() {
                         setNewDoc(e.target.value);
                         setDuplicateAlert(null);
                       }}
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-xs">Telefone (opcional)</Label>
+                    <Input
+                      type="tel"
+                      placeholder="(00) 00000-0000"
+                      value={newPhone}
+                      onChange={(e) => setNewPhone(e.target.value)}
                     />
                   </div>
                   {duplicateAlert && (
@@ -496,7 +511,7 @@ function Form() {
                     <Button
                       size="sm"
                       onClick={() => contactMut.mutate()}
-                      disabled={!contactSearch.trim() || !newDoc.trim() || contactMut.isPending}
+                      disabled={!contactSearch.trim() || contactMut.isPending}
                     >
                       {contactMut.isPending ? "Salvando..." : "Cadastrar contato"}
                     </Button>

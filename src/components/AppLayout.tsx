@@ -16,6 +16,7 @@ import {
   FileBarChart,
   BarChart3,
   Sparkles,
+  ContactRound,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -63,6 +64,7 @@ export function AppLayout({ children }: { children?: React.ReactNode }) {
         { to: "/lancamentos", label: "Lançamentos", icon: ListChecks },
         { to: "/conciliacao", label: "Conciliação", icon: GitMerge },
         { to: "/projecoes", label: "Projeções e Simulador", icon: Sparkles },
+        { to: "/contatos", label: "Fornecedores e Colaboradores", icon: ContactRound },
       ],
     },
     {

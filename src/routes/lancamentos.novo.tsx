@@ -482,7 +482,9 @@ function Form() {
                     </div>
                   </div>
                   <div>
-                    <Label className="text-xs">{newDocType === "PF" ? "CPF (opcional)" : "CNPJ (opcional)"}</Label>
+                    <Label className="text-xs">
+                      {newDocType === "PF" ? "CPF (opcional)" : "CNPJ (opcional)"}
+                    </Label>
                     <Input
                       placeholder={newDocType === "PF" ? "000.000.000-00" : "00.000.000/0000-00"}
                       value={newDoc}

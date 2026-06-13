@@ -297,7 +297,9 @@ export const listContacts = createServerFn({ method: "GET" })
   .handler(async ({ context }) => {
     const { data, error } = await context.supabase
       .from("contacts")
-      .select("id, name, type, document_type, document_number, phone, master_only, created_at, updated_at")
+      .select(
+        "id, name, type, document_type, document_number, phone, master_only, created_at, updated_at",
+      )
       .order("name", { ascending: true });
     if (error) throw new Error(error.message);
     return data;

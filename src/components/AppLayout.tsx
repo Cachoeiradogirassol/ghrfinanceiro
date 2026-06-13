@@ -16,6 +16,7 @@ import {
   FileBarChart,
   BarChart3,
   Sparkles,
+  ContactRound,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -24,7 +25,11 @@ type NavItem = {
   to: string;
   label: string;
   icon: React.ComponentType<{ className?: string }>;
-  children?: Array<{ to: string; label: string; icon: React.ComponentType<{ className?: string }> }>;
+  children?: Array<{
+    to: string;
+    label: string;
+    icon: React.ComponentType<{ className?: string }>;
+  }>;
 };
 
 export function AppLayout({ children }: { children?: React.ReactNode }) {
@@ -63,6 +68,7 @@ export function AppLayout({ children }: { children?: React.ReactNode }) {
         { to: "/lancamentos", label: "Lançamentos", icon: ListChecks },
         { to: "/conciliacao", label: "Conciliação", icon: GitMerge },
         { to: "/projecoes", label: "Projeções e Simulador", icon: Sparkles },
+        { to: "/contatos", label: "Fornecedores e Colaboradores", icon: ContactRound },
       ],
     },
     {
@@ -141,13 +147,7 @@ export function AppLayout({ children }: { children?: React.ReactNode }) {
   );
 }
 
-function ExpandableNav({
-  item,
-  pathname,
-}: {
-  item: NavItem;
-  pathname: string;
-}) {
+function ExpandableNav({ item, pathname }: { item: NavItem; pathname: string }) {
   const isActiveBranch = pathname.startsWith(item.to);
   const [open, setOpen] = useState(isActiveBranch);
   useEffect(() => {
@@ -163,9 +163,7 @@ function ExpandableNav({
       >
         <item.icon className="h-4 w-4" />
         <span className="flex-1 text-left">{item.label}</span>
-        <ChevronDown
-          className={`h-4 w-4 transition-transform ${open ? "rotate-180" : ""}`}
-        />
+        <ChevronDown className={`h-4 w-4 transition-transform ${open ? "rotate-180" : ""}`} />
       </CollapsibleTrigger>
       <CollapsibleContent className="overflow-hidden data-[state=closed]:animate-accordion-up data-[state=open]:animate-accordion-down">
         <div className="mt-0.5 ml-3 pl-3 border-l border-border space-y-0.5">

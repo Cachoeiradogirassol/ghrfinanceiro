@@ -276,31 +276,34 @@ export type Database = {
       contacts: {
         Row: {
           created_at: string
-          document_number: string
-          document_type: string
+          document_number: string | null
+          document_type: string | null
           id: string
           master_only: boolean
           name: string
+          phone: string | null
           type: string
           updated_at: string
         }
         Insert: {
           created_at?: string
-          document_number: string
-          document_type: string
+          document_number?: string | null
+          document_type?: string | null
           id?: string
           master_only?: boolean
           name: string
+          phone?: string | null
           type: string
           updated_at?: string
         }
         Update: {
           created_at?: string
-          document_number?: string
-          document_type?: string
+          document_number?: string | null
+          document_type?: string | null
           id?: string
           master_only?: boolean
           name?: string
+          phone?: string | null
           type?: string
           updated_at?: string
         }

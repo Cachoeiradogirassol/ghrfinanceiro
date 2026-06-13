@@ -27,7 +27,7 @@ import { useAuth } from "@/lib/auth";
 import { useMemo, useState } from "react";
 import { EditTransactionDialog } from "@/components/EditTransactionDialog";
 import { QuickGrid, type GridColumnDef } from "@/components/QuickGrid";
-import { groupAccounts } from "@/components/AccountCombobox";
+import { groupAccounts } from "@/lib/account-options";
 
 type Tx = {
   id: string;

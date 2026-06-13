@@ -16,7 +16,8 @@ import {
   bulkCreateProjections,
 } from "@/lib/projections.functions";
 import { QuickGrid, type GridColumnDef } from "@/components/QuickGrid";
-import { AccountCombobox, groupAccounts } from "@/components/AccountCombobox";
+import { AccountCombobox } from "@/components/AccountCombobox";
+import { groupAccounts } from "@/lib/account-options";
 import { useMemo, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";

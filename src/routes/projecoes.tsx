@@ -191,6 +191,11 @@ function ProjectionsPage() {
     }>;
     return all.filter((a) => a.kind === wanted);
   }, [accs.data, direction]);
+  const accountContextEnterprise = useMemo(() => {
+    const bank = (banks.data ?? []).find((item) => item.id === bankId);
+    const center = selectableCCs.find((item) => item.id === ccId);
+    return bank?.enterprise ?? center?.enterprise ?? null;
+  }, [banks.data, bankId, selectableCCs, ccId]);
 
   const createMut = useMutation({
     mutationFn: async () => {
@@ -696,27 +701,13 @@ function ProjectionsPage() {
           </div>
           <div className="space-y-2">
             <Label>Conta Contábil ({direction === "inflow" ? "Receita" : "Despesa"}) *</Label>
-            <Select value={accId} onValueChange={setAccId}>
-              <SelectTrigger>
-                <SelectValue
-                  placeholder={
-                    filteredAccs.length === 0 ? "Nenhuma conta disponível" : "Selecione…"
-                  }
-                />
-              </SelectTrigger>
-              <SelectContent>
-                {filteredAccs.map((a) => {
-                  const cc = (ccs.data ?? []).find((c) => c.id === a.cost_center_id);
-                  const suffix = cc ? ` · ${cc.code}` : "";
-                  return (
-                    <SelectItem key={a.id} value={a.id}>
-                      {a.name}
-                      {suffix}
-                    </SelectItem>
-                  );
-                })}
-              </SelectContent>
-            </Select>
+            <AccountCombobox
+              accounts={filteredAccs}
+              costCenters={ccs.data ?? []}
+              localEnterprise={accountContextEnterprise}
+              value={accId}
+              onChange={setAccId}
+            />
             {filteredAccs.length === 0 && (
               <p className="text-xs text-destructive">
                 Nenhuma conta {direction === "inflow" ? "de receita" : "de despesa"} cadastrada

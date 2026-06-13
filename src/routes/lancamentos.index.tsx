@@ -8,6 +8,7 @@ import {
   listAuditUsers,
   listCostCenters,
   listAccounts,
+  listBankAccounts,
   bulkCreateTransactions,
 } from "@/lib/finance.functions";
 import { Button } from "@/components/ui/button";
@@ -26,6 +27,7 @@ import { useAuth } from "@/lib/auth";
 import { useMemo, useState } from "react";
 import { EditTransactionDialog } from "@/components/EditTransactionDialog";
 import { QuickGrid, type GridColumnDef } from "@/components/QuickGrid";
+import { groupAccounts } from "@/lib/account-options";
 
 type Tx = {
   id: string;
@@ -239,9 +241,11 @@ function List() {
   // Carrega CCs e Accounts apenas quando grade está ativa
   const ccFn = useServerFn(listCostCenters);
   const accFn = useServerFn(listAccounts);
+  const bankFn = useServerFn(listBankAccounts);
   const bulkFn = useServerFn(bulkCreateTransactions);
   const ccs = useQuery({ queryKey: ["ccs"], queryFn: () => ccFn(), enabled: gridMode });
   const accs = useQuery({ queryKey: ["accs"], queryFn: () => accFn(), enabled: gridMode });
+  const banks = useQuery({ queryKey: ["banks"], queryFn: () => bankFn(), enabled: gridMode });
 
   const gridColumns = useMemo<GridColumnDef[]>(() => {
     const SELECTABLE = ["turismo", "restaurante", "vinhedo", "ghr_aldeia", "ghr_jk"];
@@ -253,36 +257,14 @@ function List() {
       name: string;
       cost_center_id?: string | null;
     }>;
-    const accOpts = allAccounts.map((a) => ({
-      value: a.id,
-      label: a.name,
+    const centerOptions = selectableCenters.map((center) => ({
+      value: center.id,
+      label: `${center.code} - ${center.name}`,
     }));
-    const enterpriseName: Record<string, string> = {
-      turismo: "Cachoeira",
-      restaurante: "Restaurante",
-      vinhedo: "Vinhedo",
-      ghr_jk: "Loteamento JK",
-      ghr_aldeia: "Loteamento Aldeia",
-    };
-    const groupedCenters = (row: Record<string, string>) => {
-      const account = allAccounts.find((item) => item.id === row.account_id);
-      const accountCenter = selectableCenters.find(
-        (center) => center.id === account?.cost_center_id,
-      );
-      const localEnterprise = accountCenter?.enterprise ?? "turismo";
-      return [...selectableCenters]
-        .sort(
-          (a, b) =>
-            Number(b.enterprise === localEnterprise) - Number(a.enterprise === localEnterprise),
-        )
-        .map((center) => ({
-          value: center.id,
-          label: `${center.code} - ${center.name}`,
-          group:
-            center.enterprise === localEnterprise
-              ? `Centros de Custo Locais (${enterpriseName[localEnterprise] ?? localEnterprise})`
-              : "Outros Empreendimentos (Intercompany)",
-        }));
+    const bankOptions = (banks.data ?? []).map((bank) => ({ value: bank.id, label: bank.name }));
+    const accountOptions = (row: Record<string, string>) => {
+      const bank = (banks.data ?? []).find((item) => item.id === row.bank_account_id);
+      return groupAccounts(allAccounts, selectableCenters, bank?.enterprise ?? null);
     };
     return [
       { key: "due_date", label: "Vencimento", type: "date", width: "150px" },
@@ -301,19 +283,28 @@ function List() {
         label: "Centro de Custo",
         type: "select",
         width: "200px",
-        optionsFor: groupedCenters,
+        options: centerOptions,
+      },
+      {
+        key: "bank_account_id",
+        label: "Conta Bancária",
+        type: "select",
+        width: "190px",
+        options: bankOptions,
       },
       {
         key: "account_id",
         label: "Conta Contábil",
         type: "select",
         width: "200px",
-        options: accOpts,
+        optionsFor: accountOptions,
+        searchPlaceholder: "Buscar em todas as contas…",
+        emptyMessage: "Nenhuma conta contábil encontrada.",
       },
       { key: "amount", label: "Valor (R$)", type: "number", width: "130px", placeholder: "0,00" },
       { key: "description", label: "Descrição", type: "text", width: "260px" },
     ];
-  }, [ccs.data, accs.data]);
+  }, [ccs.data, accs.data, banks.data]);
 
   const handleBulkSave = async (rows: Record<string, string>[]) => {
     const parsed = rows.map((r, i) => {
@@ -328,6 +319,7 @@ function List() {
       return {
         cost_center_id: r.cost_center_id,
         account_id: r.account_id,
+        bank_account_id: r.bank_account_id || null,
         type: r.type as "payable" | "receivable",
         amount: Math.abs(amount),
         due_date: r.due_date,

@@ -16,6 +16,8 @@ import {
   bulkCreateProjections,
 } from "@/lib/projections.functions";
 import { QuickGrid, type GridColumnDef } from "@/components/QuickGrid";
+import { AccountCombobox } from "@/components/AccountCombobox";
+import { groupAccounts } from "@/lib/account-options";
 import { useMemo, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -190,6 +192,11 @@ function ProjectionsPage() {
     }>;
     return all.filter((a) => a.kind === wanted);
   }, [accs.data, direction]);
+  const accountContextEnterprise = useMemo(() => {
+    const bank = (banks.data ?? []).find((item) => item.id === bankId);
+    const center = selectableCCs.find((item) => item.id === ccId);
+    return bank?.enterprise ?? center?.enterprise ?? null;
+  }, [banks.data, bankId, selectableCCs, ccId]);
 
   const createMut = useMutation({
     mutationFn: async () => {
@@ -249,32 +256,14 @@ function ProjectionsPage() {
       cost_center_id?: string;
     }>;
     const ccById = new Map((ccs.data ?? []).map((c) => [c.id, c]));
-    const enterpriseName: Record<string, string> = {
-      turismo: "Cachoeira",
-      restaurante: "Restaurante",
-      vinhedo: "Vinhedo",
-      ghr_jk: "Loteamento JK",
-      ghr_aldeia: "Loteamento Aldeia",
-    };
-    const groupedCenters = (row: Record<string, string>) => {
-      const account = allAccs.find((item) => item.id === row.account_id);
-      const localEnterprise =
-        (account?.cost_center_id ? ccById.get(account.cost_center_id)?.enterprise : null) ??
-        "turismo";
-      return [...selectableCCs]
-        .sort(
-          (a, b) =>
-            Number(b.enterprise === localEnterprise) - Number(a.enterprise === localEnterprise),
-        )
-        .map((center) => ({
-          value: center.id,
-          label: `${center.code} - ${center.name}`,
-          group:
-            center.enterprise === localEnterprise
-              ? `Centros de Custo Locais (${enterpriseName[localEnterprise] ?? localEnterprise})`
-              : "Outros Empreendimentos (Intercompany)",
-        }));
-    };
+    const centerOptions = selectableCCs.map((center) => ({
+      value: center.id,
+      label: `${center.code} - ${center.name}`,
+    }));
+    const bankOptions = (banks.data ?? []).map((bank) => ({
+      value: bank.id,
+      label: `${bank.name} — ${bank.bank}`,
+    }));
     const labelOf = (a: { name: string; cost_center_id?: string }) => {
       const cc = a.cost_center_id ? ccById.get(a.cost_center_id) : null;
       return cc ? `${a.name} · ${cc.code}` : a.name;
@@ -302,9 +291,16 @@ function ProjectionsPage() {
         label: "Centro de Custo",
         type: "select",
         width: "200px",
-        optionsFor: groupedCenters,
+        options: centerOptions,
         // Em Saídas (Contas a Pagar futuras) o centro de custo é opcional.
         disabledWhen: (row) => row.direction === "outflow",
+      },
+      {
+        key: "default_bank_account_id",
+        label: "Conta Bancária",
+        type: "select",
+        width: "200px",
+        options: bankOptions,
       },
 
       {
@@ -312,17 +308,26 @@ function ProjectionsPage() {
         label: "Conta (Receita/Despesa)",
         type: "select",
         width: "220px",
-        options: revenueOpts,
         // Filtro dinâmico: Entrada → receitas; Saída → despesas.
-        optionsFor: (row) =>
-          (row.direction || "inflow") === "outflow" ? expenseOpts : revenueOpts,
+        optionsFor: (row) => {
+          const bank = (banks.data ?? []).find((item) => item.id === row.default_bank_account_id);
+          const accounts = (row.direction || "inflow") === "outflow" ? expenseOpts : revenueOpts;
+          const ids = new Set(accounts.map((item) => item.value));
+          return groupAccounts(
+            allAccs.filter((item) => ids.has(item.id)),
+            selectableCCs,
+            bank?.enterprise ?? null,
+          );
+        },
+        searchPlaceholder: "Buscar em todas as contas…",
+        emptyMessage: "Nenhuma conta contábil encontrada.",
       },
       { key: "start_date", label: "Início (Vencimento)", type: "date", width: "160px" },
       { key: "initial_amount", label: "Valor (R$)", type: "number", width: "130px" },
       { key: "monthly_growth_rate", label: "Taxa %/mês", type: "number", width: "110px" },
       { key: "horizon_months", label: "Horizonte (m)", type: "number", width: "110px" },
     ];
-  }, [selectableCCs, accs.data, ccs.data]);
+  }, [selectableCCs, accs.data, ccs.data, banks.data]);
 
   const handleBulkSave = async (rows: Record<string, string>[]) => {
     try {
@@ -375,6 +380,7 @@ function ProjectionsPage() {
           // Saídas aceitam CC nulo (definição por liquidez).
           cost_center_id: isOutflow ? null : ccId,
           account_id: accountId,
+          default_bank_account_id: (r.default_bank_account_id ?? "").trim() || null,
           initial_amount: init,
           monthly_growth_rate: rate,
           start_date: r.start_date,
@@ -391,7 +397,7 @@ function ProjectionsPage() {
       const payload = parsed.map((r) => ({
         ...r,
         contact_id: null,
-        default_bank_account_id: null,
+        default_bank_account_id: r.default_bank_account_id,
         notes: null,
         created_by: userId,
       }));
@@ -712,27 +718,13 @@ function ProjectionsPage() {
           </div>
           <div className="space-y-2">
             <Label>Conta Contábil ({direction === "inflow" ? "Receita" : "Despesa"}) *</Label>
-            <Select value={accId} onValueChange={setAccId}>
-              <SelectTrigger>
-                <SelectValue
-                  placeholder={
-                    filteredAccs.length === 0 ? "Nenhuma conta disponível" : "Selecione…"
-                  }
-                />
-              </SelectTrigger>
-              <SelectContent>
-                {filteredAccs.map((a) => {
-                  const cc = (ccs.data ?? []).find((c) => c.id === a.cost_center_id);
-                  const suffix = cc ? ` · ${cc.code}` : "";
-                  return (
-                    <SelectItem key={a.id} value={a.id}>
-                      {a.name}
-                      {suffix}
-                    </SelectItem>
-                  );
-                })}
-              </SelectContent>
-            </Select>
+            <AccountCombobox
+              accounts={filteredAccs}
+              costCenters={ccs.data ?? []}
+              localEnterprise={accountContextEnterprise}
+              value={accId}
+              onChange={setAccId}
+            />
             {filteredAccs.length === 0 && (
               <p className="text-xs text-destructive">
                 Nenhuma conta {direction === "inflow" ? "de receita" : "de despesa"} cadastrada

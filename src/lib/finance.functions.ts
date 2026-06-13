@@ -937,6 +937,8 @@ type EnterpriseValue =
   | "restaurante"
   | "vinhedo"
   | "ghr"
+  | "ghr_aldeia"
+  | "ghr_jk"
   | "institucional_fazenda"
   | "impostos";
 
@@ -950,7 +952,7 @@ async function loadFinanceData(supabase: {
     select: (s: string) => Promise<{ data: unknown; error: { message: string } | null }>;
   };
 }) {
-  const [{ data: banks }, { data: ccs }, { data: txs }, { data: allocs }, { data: accts }] = (await Promise.all([
+  const [{ data: banks }, { data: ccs }, { data: txs }, { data: allocs }, { data: accts }, { data: intercompany }] = (await Promise.all([
     supabase.from("bank_accounts").select("id, name, initial_balance, enterprise"),
     supabase.from("cost_centers").select("id, enterprise"),
     supabase
@@ -962,6 +964,9 @@ async function loadFinanceData(supabase: {
       .from("transaction_allocations")
       .select("transaction_id, cost_center_id, amount"),
     supabase.from("accounts").select("id, kind, is_administrative"),
+    supabase
+      .from("v_dre_consolidada")
+      .select("transaction_id, source_enterprise, target_enterprise, amount, competence_date"),
   ])) as unknown as [
     { data: Array<{ id: string; name: string; initial_balance: number; enterprise: EnterpriseValue }> },
     { data: Array<{ id: string; enterprise: EnterpriseValue }> },
@@ -982,6 +987,15 @@ async function loadFinanceData(supabase: {
     },
     { data: Array<{ transaction_id: string; cost_center_id: string; amount: number }> },
     { data: Array<{ id: string; kind: string; is_administrative: boolean }> },
+    {
+      data: Array<{
+        transaction_id: string | null;
+        source_enterprise: EnterpriseValue;
+        target_enterprise: EnterpriseValue;
+        amount: number;
+        competence_date: string | null;
+      }>;
+    },
   ];
 
   const ccById = new Map(ccs?.map((c) => [c.id, c.enterprise]) ?? []);
@@ -998,7 +1012,15 @@ async function loadFinanceData(supabase: {
     allocByTx.set(a.transaction_id, arr);
   }
 
-  return { banks: banks ?? [], txs: txs ?? [], ccById, bankById, allocByTx, acctById };
+  return {
+    banks: banks ?? [],
+    txs: txs ?? [],
+    ccById,
+    bankById,
+    allocByTx,
+    acctById,
+    intercompany: intercompany ?? [],
+  };
 }
 
 function effectiveAllocs(
@@ -1024,7 +1046,7 @@ export const buildDRE = createServerFn({ method: "POST" })
       .parse(d ?? {}),
   )
   .handler(async ({ context, data }) => {
-    const { txs, ccById, bankById, allocByTx, acctById } = await loadFinanceData(
+    const { txs, ccById, allocByTx, acctById, intercompany } = await loadFinanceData(
       context.supabase as never,
     );
     const filter = data.enterprise;
@@ -1069,8 +1091,6 @@ export const buildDRE = createServerFn({ method: "POST" })
       if (d < from || d > today) continue;
       const key = competenceIso.slice(0, 7);
 
-      const bank = tx.bank_account_id ? bankById.get(tx.bank_account_id) : undefined;
-      const bankEnt = bank?.enterprise ?? null;
       const allocs = effectiveAllocs(tx, ccById, allocByTx);
       const acct = tx.account_id ? acctById.get(tx.account_id) : undefined;
       const isAdmin = !!acct?.is_administrative;
@@ -1086,15 +1106,20 @@ export const buildDRE = createServerFn({ method: "POST" })
             else b.directExpense += a.amount;
           }
         }
-        // Aportes cruzados
-        if (bankEnt && bankEnt !== a.cc_enterprise && tx.type === "payable") {
-          if (matchesFilter(set, a.cc_enterprise)) {
-            ensure(key).aporteRecebido += a.amount;
-          }
-          if (matchesFilter(set, bankEnt)) {
-            ensure(key).aporteConcedido += a.amount;
-          }
-        }
+      }
+    }
+
+    // Aportes são não operacionais e vêm exclusivamente da estrutura materializada.
+    for (const transfer of intercompany) {
+      if (!transfer.transaction_id || !transfer.competence_date) continue;
+      const d = new Date(`${transfer.competence_date}T00:00:00`);
+      if (d < from || d > today) continue;
+      const key = transfer.competence_date.slice(0, 7);
+      if (matchesFilter(set, transfer.source_enterprise)) {
+        ensure(key).aporteConcedido += Number(transfer.amount);
+      }
+      if (matchesFilter(set, transfer.target_enterprise)) {
+        ensure(key).aporteRecebido += Number(transfer.amount);
       }
     }
 

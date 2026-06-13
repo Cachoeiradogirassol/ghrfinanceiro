@@ -91,8 +91,6 @@ export function exportDREPdf(data: DREExportData, opts: DREExportOptions) {
     { label: "(-) Custos Diretos Operacionais", key: "directExpense", tkey: "directExpense" },
     { label: "(=) Margem de Contribuição / Lucro Bruto", key: "grossProfit", tkey: "grossProfit" },
     { label: "(-) Despesas Administrativas / Fixas", key: "adminExpense", tkey: "adminExpense" },
-    { label: "Aportes Recebidos", key: "aporteRecebido", tkey: "aporteRecebido" },
-    { label: "Aportes Concedidos", key: "aporteConcedido", tkey: "aporteConcedido" },
   ];
   const body = rowDefs.map((r) => [
     r.label,
@@ -103,6 +101,16 @@ export function exportDREPdf(data: DREExportData, opts: DREExportOptions) {
     "(=) Lucro Líquido Realizado",
     ...data.series.map((m) => fmt(m.net)),
     fmt(data.totals.net),
+  ]);
+  body.push([
+    "[-] Aportes Concedidos a Subsidiárias",
+    ...data.series.map((m) => fmt(-m.aporteConcedido)),
+    fmt(-data.totals.aporteConcedido),
+  ]);
+  body.push([
+    "[+] Aportes Recebidos de Controladora",
+    ...data.series.map((m) => fmt(m.aporteRecebido)),
+    fmt(data.totals.aporteRecebido),
   ]);
 
   autoTable(doc, {
@@ -125,7 +133,7 @@ export function exportDREPdf(data: DREExportData, opts: DREExportOptions) {
     alternateRowStyles: { fillColor: [245, 245, 245] },
     columnStyles: { 0: { fontStyle: "bold", textColor: 50 } },
     didParseCell: (h) => {
-      if (h.row.index === body.length - 1) {
+      if (h.row.index === rowDefs.length) {
         h.cell.styles.fontStyle = "bold";
         h.cell.styles.fillColor = [225, 225, 225];
       }

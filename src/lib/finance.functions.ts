@@ -236,6 +236,7 @@ export const createTransaction = createServerFn({ method: "POST" })
 const BulkTxRow = z.object({
   cost_center_id: z.string().uuid(),
   account_id: z.string().uuid(),
+  bank_account_id: z.string().uuid().nullable().optional(),
   contact_id: z.string().uuid().nullable().optional(),
   type: z.enum(["payable", "receivable"]),
   amount: z.number().positive(),
@@ -279,6 +280,7 @@ export const bulkCreateTransactions = createServerFn({ method: "POST" })
     const rows = data.rows.map((r) => ({
       cost_center_id: r.cost_center_id,
       account_id: r.account_id,
+      bank_account_id: r.bank_account_id ?? null,
       contact_id: r.contact_id ?? defaultContactId!,
       type: r.type,
       amount: r.amount,

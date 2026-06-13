@@ -26,6 +26,8 @@ export type GridColumnDef = {
   optionsFor?: (row: GridRow) => GridOption[];
   /** Optional per-row disabled rule. Returning true greys out the cell and clears its value on save. */
   disabledWhen?: (row: GridRow) => boolean;
+  searchPlaceholder?: string;
+  emptyMessage?: string;
 };
 
 function SearchableSelectCell({
@@ -34,12 +36,16 @@ function SearchableSelectCell({
   disabled,
   cell,
   onChange,
+  searchPlaceholder,
+  emptyMessage,
 }: {
   options: GridOption[];
   value: string;
   disabled: boolean;
   cell: string;
   onChange: (value: string) => void;
+  searchPlaceholder?: string;
+  emptyMessage?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -88,10 +94,10 @@ function SearchableSelectCell({
             autoFocus
             value={search}
             onValueChange={setSearch}
-            placeholder="Buscar centro de custo…"
+            placeholder={searchPlaceholder ?? "Buscar opção…"}
           />
           <CommandList>
-            <CommandEmpty>Nenhum centro de custo encontrado.</CommandEmpty>
+            <CommandEmpty>{emptyMessage ?? "Nenhuma opção encontrada."}</CommandEmpty>
             {groups.map((group) => (
               <CommandGroup key={group} heading={group}>
                 {options
@@ -284,6 +290,8 @@ export function QuickGrid({
                           disabled={isDisabled}
                           cell={`${rIdx}-${cIdx}`}
                           onChange={(value) => updateCell(rIdx, c.key, value)}
+                        searchPlaceholder={c.searchPlaceholder}
+                        emptyMessage={c.emptyMessage}
                         />
                       ) : c.type === "select" ? (
                         (() => {

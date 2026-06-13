@@ -133,11 +133,6 @@ function Form() {
     () => (accs.data ?? []).filter((a) => a.is_active !== false),
     [accs.data],
   );
-  const selectedBank = useMemo(
-    () => (banks.data ?? []).find((bank) => bank.id === bankId),
-    [banks.data, bankId],
-  );
-
   const selectedAccount = useMemo(
     () => (accs.data ?? []).find((a) => a.id === accountId),
     [accs.data, accountId],

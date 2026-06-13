@@ -336,6 +336,68 @@ export type Database = {
         }
         Relationships: []
       }
+      intercompany_transfers: {
+        Row: {
+          amount: number
+          created_at: string
+          created_by: string
+          id: string
+          projection_id: string | null
+          source_cost_center_id: string
+          target_cost_center_id: string
+          transaction_id: string | null
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          created_by: string
+          id?: string
+          projection_id?: string | null
+          source_cost_center_id: string
+          target_cost_center_id: string
+          transaction_id?: string | null
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          created_by?: string
+          id?: string
+          projection_id?: string | null
+          source_cost_center_id?: string
+          target_cost_center_id?: string
+          transaction_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "intercompany_transfers_projection_id_fkey"
+            columns: ["projection_id"]
+            isOneToOne: false
+            referencedRelation: "cash_projections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "intercompany_transfers_source_cost_center_id_fkey"
+            columns: ["source_cost_center_id"]
+            isOneToOne: false
+            referencedRelation: "cost_centers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "intercompany_transfers_target_cost_center_id_fkey"
+            columns: ["target_cost_center_id"]
+            isOneToOne: false
+            referencedRelation: "cost_centers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "intercompany_transfers_transaction_id_fkey"
+            columns: ["transaction_id"]
+            isOneToOne: false
+            referencedRelation: "transactions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       reconciliation_periods: {
         Row: {
           closed_at: string | null
@@ -560,7 +622,55 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      v_dre_consolidada: {
+        Row: {
+          amount: number | null
+          competence_date: string | null
+          created_at: string | null
+          created_by: string | null
+          id: string | null
+          projection_id: string | null
+          source_cost_center_id: string | null
+          source_enterprise:
+            | Database["public"]["Enums"]["enterprise_type"]
+            | null
+          target_cost_center_id: string | null
+          target_enterprise:
+            | Database["public"]["Enums"]["enterprise_type"]
+            | null
+          transaction_id: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "intercompany_transfers_projection_id_fkey"
+            columns: ["projection_id"]
+            isOneToOne: false
+            referencedRelation: "cash_projections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "intercompany_transfers_source_cost_center_id_fkey"
+            columns: ["source_cost_center_id"]
+            isOneToOne: false
+            referencedRelation: "cost_centers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "intercompany_transfers_target_cost_center_id_fkey"
+            columns: ["target_cost_center_id"]
+            isOneToOne: false
+            referencedRelation: "cost_centers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "intercompany_transfers_transaction_id_fkey"
+            columns: ["transaction_id"]
+            isOneToOne: false
+            referencedRelation: "transactions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Functions: {
       close_period_month: {
@@ -579,6 +689,14 @@ export type Database = {
       reopen_period_month: {
         Args: { _month: number; _year: number }
         Returns: boolean
+      }
+      sync_projection_intercompany: {
+        Args: { _projection_id: string }
+        Returns: undefined
+      }
+      sync_transaction_intercompany: {
+        Args: { _transaction_id: string }
+        Returns: undefined
       }
     }
     Enums: {

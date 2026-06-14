@@ -7,7 +7,6 @@ import {
   listTransactions,
   listBankAccounts,
   smartImportStatement,
-
   autoMatch,
   reconcile,
   listReconciliationPeriods,
@@ -18,6 +17,11 @@ import {
   consolidateStatementRevenues,
   createUnverifiedExpenseDrafts,
 } from "@/lib/finance.functions";
+import {
+  confirmPluggyMatches,
+  suggestPluggyMatches,
+  syncPluggyExtracts,
+} from "@/lib/pluggy.functions";
 import { parseStatementDocument, type StatementFormat } from "@/lib/statement-parser";
 import { PromoteLineDialog, type PendingLine } from "@/components/PromoteLineDialog";
 
@@ -48,6 +52,8 @@ import {
   Loader2,
   FileText,
   AlertTriangle,
+  RefreshCw,
+  CheckCheck,
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/lib/auth";
@@ -97,6 +103,17 @@ type CashAudit = {
   difference: number;
 };
 
+type PluggySuggestion = {
+  extractId: string;
+  transactionId: string;
+  bankAccountId: string;
+  date: string;
+  description: string;
+  transactionDescription: string | null;
+  amount: number;
+  type: string;
+};
+
 const PERSISTENT_TOAST = { duration: Infinity, closeButton: true } as const;
 const LOADING_TOAST = { duration: Infinity } as const;
 
@@ -114,6 +131,9 @@ function Conc() {
   const usersFn = useServerFn(listAuditUsers);
   const consolidateFn = useServerFn(consolidateStatementRevenues);
   const draftsFn = useServerFn(createUnverifiedExpenseDrafts);
+  const syncPluggyFn = useServerFn(syncPluggyExtracts);
+  const suggestPluggyFn = useServerFn(suggestPluggyMatches);
+  const confirmPluggyFn = useServerFn(confirmPluggyMatches);
   const { isMaster } = useAuth();
   const qc = useQueryClient();
 
@@ -134,8 +154,7 @@ function Conc() {
     (usersQ.data ?? []).forEach((u) => m.set(u.id, u.email));
     return m;
   }, [usersQ.data]);
-  const userLabel = (id?: string | null) =>
-    id ? (userMap.get(id) ?? id.slice(0, 8)) : "—";
+  const userLabel = (id?: string | null) => (id ? (userMap.get(id) ?? id.slice(0, 8)) : "—");
 
   const [importBankId, setImportBankId] = useState("");
   const [selectedTx, setSelectedTx] = useState<string | null>(null);
@@ -148,7 +167,8 @@ function Conc() {
   const [cashAudit, setCashAudit] = useState<CashAudit | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [statementFormat, setStatementFormat] = useState<StatementFormat>("auto");
-
+  const [pluggySuggestions, setPluggySuggestions] = useState<PluggySuggestion[]>([]);
+  const [pluggyBusy, setPluggyBusy] = useState(false);
 
   // Filtro de período
   const todayIso = new Date().toISOString().slice(0, 10);
@@ -162,9 +182,7 @@ function Conc() {
 
   const inRange = (iso: string) => iso >= rangeStart && iso <= rangeEnd;
 
-  const filteredLines = (lines.data ?? []).filter((l) =>
-    inRange(l.statement_date as string),
-  );
+  const filteredLines = (lines.data ?? []).filter((l) => inRange(l.statement_date as string));
   const filteredTxs = (txs.data ?? []).filter((t) => {
     const d =
       (t as { document_datetime?: string | null }).document_datetime?.slice(0, 10) ??
@@ -194,8 +212,7 @@ function Conc() {
       setProcessingFileName(null);
     };
 
-    const effectiveBankId =
-      importBankId || ((banks.data ?? [])[0]?.id as string | undefined) || "";
+    const effectiveBankId = importBankId || ((banks.data ?? [])[0]?.id as string | undefined) || "";
     if (!effectiveBankId) {
       return failUpload("Nenhuma conta bancária disponível para receber o extrato.");
     }
@@ -206,7 +223,8 @@ function Conc() {
     const name = file.name.toLowerCase();
     const ext = name.includes(".") ? name.slice(name.lastIndexOf(".")) : "";
     const isPdf = ext === ".pdf" || file.type === "application/pdf";
-    const isCsv = ext === ".csv" || file.type === "text/csv" || file.type === "application/vnd.ms-excel";
+    const isCsv =
+      ext === ".csv" || file.type === "text/csv" || file.type === "application/vnd.ms-excel";
     const isOfx = ext === ".ofx";
 
     // Routing: explicit format overrides extension detection.
@@ -220,9 +238,12 @@ function Conc() {
       const expectsPdf = statementFormat === "inter-pdf";
       const expectsCsv = statementFormat === "c6-csv" || statementFormat === "mp-csv";
       const expectsOfx = statementFormat === "ofx";
-      if (expectsPdf && !isPdf) return failUpload(`Padrão selecionado exige PDF, recebido "${ext || file.type}".`);
-      if (expectsCsv && !isCsv) return failUpload(`Padrão selecionado exige CSV, recebido "${ext || file.type}".`);
-      if (expectsOfx && !isOfx) return failUpload(`Padrão selecionado exige OFX, recebido "${ext || file.type}".`);
+      if (expectsPdf && !isPdf)
+        return failUpload(`Padrão selecionado exige PDF, recebido "${ext || file.type}".`);
+      if (expectsCsv && !isCsv)
+        return failUpload(`Padrão selecionado exige CSV, recebido "${ext || file.type}".`);
+      if (expectsOfx && !isOfx)
+        return failUpload(`Padrão selecionado exige OFX, recebido "${ext || file.type}".`);
     }
 
     if (statementFormat === "auto" && !isPdf && !isCsv && !isOfx) {
@@ -301,14 +322,74 @@ function Conc() {
     }
   };
 
-
-
-
-
   const runAutoMatch = async () => {
-    const r = await matchFn();
-    toast.success(`${r.matched} sugestões automáticas`);
-    qc.invalidateQueries({ queryKey: ["lines"] });
+    setPluggyBusy(true);
+    try {
+      const [legacy, pluggy] = await Promise.all([
+        matchFn(),
+        suggestPluggyFn({
+          data: {
+            bank_account_id: importBankId || undefined,
+            from: rangeStart,
+            to: rangeEnd,
+          },
+        }),
+      ]);
+      setPluggySuggestions(pluggy.suggestions);
+      toast.success(
+        `${pluggy.suggestions.length} sugestão(ões) Open Finance • ${legacy.matched} sugestão(ões) de arquivos`,
+      );
+      qc.invalidateQueries({ queryKey: ["lines"] });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Falha ao sugerir matches.");
+    } finally {
+      setPluggyBusy(false);
+    }
+  };
+
+  const syncPluggy = async () => {
+    setPluggyBusy(true);
+    try {
+      const result = await syncPluggyFn({
+        data: {
+          bank_account_id: importBankId || undefined,
+          from: rangeStart,
+          to: rangeEnd,
+        },
+      });
+      toast.success(
+        `${result.imported} movimentação(ões) importada(s) • ${result.ignored} duplicada(s) ignorada(s)`,
+      );
+      await runAutoMatch();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Falha ao sincronizar o Pluggy.");
+      setPluggyBusy(false);
+    }
+  };
+
+  const confirmPluggyBatch = async () => {
+    if (pluggySuggestions.length === 0) return;
+    setPluggyBusy(true);
+    try {
+      const result = await confirmPluggyFn({
+        data: {
+          matches: pluggySuggestions.map((suggestion) => ({
+            extract_id: suggestion.extractId,
+            transaction_id: suggestion.transactionId,
+          })),
+        },
+      });
+      toast.success(`${result.confirmed} conciliação(ões) confirmada(s) em lote.`);
+      setPluggySuggestions([]);
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ["lines"] }),
+        qc.invalidateQueries({ queryKey: ["txs"] }),
+      ]);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Falha ao confirmar o lote.");
+    } finally {
+      setPluggyBusy(false);
+    }
   };
 
   const toggleLine = (id: string) => {
@@ -402,13 +483,17 @@ function Conc() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold">Conciliação Bancária</h1>
-          <p className="text-muted-foreground">
-            Confronte o extrato com os lançamentos do sistema
-          </p>
+          <p className="text-muted-foreground">Confronte o extrato com os lançamentos do sistema</p>
         </div>
-        <Button onClick={runAutoMatch}>
-          <Sparkles className="h-4 w-4 mr-2" /> Sugerir Matches
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={syncPluggy} disabled={pluggyBusy}>
+            <RefreshCw className={`h-4 w-4 mr-2 ${pluggyBusy ? "animate-spin" : ""}`} />
+            Sincronizar Open Finance
+          </Button>
+          <Button onClick={runAutoMatch} disabled={pluggyBusy}>
+            <Sparkles className="h-4 w-4 mr-2" /> Sugerir Matches
+          </Button>
+        </div>
       </div>
 
       {/* Filtro de período + encerramento */}
@@ -469,13 +554,8 @@ function Conc() {
           <h2 className="font-semibold text-sm mb-2">Períodos</h2>
           <div className="space-y-1">
             {(periods.data ?? []).map((p) => (
-              <div
-                key={p.id}
-                className="flex items-center gap-2 text-xs border rounded px-2 py-1"
-              >
-                <Badge
-                  variant={p.status === "CLOSED" ? "destructive" : "outline"}
-                >
+              <div key={p.id} className="flex items-center gap-2 text-xs border rounded px-2 py-1">
+                <Badge variant={p.status === "CLOSED" ? "destructive" : "outline"}>
                   {p.status === "CLOSED" ? (
                     <Lock className="h-3 w-3 mr-1" />
                   ) : (
@@ -504,6 +584,47 @@ function Conc() {
                     <Unlock className="h-3 w-3 mr-1" /> Reabrir
                   </Button>
                 )}
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
+
+      {pluggySuggestions.length > 0 && (
+        <Card className="border-emerald-500/40 bg-emerald-500/5 p-5">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="flex items-center gap-2 font-semibold text-emerald-700">
+                <CheckCheck className="h-4 w-4" /> Matches automáticos Open Finance
+              </h2>
+              <p className="text-sm text-muted-foreground">
+                Mesmo valor, mesma natureza e diferença máxima de 3 dias. Revise antes da baixa
+                real.
+              </p>
+            </div>
+            <Button onClick={confirmPluggyBatch} disabled={pluggyBusy}>
+              {pluggyBusy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Confirmar Conciliações da Semana em Lote
+            </Button>
+          </div>
+          <div className="space-y-2">
+            {pluggySuggestions.map((suggestion) => (
+              <div
+                key={suggestion.extractId}
+                className="grid gap-2 rounded-lg border border-emerald-500/30 bg-card/70 p-3 text-sm md:grid-cols-[110px_1fr_1fr_130px] md:items-center"
+              >
+                <span className="font-mono">
+                  {new Date(`${suggestion.date}T00:00:00`).toLocaleDateString("pt-BR")}
+                </span>
+                <span className="truncate">{suggestion.description}</span>
+                <span className="truncate text-muted-foreground">
+                  ↔ {suggestion.transactionDescription || "Lançamento sem descrição"}
+                </span>
+                <span
+                  className={`text-right font-bold tabular-nums ${suggestion.amount > 0 ? "text-emerald-600" : "text-rose-600"}`}
+                >
+                  {fmt(suggestion.amount)}
+                </span>
               </div>
             ))}
           </div>
@@ -598,7 +719,8 @@ function Conc() {
               <div className="space-y-1">
                 <p className="text-base font-semibold">Paulo está auditando o extrato… Aguarde.</p>
                 <p className="text-sm text-muted-foreground">
-                  Extraindo dados de fluxo de caixa{processingFileName ? ` de "${processingFileName}"` : ""}.
+                  Extraindo dados de fluxo de caixa
+                  {processingFileName ? ` de "${processingFileName}"` : ""}.
                 </p>
               </div>
               <div className="w-full max-w-md space-y-2 pt-2">
@@ -610,14 +732,17 @@ function Conc() {
           ) : (
             <>
               <div className={`rounded-full p-4 ${isDragging ? "bg-primary/20" : "bg-primary/10"}`}>
-                <FileUp className={`h-10 w-10 ${isDragging ? "text-primary" : "text-primary/80"}`} />
+                <FileUp
+                  className={`h-10 w-10 ${isDragging ? "text-primary" : "text-primary/80"}`}
+                />
               </div>
               <div className="space-y-1">
                 <p className="text-lg font-semibold">
                   Arraste e solte seu extrato (PDF, CSV ou OFX) aqui
                 </p>
                 <p className="text-sm text-muted-foreground flex items-center justify-center gap-1">
-                  <FileText className="h-3.5 w-3.5" /> Saídas: enviado/pago/tarifa • Entradas: recebido/crédito/depósito
+                  <FileText className="h-3.5 w-3.5" /> Saídas: enviado/pago/tarifa • Entradas:
+                  recebido/crédito/depósito
                 </p>
               </div>
               <span className="mt-1 inline-flex items-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow">
@@ -649,13 +774,13 @@ function Conc() {
             </div>
           </div>
         )}
-
       </Card>
-
 
       {(() => {
         const pending = filteredLines.filter(
-          (l) => !l.reconciled && !(l as { matched_transaction_id?: string | null }).matched_transaction_id,
+          (l) =>
+            !l.reconciled &&
+            !(l as { matched_transaction_id?: string | null }).matched_transaction_id,
         );
         if (pending.length === 0) return null;
         const credits = pending.filter((l) => Number(l.amount) > 0);
@@ -775,7 +900,9 @@ function Conc() {
                             statement_date: l.statement_date as string,
                             amount: l.amount as number,
                             description: (l.description ?? null) as string | null,
-                            bank_accounts: (l as { bank_accounts?: { name?: string | null } | null }).bank_accounts ?? null,
+                            bank_accounts:
+                              (l as { bank_accounts?: { name?: string | null } | null })
+                                .bank_accounts ?? null,
                           })
                         }
                       >
@@ -790,8 +917,6 @@ function Conc() {
         );
       })()}
 
-
-
       {selectedTx && (
         <Card className="p-4 bg-primary/5 border-primary/30">
           <div className="flex items-center justify-between">
@@ -802,9 +927,7 @@ function Conc() {
               </p>
               <p className="text-xs text-muted-foreground">
                 Selecionado: {fmt(selectedSum)} • {selectedLines.size} linha(s){" "}
-                {sumMatches && (
-                  <span className="text-primary font-medium">✓ Soma confere</span>
-                )}
+                {sumMatches && <span className="text-primary font-medium">✓ Soma confere</span>}
               </p>
             </div>
             <div className="flex gap-2">
@@ -826,70 +949,83 @@ function Conc() {
         </Card>
       )}
 
-      {cashAudit && (() => {
-        const audited = Math.abs(cashAudit.difference) < 0.01;
-        return (
-          <Card className={`p-5 border-2 ${audited ? "border-emerald-500/60 bg-emerald-500/5" : "border-rose-500/60 bg-rose-500/5"}`}>
-            <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
-              <div>
-                <h2 className="text-lg font-bold">Auditoria de Batimento de Caixa</h2>
-                <p className="text-sm text-muted-foreground">
-                  {cashAudit.bankName} • {cashAudit.fileName}
-                </p>
+      {cashAudit &&
+        (() => {
+          const audited = Math.abs(cashAudit.difference) < 0.01;
+          return (
+            <Card
+              className={`p-5 border-2 ${audited ? "border-emerald-500/60 bg-emerald-500/5" : "border-rose-500/60 bg-rose-500/5"}`}
+            >
+              <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
+                <div>
+                  <h2 className="text-lg font-bold">Auditoria de Batimento de Caixa</h2>
+                  <p className="text-sm text-muted-foreground">
+                    {cashAudit.bankName} • {cashAudit.fileName}
+                  </p>
+                </div>
+                <Badge
+                  className={
+                    audited
+                      ? "bg-emerald-600 hover:bg-emerald-600 text-white border-0 text-sm px-3 py-1"
+                      : "bg-rose-600 hover:bg-rose-600 text-white border-0 text-sm px-3 py-1"
+                  }
+                >
+                  {audited
+                    ? "CONCILIAÇÃO DO SEED AUDITADA (100% CORRETA)"
+                    : `Diferença: ${fmt(Math.abs(cashAudit.difference))}`}
+                </Badge>
               </div>
-              <Badge
-                className={
-                  audited
-                    ? "bg-emerald-600 hover:bg-emerald-600 text-white border-0 text-sm px-3 py-1"
-                    : "bg-rose-600 hover:bg-rose-600 text-white border-0 text-sm px-3 py-1"
-                }
-              >
-                {audited ? "CONCILIAÇÃO DO SEED AUDITADA (100% CORRETA)" : `Diferença: ${fmt(Math.abs(cashAudit.difference))}`}
-              </Badge>
-            </div>
 
-            {audited && (
-              <div className="mb-4 rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-4">
-                <p className="text-sm font-medium text-emerald-700">
-                  Paulo: A precisão cirúrgica da gestão privada é a salvaguarda do capital real contra as distorções monetárias — aqui o caixa protege o capital de verdade.
-                </p>
-              </div>
-            )}
+              {audited && (
+                <div className="mb-4 rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-4">
+                  <p className="text-sm font-medium text-emerald-700">
+                    Paulo: A precisão cirúrgica da gestão privada é a salvaguarda do capital real
+                    contra as distorções monetárias — aqui o caixa protege o capital de verdade.
+                  </p>
+                </div>
+              )}
 
-            {!audited && (
-              <div className="mb-4 flex items-start gap-2 rounded-lg border border-rose-500/30 bg-rose-500/10 p-4 text-rose-700">
-                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-                <p className="text-sm font-medium">
-                  O cálculo importado não bateu com o saldo final do PDF. Revise lançamentos duplicados, ausentes ou com sinal invertido.
-                </p>
-              </div>
-            )}
+              {!audited && (
+                <div className="mb-4 flex items-start gap-2 rounded-lg border border-rose-500/30 bg-rose-500/10 p-4 text-rose-700">
+                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                  <p className="text-sm font-medium">
+                    O cálculo importado não bateu com o saldo final do PDF. Revise lançamentos
+                    duplicados, ausentes ou com sinal invertido.
+                  </p>
+                </div>
+              )}
 
-            <div className="grid gap-3 md:grid-cols-5">
-              <div className="rounded-lg border bg-card p-3">
-                <p className="text-xs text-muted-foreground">Saldo atual no sistema</p>
-                <p className="text-base font-bold tabular-nums">{fmt(cashAudit.systemBalance)}</p>
+              <div className="grid gap-3 md:grid-cols-5">
+                <div className="rounded-lg border bg-card p-3">
+                  <p className="text-xs text-muted-foreground">Saldo atual no sistema</p>
+                  <p className="text-base font-bold tabular-nums">{fmt(cashAudit.systemBalance)}</p>
+                </div>
+                <div className="rounded-lg border bg-card p-3">
+                  <p className="text-xs text-muted-foreground">Entradas importadas</p>
+                  <p className="text-base font-bold tabular-nums text-emerald-600">
+                    + {fmt(cashAudit.importedEntries)}
+                  </p>
+                </div>
+                <div className="rounded-lg border bg-card p-3">
+                  <p className="text-xs text-muted-foreground">Saídas importadas</p>
+                  <p className="text-base font-bold tabular-nums text-rose-600">
+                    − {fmt(cashAudit.importedExits)}
+                  </p>
+                </div>
+                <div className="rounded-lg border bg-card p-3">
+                  <p className="text-xs text-muted-foreground">Resultado calculado</p>
+                  <p className="text-base font-bold tabular-nums">
+                    {fmt(cashAudit.calculatedFinalBalance)}
+                  </p>
+                </div>
+                <div className="rounded-lg border bg-card p-3">
+                  <p className="text-xs text-muted-foreground">Saldo final real do PDF</p>
+                  <p className="text-base font-bold tabular-nums">{fmt(cashAudit.finalBalance)}</p>
+                </div>
               </div>
-              <div className="rounded-lg border bg-card p-3">
-                <p className="text-xs text-muted-foreground">Entradas importadas</p>
-                <p className="text-base font-bold tabular-nums text-emerald-600">+ {fmt(cashAudit.importedEntries)}</p>
-              </div>
-              <div className="rounded-lg border bg-card p-3">
-                <p className="text-xs text-muted-foreground">Saídas importadas</p>
-                <p className="text-base font-bold tabular-nums text-rose-600">− {fmt(cashAudit.importedExits)}</p>
-              </div>
-              <div className="rounded-lg border bg-card p-3">
-                <p className="text-xs text-muted-foreground">Resultado calculado</p>
-                <p className="text-base font-bold tabular-nums">{fmt(cashAudit.calculatedFinalBalance)}</p>
-              </div>
-              <div className="rounded-lg border bg-card p-3">
-                <p className="text-xs text-muted-foreground">Saldo final real do PDF</p>
-                <p className="text-base font-bold tabular-nums">{fmt(cashAudit.finalBalance)}</p>
-              </div>
-            </div>
-          </Card>
-        );
-      })()}
+            </Card>
+          );
+        })()}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <Card className="p-4">
@@ -937,13 +1073,12 @@ function Conc() {
                     {fmt(Number(l.amount))}
                   </span>
                   {l.reconciled && <Badge variant="outline">conciliado</Badge>}
-                  {isMaster &&
-                    (l as { matched_by?: string }).matched_by && (
-                      <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
-                        <User className="h-3 w-3" />
-                        {userLabel((l as { matched_by: string }).matched_by)}
-                      </span>
-                    )}
+                  {isMaster && (l as { matched_by?: string }).matched_by && (
+                    <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
+                      <User className="h-3 w-3" />
+                      {userLabel((l as { matched_by: string }).matched_by)}
+                    </span>
+                  )}
                 </label>
               );
             })}
@@ -987,15 +1122,11 @@ function Conc() {
                     </span>
                     <span className="flex-1 truncate text-xs">
                       {t.description ?? t.accounts?.name}
-                      {t.is_batch && (
-                        <Layers className="h-3 w-3 inline ml-1 text-primary" />
-                      )}
+                      {t.is_batch && <Layers className="h-3 w-3 inline ml-1 text-primary" />}
                     </span>
                     <span
                       className={`font-mono text-xs ${
-                        t.type === "receivable"
-                          ? "text-primary"
-                          : "text-destructive"
+                        t.type === "receivable" ? "text-primary" : "text-destructive"
                       }`}
                     >
                       {fmt(Number(t.amount))}
@@ -1015,9 +1146,10 @@ function Conc() {
       <PromoteLineDialog
         line={promoting}
         open={!!promoting}
-        onOpenChange={(v) => { if (!v) setPromoting(null); }}
+        onOpenChange={(v) => {
+          if (!v) setPromoting(null);
+        }}
       />
     </div>
   );
-
 }

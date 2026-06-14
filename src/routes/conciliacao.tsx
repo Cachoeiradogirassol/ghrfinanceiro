@@ -18,6 +18,11 @@ import {
   consolidateStatementRevenues,
   createUnverifiedExpenseDrafts,
 } from "@/lib/finance.functions";
+import {
+  confirmPluggyMatches,
+  suggestPluggyMatches,
+  syncPluggyExtracts,
+} from "@/lib/pluggy.functions";
 import { parseStatementDocument, type StatementFormat } from "@/lib/statement-parser";
 import { PromoteLineDialog, type PendingLine } from "@/components/PromoteLineDialog";
 
@@ -48,6 +53,8 @@ import {
   Loader2,
   FileText,
   AlertTriangle,
+  RefreshCw,
+  CheckCheck,
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/lib/auth";
@@ -97,6 +104,17 @@ type CashAudit = {
   difference: number;
 };
 
+type PluggySuggestion = {
+  extractId: string;
+  transactionId: string;
+  bankAccountId: string;
+  date: string;
+  description: string;
+  transactionDescription: string | null;
+  amount: number;
+  type: string;
+};
+
 const PERSISTENT_TOAST = { duration: Infinity, closeButton: true } as const;
 const LOADING_TOAST = { duration: Infinity } as const;
 
@@ -114,6 +132,9 @@ function Conc() {
   const usersFn = useServerFn(listAuditUsers);
   const consolidateFn = useServerFn(consolidateStatementRevenues);
   const draftsFn = useServerFn(createUnverifiedExpenseDrafts);
+  const syncPluggyFn = useServerFn(syncPluggyExtracts);
+  const suggestPluggyFn = useServerFn(suggestPluggyMatches);
+  const confirmPluggyFn = useServerFn(confirmPluggyMatches);
   const { isMaster } = useAuth();
   const qc = useQueryClient();
 
@@ -148,6 +169,8 @@ function Conc() {
   const [cashAudit, setCashAudit] = useState<CashAudit | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [statementFormat, setStatementFormat] = useState<StatementFormat>("auto");
+  const [pluggySuggestions, setPluggySuggestions] = useState<PluggySuggestion[]>([]);
+  const [pluggyBusy, setPluggyBusy] = useState(false);
 
 
   // Filtro de período
@@ -306,9 +329,73 @@ function Conc() {
 
 
   const runAutoMatch = async () => {
-    const r = await matchFn();
-    toast.success(`${r.matched} sugestões automáticas`);
-    qc.invalidateQueries({ queryKey: ["lines"] });
+    setPluggyBusy(true);
+    try {
+      const [legacy, pluggy] = await Promise.all([
+        matchFn(),
+        suggestPluggyFn({
+          data: {
+            bank_account_id: importBankId || undefined,
+            from: rangeStart,
+            to: rangeEnd,
+          },
+        }),
+      ]);
+      setPluggySuggestions(pluggy.suggestions);
+      toast.success(
+        `${pluggy.suggestions.length} sugestão(ões) Open Finance • ${legacy.matched} sugestão(ões) de arquivos`,
+      );
+      qc.invalidateQueries({ queryKey: ["lines"] });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Falha ao sugerir matches.");
+    } finally {
+      setPluggyBusy(false);
+    }
+  };
+
+  const syncPluggy = async () => {
+    setPluggyBusy(true);
+    try {
+      const result = await syncPluggyFn({
+        data: {
+          bank_account_id: importBankId || undefined,
+          from: rangeStart,
+          to: rangeEnd,
+        },
+      });
+      toast.success(
+        `${result.imported} movimentação(ões) importada(s) • ${result.ignored} duplicada(s) ignorada(s)`,
+      );
+      await runAutoMatch();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Falha ao sincronizar o Pluggy.");
+      setPluggyBusy(false);
+    }
+  };
+
+  const confirmPluggyBatch = async () => {
+    if (pluggySuggestions.length === 0) return;
+    setPluggyBusy(true);
+    try {
+      const result = await confirmPluggyFn({
+        data: {
+          matches: pluggySuggestions.map((suggestion) => ({
+            extract_id: suggestion.extractId,
+            transaction_id: suggestion.transactionId,
+          })),
+        },
+      });
+      toast.success(`${result.confirmed} conciliação(ões) confirmada(s) em lote.`);
+      setPluggySuggestions([]);
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ["lines"] }),
+        qc.invalidateQueries({ queryKey: ["txs"] }),
+      ]);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Falha ao confirmar o lote.");
+    } finally {
+      setPluggyBusy(false);
+    }
   };
 
   const toggleLine = (id: string) => {

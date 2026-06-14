@@ -37,6 +37,7 @@ import { Lock, Archive, Trash2, Plus, Pencil } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ENTERPRISES, type Enterprise } from "@/lib/enterprises";
+import { PluggyConnection } from "@/components/PluggyConnection";
 
 // ---------------- USERS ----------------
 type AdminUser = {
@@ -284,6 +285,13 @@ export function BanksTab() {
 
   return (
     <div className="grid gap-4 md:grid-cols-2">
+      <PluggyConnection
+        banks={q.data ?? []}
+        onConnected={() => {
+          qc.invalidateQueries({ queryKey: ["admin-banks"] });
+          qc.invalidateQueries({ queryKey: ["banks"] });
+        }}
+      />
       <Card className="p-5">
         <h3 className="font-semibold mb-3 flex items-center gap-2"><Plus className="h-4 w-4" /> Nova conta bancária</h3>
         <form onSubmit={async (e) => {

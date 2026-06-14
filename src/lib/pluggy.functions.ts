@@ -52,6 +52,7 @@ export const syncPluggyExtracts = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => SyncInput.parse(input))
   .handler(async ({ context, data }) => {
+    await assertMaster(context);
     const query = context.supabase
       .from("bank_accounts")
       .select("id, pluggy_account_id")
@@ -156,6 +157,7 @@ export const confirmPluggyMatches = createServerFn({ method: "POST" })
     z.object({ matches: z.array(z.object({ extract_id: z.string().uuid(), transaction_id: z.string().uuid() })).min(1).max(200) }).parse(input),
   )
   .handler(async ({ context, data }) => {
+    await assertMaster(context);
     const { data: confirmed, error } = await context.supabase.rpc(
       "confirm_bank_statement_extract_matches",
       { _matches: data.matches },

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
-import { PluggyConnect, type ConnectEventPayload } from "react-pluggy-connect";
+import { PluggyConnect } from "react-pluggy-connect";
 import { Landmark, Loader2, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -38,7 +38,7 @@ export function PluggyConnection({ banks, onConnected }: { banks: Bank[]; onConn
     }
   };
 
-  const onSuccess = async (payload: ConnectEventPayload) => {
+  const onSuccess = async (payload: { item: { id: string } }) => {
     const itemId = payload.item?.id;
     if (!itemId || !bankId) return;
     setLoading(true);
@@ -93,8 +93,12 @@ export function PluggyConnection({ banks, onConnected }: { banks: Bank[]; onConn
           connectToken={token}
           onSuccess={onSuccess}
           onClose={() => setToken(null)}
-          onError={(error) => toast.error(error.message || "A conexão Pluggy foi interrompida.")}
-          onLoadError={() => toast.error("Não foi possível carregar o widget Pluggy.")}
+          onError={(error) => {
+            toast.error(error.message || "A conexão Pluggy foi interrompida.");
+          }}
+          onLoadError={() => {
+            toast.error("Não foi possível carregar o widget Pluggy.");
+          }}
         />
       )}
     </Card>

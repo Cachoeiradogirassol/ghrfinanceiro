@@ -62,6 +62,8 @@ export type Database = {
           is_active: boolean
           master_only: boolean
           name: string
+          pluggy_account_id: string | null
+          pluggy_item_id: string | null
         }
         Insert: {
           bank?: string | null
@@ -72,6 +74,8 @@ export type Database = {
           is_active?: boolean
           master_only?: boolean
           name: string
+          pluggy_account_id?: string | null
+          pluggy_item_id?: string | null
         }
         Update: {
           bank?: string | null
@@ -82,8 +86,54 @@ export type Database = {
           is_active?: boolean
           master_only?: boolean
           name?: string
+          pluggy_account_id?: string | null
+          pluggy_item_id?: string | null
         }
         Relationships: []
+      }
+      bank_statement_extracts: {
+        Row: {
+          amount: number
+          bank_account_id: string
+          created_at: string
+          description: string
+          id: string
+          pluggy_transaction_id: string
+          status: string
+          transaction_date: string
+          updated_at: string
+        }
+        Insert: {
+          amount: number
+          bank_account_id: string
+          created_at?: string
+          description?: string
+          id?: string
+          pluggy_transaction_id: string
+          status?: string
+          transaction_date: string
+          updated_at?: string
+        }
+        Update: {
+          amount?: number
+          bank_account_id?: string
+          created_at?: string
+          description?: string
+          id?: string
+          pluggy_transaction_id?: string
+          status?: string
+          transaction_date?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bank_statement_extracts_bank_account_id_fkey"
+            columns: ["bank_account_id"]
+            isOneToOne: false
+            referencedRelation: "bank_accounts"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       bank_statement_lines: {
         Row: {

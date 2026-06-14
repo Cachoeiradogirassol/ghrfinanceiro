@@ -82,11 +82,7 @@ export async function listPluggyAccounts(itemId: string) {
   return result.results ?? [];
 }
 
-export async function listPluggyTransactions(
-  accountId: string,
-  from: string,
-  to: string,
-) {
+export async function listPluggyTransactions(accountId: string, from: string, to: string) {
   const apiKey = await createPluggyApiKey();
   const transactions: PluggyTransaction[] = [];
   let path = `/v2/transactions?${new URLSearchParams({ accountId, from, to }).toString()}`;

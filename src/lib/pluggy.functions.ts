@@ -3,7 +3,12 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { z } from "zod";
 
 async function assertMaster(context: {
-  supabase: { rpc: (name: "has_role", args: { _user_id: string; _role: "master" }) => PromiseLike<{ data: boolean | null }> };
+  supabase: {
+    rpc: (
+      name: "has_role",
+      args: { _user_id: string; _role: "master" },
+    ) => PromiseLike<{ data: boolean | null }>;
+  };
   userId: string;
 }) {
   const { data } = await context.supabase.rpc("has_role", {
@@ -31,7 +36,8 @@ export const completePluggyConnection = createServerFn({ method: "POST" })
     const { listPluggyAccounts } = await import("./pluggy.server");
     const accounts = await listPluggyAccounts(data.item_id);
     const eligible = accounts.filter((account) => account.type !== "CREDIT");
-    if (eligible.length === 0) throw new Error("Nenhuma conta transacional foi encontrada no Pluggy.");
+    if (eligible.length === 0)
+      throw new Error("Nenhuma conta transacional foi encontrada no Pluggy.");
 
     const selected = eligible[0];
     const { error } = await context.supabase
@@ -123,30 +129,39 @@ export const suggestPluggyMatches = createServerFn({ method: "POST" })
       const extractTime = new Date(`${extract.transaction_date}T00:00:00Z`).getTime();
       const candidates = (transactions ?? [])
         .filter((transaction) => {
-          if (used.has(transaction.id) || transaction.bank_account_id !== extract.bank_account_id) return false;
-          if (Math.abs(Math.abs(Number(transaction.amount)) - Math.abs(Number(extract.amount))) > 0.01) return false;
-          if ((Number(extract.amount) > 0) !== (transaction.type === "receivable")) return false;
+          if (used.has(transaction.id) || transaction.bank_account_id !== extract.bank_account_id)
+            return false;
+          if (
+            Math.abs(Math.abs(Number(transaction.amount)) - Math.abs(Number(extract.amount))) > 0.01
+          )
+            return false;
+          if (Number(extract.amount) > 0 !== (transaction.type === "receivable")) return false;
           const date = transaction.document_datetime?.slice(0, 10) ?? transaction.due_date;
           return Math.abs(new Date(`${date}T00:00:00Z`).getTime() - extractTime) <= 3 * 86_400_000;
         })
         .sort((a, b) => {
           const aDate = a.document_datetime?.slice(0, 10) ?? a.due_date;
           const bDate = b.document_datetime?.slice(0, 10) ?? b.due_date;
-          return Math.abs(new Date(`${aDate}T00:00:00Z`).getTime() - extractTime) - Math.abs(new Date(`${bDate}T00:00:00Z`).getTime() - extractTime);
+          return (
+            Math.abs(new Date(`${aDate}T00:00:00Z`).getTime() - extractTime) -
+            Math.abs(new Date(`${bDate}T00:00:00Z`).getTime() - extractTime)
+          );
         });
       const transaction = candidates[0];
       if (!transaction) return [];
       used.add(transaction.id);
-      return [{
-        extractId: extract.id,
-        transactionId: transaction.id,
-        bankAccountId: extract.bank_account_id,
-        date: extract.transaction_date,
-        description: extract.description,
-        transactionDescription: transaction.description,
-        amount: Number(extract.amount),
-        type: transaction.type,
-      }];
+      return [
+        {
+          extractId: extract.id,
+          transactionId: transaction.id,
+          bankAccountId: extract.bank_account_id,
+          date: extract.transaction_date,
+          description: extract.description,
+          transactionDescription: transaction.description,
+          amount: Number(extract.amount),
+          type: transaction.type,
+        },
+      ];
     });
     return { suggestions };
   });
@@ -154,7 +169,14 @@ export const suggestPluggyMatches = createServerFn({ method: "POST" })
 export const confirmPluggyMatches = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) =>
-    z.object({ matches: z.array(z.object({ extract_id: z.string().uuid(), transaction_id: z.string().uuid() })).min(1).max(200) }).parse(input),
+    z
+      .object({
+        matches: z
+          .array(z.object({ extract_id: z.string().uuid(), transaction_id: z.string().uuid() }))
+          .min(1)
+          .max(200),
+      })
+      .parse(input),
   )
   .handler(async ({ context, data }) => {
     await assertMaster(context);

@@ -7,7 +7,6 @@ import {
   listTransactions,
   listBankAccounts,
   smartImportStatement,
-
   autoMatch,
   reconcile,
   listReconciliationPeriods,
@@ -155,8 +154,7 @@ function Conc() {
     (usersQ.data ?? []).forEach((u) => m.set(u.id, u.email));
     return m;
   }, [usersQ.data]);
-  const userLabel = (id?: string | null) =>
-    id ? (userMap.get(id) ?? id.slice(0, 8)) : "—";
+  const userLabel = (id?: string | null) => (id ? (userMap.get(id) ?? id.slice(0, 8)) : "—");
 
   const [importBankId, setImportBankId] = useState("");
   const [selectedTx, setSelectedTx] = useState<string | null>(null);
@@ -172,7 +170,6 @@ function Conc() {
   const [pluggySuggestions, setPluggySuggestions] = useState<PluggySuggestion[]>([]);
   const [pluggyBusy, setPluggyBusy] = useState(false);
 
-
   // Filtro de período
   const todayIso = new Date().toISOString().slice(0, 10);
   const monthAgoIso = (() => {
@@ -185,9 +182,7 @@ function Conc() {
 
   const inRange = (iso: string) => iso >= rangeStart && iso <= rangeEnd;
 
-  const filteredLines = (lines.data ?? []).filter((l) =>
-    inRange(l.statement_date as string),
-  );
+  const filteredLines = (lines.data ?? []).filter((l) => inRange(l.statement_date as string));
   const filteredTxs = (txs.data ?? []).filter((t) => {
     const d =
       (t as { document_datetime?: string | null }).document_datetime?.slice(0, 10) ??
@@ -217,8 +212,7 @@ function Conc() {
       setProcessingFileName(null);
     };
 
-    const effectiveBankId =
-      importBankId || ((banks.data ?? [])[0]?.id as string | undefined) || "";
+    const effectiveBankId = importBankId || ((banks.data ?? [])[0]?.id as string | undefined) || "";
     if (!effectiveBankId) {
       return failUpload("Nenhuma conta bancária disponível para receber o extrato.");
     }
@@ -229,7 +223,8 @@ function Conc() {
     const name = file.name.toLowerCase();
     const ext = name.includes(".") ? name.slice(name.lastIndexOf(".")) : "";
     const isPdf = ext === ".pdf" || file.type === "application/pdf";
-    const isCsv = ext === ".csv" || file.type === "text/csv" || file.type === "application/vnd.ms-excel";
+    const isCsv =
+      ext === ".csv" || file.type === "text/csv" || file.type === "application/vnd.ms-excel";
     const isOfx = ext === ".ofx";
 
     // Routing: explicit format overrides extension detection.
@@ -243,9 +238,12 @@ function Conc() {
       const expectsPdf = statementFormat === "inter-pdf";
       const expectsCsv = statementFormat === "c6-csv" || statementFormat === "mp-csv";
       const expectsOfx = statementFormat === "ofx";
-      if (expectsPdf && !isPdf) return failUpload(`Padrão selecionado exige PDF, recebido "${ext || file.type}".`);
-      if (expectsCsv && !isCsv) return failUpload(`Padrão selecionado exige CSV, recebido "${ext || file.type}".`);
-      if (expectsOfx && !isOfx) return failUpload(`Padrão selecionado exige OFX, recebido "${ext || file.type}".`);
+      if (expectsPdf && !isPdf)
+        return failUpload(`Padrão selecionado exige PDF, recebido "${ext || file.type}".`);
+      if (expectsCsv && !isCsv)
+        return failUpload(`Padrão selecionado exige CSV, recebido "${ext || file.type}".`);
+      if (expectsOfx && !isOfx)
+        return failUpload(`Padrão selecionado exige OFX, recebido "${ext || file.type}".`);
     }
 
     if (statementFormat === "auto" && !isPdf && !isCsv && !isOfx) {
@@ -323,10 +321,6 @@ function Conc() {
       setProcessingFileName(null);
     }
   };
-
-
-
-
 
   const runAutoMatch = async () => {
     setPluggyBusy(true);
@@ -489,9 +483,7 @@ function Conc() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold">Conciliação Bancária</h1>
-          <p className="text-muted-foreground">
-            Confronte o extrato com os lançamentos do sistema
-          </p>
+          <p className="text-muted-foreground">Confronte o extrato com os lançamentos do sistema</p>
         </div>
         <div className="flex gap-2">
           <Button variant="outline" onClick={syncPluggy} disabled={pluggyBusy}>
@@ -562,13 +554,8 @@ function Conc() {
           <h2 className="font-semibold text-sm mb-2">Períodos</h2>
           <div className="space-y-1">
             {(periods.data ?? []).map((p) => (
-              <div
-                key={p.id}
-                className="flex items-center gap-2 text-xs border rounded px-2 py-1"
-              >
-                <Badge
-                  variant={p.status === "CLOSED" ? "destructive" : "outline"}
-                >
+              <div key={p.id} className="flex items-center gap-2 text-xs border rounded px-2 py-1">
+                <Badge variant={p.status === "CLOSED" ? "destructive" : "outline"}>
                   {p.status === "CLOSED" ? (
                     <Lock className="h-3 w-3 mr-1" />
                   ) : (
@@ -611,7 +598,8 @@ function Conc() {
                 <CheckCheck className="h-4 w-4" /> Matches automáticos Open Finance
               </h2>
               <p className="text-sm text-muted-foreground">
-                Mesmo valor, mesma natureza e diferença máxima de 3 dias. Revise antes da baixa real.
+                Mesmo valor, mesma natureza e diferença máxima de 3 dias. Revise antes da baixa
+                real.
               </p>
             </div>
             <Button onClick={confirmPluggyBatch} disabled={pluggyBusy}>
@@ -632,7 +620,9 @@ function Conc() {
                 <span className="truncate text-muted-foreground">
                   ↔ {suggestion.transactionDescription || "Lançamento sem descrição"}
                 </span>
-                <span className={`text-right font-bold tabular-nums ${suggestion.amount > 0 ? "text-emerald-600" : "text-rose-600"}`}>
+                <span
+                  className={`text-right font-bold tabular-nums ${suggestion.amount > 0 ? "text-emerald-600" : "text-rose-600"}`}
+                >
                   {fmt(suggestion.amount)}
                 </span>
               </div>
@@ -729,7 +719,8 @@ function Conc() {
               <div className="space-y-1">
                 <p className="text-base font-semibold">Paulo está auditando o extrato… Aguarde.</p>
                 <p className="text-sm text-muted-foreground">
-                  Extraindo dados de fluxo de caixa{processingFileName ? ` de "${processingFileName}"` : ""}.
+                  Extraindo dados de fluxo de caixa
+                  {processingFileName ? ` de "${processingFileName}"` : ""}.
                 </p>
               </div>
               <div className="w-full max-w-md space-y-2 pt-2">
@@ -741,14 +732,17 @@ function Conc() {
           ) : (
             <>
               <div className={`rounded-full p-4 ${isDragging ? "bg-primary/20" : "bg-primary/10"}`}>
-                <FileUp className={`h-10 w-10 ${isDragging ? "text-primary" : "text-primary/80"}`} />
+                <FileUp
+                  className={`h-10 w-10 ${isDragging ? "text-primary" : "text-primary/80"}`}
+                />
               </div>
               <div className="space-y-1">
                 <p className="text-lg font-semibold">
                   Arraste e solte seu extrato (PDF, CSV ou OFX) aqui
                 </p>
                 <p className="text-sm text-muted-foreground flex items-center justify-center gap-1">
-                  <FileText className="h-3.5 w-3.5" /> Saídas: enviado/pago/tarifa • Entradas: recebido/crédito/depósito
+                  <FileText className="h-3.5 w-3.5" /> Saídas: enviado/pago/tarifa • Entradas:
+                  recebido/crédito/depósito
                 </p>
               </div>
               <span className="mt-1 inline-flex items-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow">
@@ -780,13 +774,13 @@ function Conc() {
             </div>
           </div>
         )}
-
       </Card>
-
 
       {(() => {
         const pending = filteredLines.filter(
-          (l) => !l.reconciled && !(l as { matched_transaction_id?: string | null }).matched_transaction_id,
+          (l) =>
+            !l.reconciled &&
+            !(l as { matched_transaction_id?: string | null }).matched_transaction_id,
         );
         if (pending.length === 0) return null;
         const credits = pending.filter((l) => Number(l.amount) > 0);
@@ -906,7 +900,9 @@ function Conc() {
                             statement_date: l.statement_date as string,
                             amount: l.amount as number,
                             description: (l.description ?? null) as string | null,
-                            bank_accounts: (l as { bank_accounts?: { name?: string | null } | null }).bank_accounts ?? null,
+                            bank_accounts:
+                              (l as { bank_accounts?: { name?: string | null } | null })
+                                .bank_accounts ?? null,
                           })
                         }
                       >
@@ -921,8 +917,6 @@ function Conc() {
         );
       })()}
 
-
-
       {selectedTx && (
         <Card className="p-4 bg-primary/5 border-primary/30">
           <div className="flex items-center justify-between">
@@ -933,9 +927,7 @@ function Conc() {
               </p>
               <p className="text-xs text-muted-foreground">
                 Selecionado: {fmt(selectedSum)} • {selectedLines.size} linha(s){" "}
-                {sumMatches && (
-                  <span className="text-primary font-medium">✓ Soma confere</span>
-                )}
+                {sumMatches && <span className="text-primary font-medium">✓ Soma confere</span>}
               </p>
             </div>
             <div className="flex gap-2">
@@ -957,70 +949,83 @@ function Conc() {
         </Card>
       )}
 
-      {cashAudit && (() => {
-        const audited = Math.abs(cashAudit.difference) < 0.01;
-        return (
-          <Card className={`p-5 border-2 ${audited ? "border-emerald-500/60 bg-emerald-500/5" : "border-rose-500/60 bg-rose-500/5"}`}>
-            <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
-              <div>
-                <h2 className="text-lg font-bold">Auditoria de Batimento de Caixa</h2>
-                <p className="text-sm text-muted-foreground">
-                  {cashAudit.bankName} • {cashAudit.fileName}
-                </p>
+      {cashAudit &&
+        (() => {
+          const audited = Math.abs(cashAudit.difference) < 0.01;
+          return (
+            <Card
+              className={`p-5 border-2 ${audited ? "border-emerald-500/60 bg-emerald-500/5" : "border-rose-500/60 bg-rose-500/5"}`}
+            >
+              <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
+                <div>
+                  <h2 className="text-lg font-bold">Auditoria de Batimento de Caixa</h2>
+                  <p className="text-sm text-muted-foreground">
+                    {cashAudit.bankName} • {cashAudit.fileName}
+                  </p>
+                </div>
+                <Badge
+                  className={
+                    audited
+                      ? "bg-emerald-600 hover:bg-emerald-600 text-white border-0 text-sm px-3 py-1"
+                      : "bg-rose-600 hover:bg-rose-600 text-white border-0 text-sm px-3 py-1"
+                  }
+                >
+                  {audited
+                    ? "CONCILIAÇÃO DO SEED AUDITADA (100% CORRETA)"
+                    : `Diferença: ${fmt(Math.abs(cashAudit.difference))}`}
+                </Badge>
               </div>
-              <Badge
-                className={
-                  audited
-                    ? "bg-emerald-600 hover:bg-emerald-600 text-white border-0 text-sm px-3 py-1"
-                    : "bg-rose-600 hover:bg-rose-600 text-white border-0 text-sm px-3 py-1"
-                }
-              >
-                {audited ? "CONCILIAÇÃO DO SEED AUDITADA (100% CORRETA)" : `Diferença: ${fmt(Math.abs(cashAudit.difference))}`}
-              </Badge>
-            </div>
 
-            {audited && (
-              <div className="mb-4 rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-4">
-                <p className="text-sm font-medium text-emerald-700">
-                  Paulo: A precisão cirúrgica da gestão privada é a salvaguarda do capital real contra as distorções monetárias — aqui o caixa protege o capital de verdade.
-                </p>
-              </div>
-            )}
+              {audited && (
+                <div className="mb-4 rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-4">
+                  <p className="text-sm font-medium text-emerald-700">
+                    Paulo: A precisão cirúrgica da gestão privada é a salvaguarda do capital real
+                    contra as distorções monetárias — aqui o caixa protege o capital de verdade.
+                  </p>
+                </div>
+              )}
 
-            {!audited && (
-              <div className="mb-4 flex items-start gap-2 rounded-lg border border-rose-500/30 bg-rose-500/10 p-4 text-rose-700">
-                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-                <p className="text-sm font-medium">
-                  O cálculo importado não bateu com o saldo final do PDF. Revise lançamentos duplicados, ausentes ou com sinal invertido.
-                </p>
-              </div>
-            )}
+              {!audited && (
+                <div className="mb-4 flex items-start gap-2 rounded-lg border border-rose-500/30 bg-rose-500/10 p-4 text-rose-700">
+                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                  <p className="text-sm font-medium">
+                    O cálculo importado não bateu com o saldo final do PDF. Revise lançamentos
+                    duplicados, ausentes ou com sinal invertido.
+                  </p>
+                </div>
+              )}
 
-            <div className="grid gap-3 md:grid-cols-5">
-              <div className="rounded-lg border bg-card p-3">
-                <p className="text-xs text-muted-foreground">Saldo atual no sistema</p>
-                <p className="text-base font-bold tabular-nums">{fmt(cashAudit.systemBalance)}</p>
+              <div className="grid gap-3 md:grid-cols-5">
+                <div className="rounded-lg border bg-card p-3">
+                  <p className="text-xs text-muted-foreground">Saldo atual no sistema</p>
+                  <p className="text-base font-bold tabular-nums">{fmt(cashAudit.systemBalance)}</p>
+                </div>
+                <div className="rounded-lg border bg-card p-3">
+                  <p className="text-xs text-muted-foreground">Entradas importadas</p>
+                  <p className="text-base font-bold tabular-nums text-emerald-600">
+                    + {fmt(cashAudit.importedEntries)}
+                  </p>
+                </div>
+                <div className="rounded-lg border bg-card p-3">
+                  <p className="text-xs text-muted-foreground">Saídas importadas</p>
+                  <p className="text-base font-bold tabular-nums text-rose-600">
+                    − {fmt(cashAudit.importedExits)}
+                  </p>
+                </div>
+                <div className="rounded-lg border bg-card p-3">
+                  <p className="text-xs text-muted-foreground">Resultado calculado</p>
+                  <p className="text-base font-bold tabular-nums">
+                    {fmt(cashAudit.calculatedFinalBalance)}
+                  </p>
+                </div>
+                <div className="rounded-lg border bg-card p-3">
+                  <p className="text-xs text-muted-foreground">Saldo final real do PDF</p>
+                  <p className="text-base font-bold tabular-nums">{fmt(cashAudit.finalBalance)}</p>
+                </div>
               </div>
-              <div className="rounded-lg border bg-card p-3">
-                <p className="text-xs text-muted-foreground">Entradas importadas</p>
-                <p className="text-base font-bold tabular-nums text-emerald-600">+ {fmt(cashAudit.importedEntries)}</p>
-              </div>
-              <div className="rounded-lg border bg-card p-3">
-                <p className="text-xs text-muted-foreground">Saídas importadas</p>
-                <p className="text-base font-bold tabular-nums text-rose-600">− {fmt(cashAudit.importedExits)}</p>
-              </div>
-              <div className="rounded-lg border bg-card p-3">
-                <p className="text-xs text-muted-foreground">Resultado calculado</p>
-                <p className="text-base font-bold tabular-nums">{fmt(cashAudit.calculatedFinalBalance)}</p>
-              </div>
-              <div className="rounded-lg border bg-card p-3">
-                <p className="text-xs text-muted-foreground">Saldo final real do PDF</p>
-                <p className="text-base font-bold tabular-nums">{fmt(cashAudit.finalBalance)}</p>
-              </div>
-            </div>
-          </Card>
-        );
-      })()}
+            </Card>
+          );
+        })()}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <Card className="p-4">
@@ -1068,13 +1073,12 @@ function Conc() {
                     {fmt(Number(l.amount))}
                   </span>
                   {l.reconciled && <Badge variant="outline">conciliado</Badge>}
-                  {isMaster &&
-                    (l as { matched_by?: string }).matched_by && (
-                      <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
-                        <User className="h-3 w-3" />
-                        {userLabel((l as { matched_by: string }).matched_by)}
-                      </span>
-                    )}
+                  {isMaster && (l as { matched_by?: string }).matched_by && (
+                    <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
+                      <User className="h-3 w-3" />
+                      {userLabel((l as { matched_by: string }).matched_by)}
+                    </span>
+                  )}
                 </label>
               );
             })}
@@ -1118,15 +1122,11 @@ function Conc() {
                     </span>
                     <span className="flex-1 truncate text-xs">
                       {t.description ?? t.accounts?.name}
-                      {t.is_batch && (
-                        <Layers className="h-3 w-3 inline ml-1 text-primary" />
-                      )}
+                      {t.is_batch && <Layers className="h-3 w-3 inline ml-1 text-primary" />}
                     </span>
                     <span
                       className={`font-mono text-xs ${
-                        t.type === "receivable"
-                          ? "text-primary"
-                          : "text-destructive"
+                        t.type === "receivable" ? "text-primary" : "text-destructive"
                       }`}
                     >
                       {fmt(Number(t.amount))}
@@ -1146,9 +1146,10 @@ function Conc() {
       <PromoteLineDialog
         line={promoting}
         open={!!promoting}
-        onOpenChange={(v) => { if (!v) setPromoting(null); }}
+        onOpenChange={(v) => {
+          if (!v) setPromoting(null);
+        }}
       />
     </div>
   );
-
 }

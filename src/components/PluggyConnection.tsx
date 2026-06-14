@@ -6,7 +6,13 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { createPluggyToken, completePluggyConnection } from "@/lib/pluggy.functions";
 import { useAuth } from "@/lib/auth";
 import { toast } from "sonner";
@@ -17,7 +23,13 @@ type Bank = {
   pluggy_account_id?: string | null;
 };
 
-export function PluggyConnection({ banks, onConnected }: { banks: Bank[]; onConnected: () => void }) {
+export function PluggyConnection({
+  banks,
+  onConnected,
+}: {
+  banks: Bank[];
+  onConnected: () => void;
+}) {
   const { isMaster } = useAuth();
   const tokenFn = useServerFn(createPluggyToken);
   const completeFn = useServerFn(completePluggyConnection);
@@ -64,27 +76,37 @@ export function PluggyConnection({ banks, onConnected }: { banks: Bank[]; onConn
             <Landmark className="h-4 w-4 text-primary" /> Open Finance com Pluggy
           </h3>
           <p className="max-w-2xl text-sm text-muted-foreground">
-            Conecte Mercado Pago, Banco Inter ou C6 Bank para importar movimentações liquidadas e preparar a conciliação semanal.
+            Conecte Mercado Pago, Banco Inter ou C6 Bank para importar movimentações liquidadas e
+            preparar a conciliação semanal.
           </p>
         </div>
-        <Badge variant="outline" className="gap-1"><ShieldCheck className="h-3 w-3" /> Credenciais protegidas</Badge>
+        <Badge variant="outline" className="gap-1">
+          <ShieldCheck className="h-3 w-3" /> Credenciais protegidas
+        </Badge>
       </div>
       <div className="mt-4 flex flex-wrap items-end gap-3">
         <div className="min-w-72 space-y-1">
           <Label>Conta correspondente no CONTROLE.GHR</Label>
           <Select value={bankId} onValueChange={setBankId}>
-            <SelectTrigger><SelectValue placeholder="Selecione a conta" /></SelectTrigger>
+            <SelectTrigger>
+              <SelectValue placeholder="Selecione a conta" />
+            </SelectTrigger>
             <SelectContent>
               {banks.map((bank) => (
                 <SelectItem key={bank.id} value={bank.id}>
-                  {bank.name}{bank.pluggy_account_id ? " • conectada" : ""}
+                  {bank.name}
+                  {bank.pluggy_account_id ? " • conectada" : ""}
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
         </div>
         <Button onClick={openWidget} disabled={loading || !bankId}>
-          {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Landmark className="mr-2 h-4 w-4" />}
+          {loading ? (
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+          ) : (
+            <Landmark className="mr-2 h-4 w-4" />
+          )}
           Conectar Conta via Open Finance (Pluggy)
         </Button>
       </div>

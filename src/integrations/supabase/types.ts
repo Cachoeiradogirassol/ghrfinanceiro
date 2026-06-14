@@ -98,6 +98,9 @@ export type Database = {
           created_at: string
           description: string
           id: string
+          matched_at: string | null
+          matched_by: string | null
+          matched_transaction_id: string | null
           pluggy_transaction_id: string
           status: string
           transaction_date: string
@@ -109,6 +112,9 @@ export type Database = {
           created_at?: string
           description?: string
           id?: string
+          matched_at?: string | null
+          matched_by?: string | null
+          matched_transaction_id?: string | null
           pluggy_transaction_id: string
           status?: string
           transaction_date: string
@@ -120,6 +126,9 @@ export type Database = {
           created_at?: string
           description?: string
           id?: string
+          matched_at?: string | null
+          matched_by?: string | null
+          matched_transaction_id?: string | null
           pluggy_transaction_id?: string
           status?: string
           transaction_date?: string
@@ -131,6 +140,13 @@ export type Database = {
             columns: ["bank_account_id"]
             isOneToOne: false
             referencedRelation: "bank_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bank_statement_extracts_matched_transaction_id_fkey"
+            columns: ["matched_transaction_id"]
+            isOneToOne: false
+            referencedRelation: "transactions"
             referencedColumns: ["id"]
           },
         ]
@@ -729,6 +745,10 @@ export type Database = {
       close_period_month: {
         Args: { _month: number; _year: number }
         Returns: string
+      }
+      confirm_bank_statement_extract_matches: {
+        Args: { _matches: Json }
+        Returns: number
       }
       has_role: {
         Args: {

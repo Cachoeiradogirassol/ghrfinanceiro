@@ -493,9 +493,15 @@ function Conc() {
             Confronte o extrato com os lançamentos do sistema
           </p>
         </div>
-        <Button onClick={runAutoMatch}>
-          <Sparkles className="h-4 w-4 mr-2" /> Sugerir Matches
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={syncPluggy} disabled={pluggyBusy}>
+            <RefreshCw className={`h-4 w-4 mr-2 ${pluggyBusy ? "animate-spin" : ""}`} />
+            Sincronizar Open Finance
+          </Button>
+          <Button onClick={runAutoMatch} disabled={pluggyBusy}>
+            <Sparkles className="h-4 w-4 mr-2" /> Sugerir Matches
+          </Button>
+        </div>
       </div>
 
       {/* Filtro de período + encerramento */}
@@ -591,6 +597,44 @@ function Conc() {
                     <Unlock className="h-3 w-3 mr-1" /> Reabrir
                   </Button>
                 )}
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
+
+      {pluggySuggestions.length > 0 && (
+        <Card className="border-emerald-500/40 bg-emerald-500/5 p-5">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="flex items-center gap-2 font-semibold text-emerald-700">
+                <CheckCheck className="h-4 w-4" /> Matches automáticos Open Finance
+              </h2>
+              <p className="text-sm text-muted-foreground">
+                Mesmo valor, mesma natureza e diferença máxima de 3 dias. Revise antes da baixa real.
+              </p>
+            </div>
+            <Button onClick={confirmPluggyBatch} disabled={pluggyBusy}>
+              {pluggyBusy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Confirmar Conciliações da Semana em Lote
+            </Button>
+          </div>
+          <div className="space-y-2">
+            {pluggySuggestions.map((suggestion) => (
+              <div
+                key={suggestion.extractId}
+                className="grid gap-2 rounded-lg border border-emerald-500/30 bg-card/70 p-3 text-sm md:grid-cols-[110px_1fr_1fr_130px] md:items-center"
+              >
+                <span className="font-mono">
+                  {new Date(`${suggestion.date}T00:00:00`).toLocaleDateString("pt-BR")}
+                </span>
+                <span className="truncate">{suggestion.description}</span>
+                <span className="truncate text-muted-foreground">
+                  ↔ {suggestion.transactionDescription || "Lançamento sem descrição"}
+                </span>
+                <span className={`text-right font-bold tabular-nums ${suggestion.amount > 0 ? "text-emerald-600" : "text-rose-600"}`}>
+                  {fmt(suggestion.amount)}
+                </span>
               </div>
             ))}
           </div>

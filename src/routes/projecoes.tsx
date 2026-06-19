@@ -73,6 +73,7 @@ import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import * as XLSX from "xlsx";
 import { supabase } from "@/integrations/supabase/client";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 
 export const Route = createFileRoute("/projecoes")({
   head: () => ({
@@ -609,306 +610,324 @@ function ProjectionsPage() {
         </div>
       </div>
 
-      {gridMode && (
-        <Card className="p-4">
-          <QuickGrid
-            columns={gridColumns}
-            initialRows={5}
-            onSave={handleBulkSave}
-            saveLabel="Salvar Projeções em Lote"
-            emptyRow={{
-              direction: "inflow",
-              monthly_growth_rate: "0.7",
-              horizon_months: "12",
-            }}
-          />
-        </Card>
-      )}
+      <Tabs defaultValue="gerenciar" className="w-full">
+        <TabsList>
+          <TabsTrigger value="gerenciar">Gerenciar Projeções</TabsTrigger>
+          <TabsTrigger value="grafico">Gráfico Consolidado</TabsTrigger>
+        </TabsList>
 
-      <Card className="p-5 space-y-4">
-        <div className="flex items-center gap-2">
-          <TrendingUp className="h-5 w-5 text-primary" />
-          <h2 className="font-semibold">Nova Projeção</h2>
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="space-y-2 md:col-span-2">
-            <Label>Tipo da Projeção *</Label>
-            <div className="flex gap-2">
-              <Button
-                type="button"
-                variant={direction === "inflow" ? "default" : "outline"}
-                className="flex-1"
-                onClick={() => {
-                  setDirection("inflow");
-                  setAccId("");
+        <TabsContent value="gerenciar" className="space-y-6 mt-4">
+          {gridMode && (
+            <Card className="p-4">
+              <QuickGrid
+                columns={gridColumns}
+                initialRows={5}
+                onSave={handleBulkSave}
+                saveLabel="Salvar Projeções em Lote"
+                emptyRow={{
+                  direction: "inflow",
+                  monthly_growth_rate: "0.7",
+                  horizon_months: "12",
                 }}
-              >
-                <ArrowUpCircle className="h-4 w-4 mr-1" /> Entrada (Recebimento)
-              </Button>
-              <Button
-                type="button"
-                variant={direction === "outflow" ? "default" : "outline"}
-                className="flex-1"
-                onClick={() => {
-                  setDirection("outflow");
-                  setAccId("");
-                  setContactId("");
-                  setBankId("");
-                }}
-              >
-                <ArrowDownCircle className="h-4 w-4 mr-1" /> Saída (Pagamento)
-              </Button>
+              />
+            </Card>
+          )}
+
+          <Card className="p-5 space-y-4">
+            <div className="flex items-center gap-2">
+              <TrendingUp className="h-5 w-5 text-primary" />
+              <h2 className="font-semibold">Nova Projeção</h2>
             </div>
-          </div>
-          <div className="space-y-2 md:col-span-2">
-            <Label>Nome da Projeção *</Label>
-            <Input
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder={
-                direction === "inflow"
-                  ? "Ex: Dividendos Loteamento JK"
-                  : "Ex: Pagamento Recorrente Fornecedor"
-              }
-            />
-          </div>
-          <div className="space-y-2">
-            <Label>Valor Inicial Estimado (R$) *</Label>
-            <Input
-              type="text"
-              inputMode="decimal"
-              value={initial}
-              onChange={(e) => setInitial(e.target.value)}
-              placeholder="50000,00"
-            />
-          </div>
-          <div className="space-y-2">
-            <Label>Taxa de Crescimento Mensal (%) *</Label>
-            <Input
-              type="text"
-              inputMode="decimal"
-              value={rate}
-              onChange={(e) => setRate(e.target.value)}
-              placeholder="0,7"
-            />
-            <p className="text-xs text-muted-foreground">
-              Juros compostos aplicados mês a mês sobre o valor anterior.
-            </p>
-          </div>
-          <div className="space-y-2">
-            <Label>Centro de Custo *</Label>
-            <Select
-              value={ccId}
-              onValueChange={(v) => {
-                setCcId(v);
-                setAccId("");
-              }}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Selecione…" />
-              </SelectTrigger>
-              <SelectContent>
-                {selectableCCs.map((c) => (
-                  <SelectItem key={c.id} value={c.id}>
-                    {c.code} — {c.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-2">
-            <Label>Conta Contábil ({direction === "inflow" ? "Receita" : "Despesa"}) *</Label>
-            <AccountCombobox
-              accounts={filteredAccs}
-              costCenters={ccs.data ?? []}
-              localEnterprise={accountContextEnterprise}
-              value={accId}
-              onChange={setAccId}
-            />
-            {filteredAccs.length === 0 && (
-              <p className="text-xs text-destructive">
-                Nenhuma conta {direction === "inflow" ? "de receita" : "de despesa"} cadastrada
-                {ccId ? " neste centro de custo" : ""}. Cadastre no Plano de Contas.
-              </p>
-            )}
-          </div>
-          {direction === "inflow" ? (
-            <>
-              <div className="space-y-2">
-                <Label>Cliente/Pagador (obrigatório p/ realizar)</Label>
-                <Select value={contactId} onValueChange={setContactId}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione…" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {(() => {
-                      const all = (contacts.data ?? []) as Array<{ id: string; name: string }>;
-                      const generals = all.filter((c) =>
-                        /^CLIENTE GERAL|^VENDAS CONSOLIDADAS/i.test(c.name),
-                      );
-                      const others = all.filter(
-                        (c) => !/^CLIENTE GERAL|^VENDAS CONSOLIDADAS/i.test(c.name),
-                      );
-                      return (
-                        <>
-                          {generals.length > 0 && (
-                            <>
-                              <div className="px-2 py-1 text-[10px] uppercase tracking-wide text-muted-foreground">
-                                Clientes Gerais
-                              </div>
-                              {generals.map((c) => (
-                                <SelectItem key={c.id} value={c.id}>
-                                  {c.name}
-                                </SelectItem>
-                              ))}
-                              <div className="px-2 py-1 mt-1 text-[10px] uppercase tracking-wide text-muted-foreground">
-                                Demais Contatos
-                              </div>
-                            </>
-                          )}
-                          {others.map((c) => (
-                            <SelectItem key={c.id} value={c.id}>
-                              {c.name}
-                            </SelectItem>
-                          ))}
-                        </>
-                      );
-                    })()}
-                  </SelectContent>
-                </Select>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2 md:col-span-2">
+                <Label>Tipo da Projeção *</Label>
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    variant={direction === "inflow" ? "default" : "outline"}
+                    className="flex-1"
+                    onClick={() => {
+                      setDirection("inflow");
+                      setAccId("");
+                    }}
+                  >
+                    <ArrowUpCircle className="h-4 w-4 mr-1" /> Entrada (Recebimento)
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={direction === "outflow" ? "default" : "outline"}
+                    className="flex-1"
+                    onClick={() => {
+                      setDirection("outflow");
+                      setAccId("");
+                      setContactId("");
+                      setBankId("");
+                    }}
+                  >
+                    <ArrowDownCircle className="h-4 w-4 mr-1" /> Saída (Pagamento)
+                  </Button>
+                </div>
+              </div>
+              <div className="space-y-2 md:col-span-2">
+                <Label>Nome da Projeção *</Label>
+                <Input
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder={
+                    direction === "inflow"
+                      ? "Ex: Dividendos Loteamento JK"
+                      : "Ex: Pagamento Recorrente Fornecedor"
+                  }
+                />
               </div>
               <div className="space-y-2">
-                <Label>Banco de Destino (opcional)</Label>
-                <Select value={bankId} onValueChange={setBankId}>
+                <Label>Valor Inicial Estimado (R$) *</Label>
+                <Input
+                  type="text"
+                  inputMode="decimal"
+                  value={initial}
+                  onChange={(e) => setInitial(e.target.value)}
+                  placeholder="50000,00"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Taxa de Crescimento Mensal (%) *</Label>
+                <Input
+                  type="text"
+                  inputMode="decimal"
+                  value={rate}
+                  onChange={(e) => setRate(e.target.value)}
+                  placeholder="0,7"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Juros compostos aplicados mês a mês sobre o valor anterior.
+                </p>
+              </div>
+              <div className="space-y-2">
+                <Label>Centro de Custo *</Label>
+                <Select
+                  value={ccId}
+                  onValueChange={(v) => {
+                    setCcId(v);
+                    setAccId("");
+                  }}
+                >
                   <SelectTrigger>
                     <SelectValue placeholder="Selecione…" />
                   </SelectTrigger>
                   <SelectContent>
-                    {(banks.data ?? []).map((b) => (
-                      <SelectItem key={b.id} value={b.id}>
-                        {b.name} — {b.bank}
+                    {selectableCCs.map((c) => (
+                      <SelectItem key={c.id} value={c.id}>
+                        {c.code} — {c.name}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
-            </>
-          ) : (
-            <div className="space-y-2 md:col-span-2">
-              <Label>Caixa de Origem</Label>
-              <div className="rounded-md border border-dashed border-border bg-muted/30 p-3 text-sm text-muted-foreground">
-                <strong className="text-foreground">Definir por Liquidez (Automático)</strong> — o
-                banco de origem será escolhido somente no momento do pagamento efetivo, quando você
-                clicar em <em>Pagar do Caixa</em>. Pagador não é exigido: quem paga é a própria
-                estrutura conforme a saúde financeira do período.
+              <div className="space-y-2">
+                <Label>Conta Contábil ({direction === "inflow" ? "Receita" : "Despesa"}) *</Label>
+                <AccountCombobox
+                  accounts={filteredAccs}
+                  costCenters={ccs.data ?? []}
+                  localEnterprise={accountContextEnterprise}
+                  value={accId}
+                  onChange={setAccId}
+                />
+                {filteredAccs.length === 0 && (
+                  <p className="text-xs text-destructive">
+                    Nenhuma conta {direction === "inflow" ? "de receita" : "de despesa"} cadastrada
+                    {ccId ? " neste centro de custo" : ""}. Cadastre no Plano de Contas.
+                  </p>
+                )}
+              </div>
+              {direction === "inflow" ? (
+                <>
+                  <div className="space-y-2">
+                    <Label>Cliente/Pagador (obrigatório p/ realizar)</Label>
+                    <Select value={contactId} onValueChange={setContactId}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecione…" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {(() => {
+                          const all = (contacts.data ?? []) as Array<{ id: string; name: string }>;
+                          const generals = all.filter((c) =>
+                            /^CLIENTE GERAL|^VENDAS CONSOLIDADAS/i.test(c.name),
+                          );
+                          const others = all.filter(
+                            (c) => !/^CLIENTE GERAL|^VENDAS CONSOLIDADAS/i.test(c.name),
+                          );
+                          return (
+                            <>
+                              {generals.length > 0 && (
+                                <>
+                                  <div className="px-2 py-1 text-[10px] uppercase tracking-wide text-muted-foreground">
+                                    Clientes Gerais
+                                  </div>
+                                  {generals.map((c) => (
+                                    <SelectItem key={c.id} value={c.id}>
+                                      {c.name}
+                                    </SelectItem>
+                                  ))}
+                                  <div className="px-2 py-1 mt-1 text-[10px] uppercase tracking-wide text-muted-foreground">
+                                    Demais Contatos
+                                  </div>
+                                </>
+                              )}
+                              {others.map((c) => (
+                                <SelectItem key={c.id} value={c.id}>
+                                  {c.name}
+                                </SelectItem>
+                              ))}
+                            </>
+                          );
+                        })()}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Banco de Destino (opcional)</Label>
+                    <Select value={bankId} onValueChange={setBankId}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecione…" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {(banks.data ?? []).map((b) => (
+                          <SelectItem key={b.id} value={b.id}>
+                            {b.name} — {b.bank}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </>
+              ) : (
+                <div className="space-y-2 md:col-span-2">
+                  <Label>Caixa de Origem</Label>
+                  <div className="rounded-md border border-dashed border-border bg-muted/30 p-3 text-sm text-muted-foreground">
+                    <strong className="text-foreground">Definir por Liquidez (Automático)</strong> — o
+                    banco de origem será escolhido somente no momento do pagamento efetivo, quando você
+                    clicar em <em>Pagar do Caixa</em>. Pagador não é exigido: quem paga é a própria
+                    estrutura conforme a saúde financeira do período.
+                  </div>
+                </div>
+              )}
+
+              <div className="space-y-2">
+                <Label>Mês inicial *</Label>
+                <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+              </div>
+              <div className="space-y-2">
+                <Label>Horizonte (meses) *</Label>
+                <Input
+                  type="number"
+                  min={1}
+                  max={120}
+                  value={horizon}
+                  onChange={(e) => setHorizon(e.target.value)}
+                />
+              </div>
+              <div className="space-y-2 md:col-span-2">
+                <Label>Observações</Label>
+                <Textarea
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  placeholder="Cenário, premissas Austrian, contexto da projeção…"
+                  rows={2}
+                />
               </div>
             </div>
-          )}
+            <div className="flex justify-end">
+              <Button onClick={() => createMut.mutate()} disabled={createMut.isPending}>
+                {createMut.isPending ? "Salvando…" : "Criar Projeção"}
+              </Button>
+            </div>
+          </Card>
 
-          <div className="space-y-2">
-            <Label>Mês inicial *</Label>
-            <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
-          </div>
-          <div className="space-y-2">
-            <Label>Horizonte (meses) *</Label>
-            <Input
-              type="number"
-              min={1}
-              max={120}
-              value={horizon}
-              onChange={(e) => setHorizon(e.target.value)}
-            />
-          </div>
-          <div className="space-y-2 md:col-span-2">
-            <Label>Observações</Label>
-            <Textarea
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              placeholder="Cenário, premissas Austrian, contexto da projeção…"
-              rows={2}
-            />
-          </div>
-        </div>
-        <div className="flex justify-end">
-          <Button onClick={() => createMut.mutate()} disabled={createMut.isPending}>
-            {createMut.isPending ? "Salvando…" : "Criar Projeção"}
-          </Button>
-        </div>
-      </Card>
+          <Card className="p-5">
+            <h2 className="font-semibold mb-3">Projeções Ativas</h2>
+            {projs.isLoading ? (
+              <p className="text-sm text-muted-foreground">Carregando…</p>
+            ) : (projs.data ?? []).length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                Nenhuma projeção criada. Use o formulário acima para começar.
+              </p>
+            ) : (
+              <div className="space-y-6">
+                {(projs.data ?? []).map((p) => (
+                  <ProjectionDetail
+                    key={p.id}
+                    proj={p}
+                    onDelete={() => deleteMut.mutate(p.id)}
+                    onChanged={() => qc.invalidateQueries({ queryKey: ["projections"] })}
+                    banks={(banks.data ?? []) as Array<{ id: string; name: string; bank: string }>}
+                  />
+                ))}
+              </div>
+            )}
+          </Card>
+        </TabsContent>
 
-      {consolidated.length > 0 && (
-        <Card className="p-5 space-y-3">
-          <h2 className="font-semibold">Curva Consolidada de Capital Futuro</h2>
-          <p className="text-xs text-muted-foreground">
-            Soma de todas as projeções ativas · entradas somam, saídas subtraem
-          </p>
-          <div className="h-72 w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={consolidated}>
-                <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
-                <XAxis dataKey="mes" tick={{ fontSize: 11 }} />
-                <YAxis
-                  tick={{ fontSize: 11 }}
-                  tickFormatter={(v) => Number(v).toLocaleString("pt-BR", { notation: "compact" })}
-                />
-                <Tooltip
-                  formatter={(v: number) => fmt(Number(v))}
-                  labelFormatter={(l) => `Mês ${l}`}
-                />
-                <Legend />
-                <Line
-                  type="monotone"
-                  dataKey="entradas"
-                  stroke="hsl(142 71% 45%)"
-                  name="Entradas"
-                  dot={false}
-                />
-                <Line
-                  type="monotone"
-                  dataKey="saidas"
-                  stroke="hsl(0 72% 51%)"
-                  name="Saídas"
-                  dot={false}
-                />
-                <Line
-                  type="monotone"
-                  dataKey="acumulado"
-                  stroke="hsl(var(--primary))"
-                  name="Líquido Acumulado"
-                  strokeWidth={2}
-                  dot={false}
-                />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-        </Card>
-      )}
-
-      <Card className="p-5">
-        <h2 className="font-semibold mb-3">Projeções Ativas</h2>
-        {projs.isLoading ? (
-          <p className="text-sm text-muted-foreground">Carregando…</p>
-        ) : (projs.data ?? []).length === 0 ? (
-          <p className="text-sm text-muted-foreground">
-            Nenhuma projeção criada. Use o formulário acima para começar.
-          </p>
-        ) : (
-          <div className="space-y-6">
-            {(projs.data ?? []).map((p) => (
-              <ProjectionDetail
-                key={p.id}
-                proj={p}
-                onDelete={() => deleteMut.mutate(p.id)}
-                onChanged={() => qc.invalidateQueries({ queryKey: ["projections"] })}
-                banks={(banks.data ?? []) as Array<{ id: string; name: string; bank: string }>}
-              />
-            ))}
-          </div>
-        )}
-      </Card>
+        <TabsContent value="grafico" className="mt-4">
+          <Card className="p-5 space-y-3">
+            <h2 className="font-semibold">Curva Consolidada de Capital Futuro</h2>
+            <p className="text-xs text-muted-foreground">
+              Soma de todas as projeções ativas · entradas somam, saídas subtraem
+            </p>
+            {consolidated.length === 0 ? (
+              <p className="text-sm text-muted-foreground py-12 text-center">
+                Crie projeções na aba "Gerenciar Projeções" para visualizar o gráfico consolidado.
+              </p>
+            ) : (
+              <div className="h-[28rem] w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={consolidated}>
+                    <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
+                    <XAxis dataKey="mes" tick={{ fontSize: 11 }} />
+                    <YAxis
+                      tick={{ fontSize: 11 }}
+                      tickFormatter={(v) => Number(v).toLocaleString("pt-BR", { notation: "compact" })}
+                    />
+                    <Tooltip
+                      formatter={(v: number) => fmt(Number(v))}
+                      labelFormatter={(l) => `Mês ${l}`}
+                    />
+                    <Legend />
+                    <Line
+                      type="monotone"
+                      dataKey="entradas"
+                      stroke="hsl(142 71% 45%)"
+                      name="Entradas"
+                      dot={false}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="saidas"
+                      stroke="hsl(0 72% 51%)"
+                      name="Saídas"
+                      dot={false}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="acumulado"
+                      stroke="hsl(var(--primary))"
+                      name="Líquido Acumulado"
+                      strokeWidth={2}
+                      dot={false}
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+          </Card>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
+
+
+
 
 function ProjectionDetail({
   proj,

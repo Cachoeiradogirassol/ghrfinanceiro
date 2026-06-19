@@ -922,6 +922,11 @@ function ProjectionsPage() {
           </Card>
         </TabsContent>
       </Tabs>
+    </div>
+  );
+}
+
+
 
 
 function ProjectionDetail({

@@ -7,7 +7,8 @@ export type EnterpriseValue =
   | "impostos"
   | "ghr"
   | "ghr_aldeia"
-  | "ghr_jk";
+  | "ghr_jk"
+  | "ghr_alexania";
 
 export type EnterpriseGroupKey = "fazenda" | "ghr_grupo";
 export type EnterpriseFilterValue = "all" | EnterpriseGroupKey | EnterpriseValue;
@@ -28,7 +29,7 @@ export const ENTERPRISE_GROUPS: { key: EnterpriseGroupKey; label: string; childr
   {
     key: "ghr_grupo",
     label: "GHR EMPREENDIMENTOS",
-    children: ["ghr_aldeia", "ghr_jk"],
+    children: ["ghr_aldeia", "ghr_jk", "ghr_alexania"],
   },
 ];
 
@@ -39,6 +40,7 @@ export const ENTERPRISES: Enterprise[] = [
   { value: "vinhedo", label: "Vinhedo Girassol", group: "fazenda" },
   { value: "ghr_aldeia", label: "GHR - Loteamento Aldeia Girassol", group: "ghr_grupo" },
   { value: "ghr_jk", label: "GHR - Loteamento JK", group: "ghr_grupo" },
+  { value: "ghr_alexania", label: "GHR - Loteamento Alexânia", group: "ghr_grupo" },
 ];
 
 // Legado (mantido para mapear dados antigos / contas existentes, mas oculto na UI).

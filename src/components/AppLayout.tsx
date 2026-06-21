@@ -3,20 +3,21 @@ import { useAuth } from "@/lib/auth";
 import { supabase } from "@/integrations/supabase/client";
 import { useEffect, useState } from "react";
 import {
-  LayoutDashboard,
-  ListChecks,
-  GitMerge,
+  Crown,
+  Map,
+  Swords,
   Settings,
   LogOut,
   Lock,
-  FolderTree,
+  ScrollText,
   ChevronDown,
   Users,
   Landmark,
   FileBarChart,
   BarChart3,
-  Sparkles,
+  Sparkle,
   ContactRound,
+  Shield,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";

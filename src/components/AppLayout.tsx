@@ -96,7 +96,7 @@ export function AppLayout({ children }: { children?: React.ReactNode }) {
     <div className="flex h-screen bg-background text-foreground">
       <aside className="w-60 border-r border-border bg-sidebar flex flex-col">
         <div className="p-5 border-b border-border">
-          <h1 className="text-lg font-bold tracking-tight">CONTROLE.GHR</h1>
+          <h1 className="text-lg font-bold tracking-tight">⚜ TRONO DO IMPÉRIO ⚜</h1>
           <p className="text-xs text-muted-foreground mt-1">
             {isMaster ? (
               <span className="inline-flex items-center gap-1 text-primary">

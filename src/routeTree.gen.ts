@@ -28,6 +28,7 @@ import { Route as AuthRedefinirSenhaRouteImport } from './routes/auth.redefinir-
 import { Route as ApiChatReportsRouteImport } from './routes/api/chat-reports'
 import { Route as ApiChatRouteImport } from './routes/api/chat'
 import { Route as ApiPublicWebhooksPdvRestauranteRouteImport } from './routes/api/public/webhooks/pdv-restaurante'
+import { Route as ApiPublicWebhooksBankingRouteImport } from './routes/api/public/webhooks/banking'
 
 const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
   id: '/sitemap.xml',
@@ -127,6 +128,12 @@ const ApiPublicWebhooksPdvRestauranteRoute =
     path: '/api/public/webhooks/pdv-restaurante',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiPublicWebhooksBankingRoute =
+  ApiPublicWebhooksBankingRouteImport.update({
+    id: '/api/public/webhooks/banking',
+    path: '/api/public/webhooks/banking',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -147,6 +154,7 @@ export interface FileRoutesByFullPath {
   '/configuracoes/usuarios': typeof ConfiguracoesUsuariosRoute
   '/lancamentos/novo': typeof LancamentosNovoRoute
   '/lancamentos/': typeof LancamentosIndexRoute
+  '/api/public/webhooks/banking': typeof ApiPublicWebhooksBankingRoute
   '/api/public/webhooks/pdv-restaurante': typeof ApiPublicWebhooksPdvRestauranteRoute
 }
 export interface FileRoutesByTo {
@@ -168,6 +176,7 @@ export interface FileRoutesByTo {
   '/configuracoes/usuarios': typeof ConfiguracoesUsuariosRoute
   '/lancamentos/novo': typeof LancamentosNovoRoute
   '/lancamentos': typeof LancamentosIndexRoute
+  '/api/public/webhooks/banking': typeof ApiPublicWebhooksBankingRoute
   '/api/public/webhooks/pdv-restaurante': typeof ApiPublicWebhooksPdvRestauranteRoute
 }
 export interface FileRoutesById {
@@ -190,6 +199,7 @@ export interface FileRoutesById {
   '/configuracoes/usuarios': typeof ConfiguracoesUsuariosRoute
   '/lancamentos/novo': typeof LancamentosNovoRoute
   '/lancamentos/': typeof LancamentosIndexRoute
+  '/api/public/webhooks/banking': typeof ApiPublicWebhooksBankingRoute
   '/api/public/webhooks/pdv-restaurante': typeof ApiPublicWebhooksPdvRestauranteRoute
 }
 export interface FileRouteTypes {
@@ -213,6 +223,7 @@ export interface FileRouteTypes {
     | '/configuracoes/usuarios'
     | '/lancamentos/novo'
     | '/lancamentos/'
+    | '/api/public/webhooks/banking'
     | '/api/public/webhooks/pdv-restaurante'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -234,6 +245,7 @@ export interface FileRouteTypes {
     | '/configuracoes/usuarios'
     | '/lancamentos/novo'
     | '/lancamentos'
+    | '/api/public/webhooks/banking'
     | '/api/public/webhooks/pdv-restaurante'
   id:
     | '__root__'
@@ -255,6 +267,7 @@ export interface FileRouteTypes {
     | '/configuracoes/usuarios'
     | '/lancamentos/novo'
     | '/lancamentos/'
+    | '/api/public/webhooks/banking'
     | '/api/public/webhooks/pdv-restaurante'
   fileRoutesById: FileRoutesById
 }
@@ -273,6 +286,7 @@ export interface RootRouteChildren {
   ApiChatReportsRoute: typeof ApiChatReportsRoute
   LancamentosNovoRoute: typeof LancamentosNovoRoute
   LancamentosIndexRoute: typeof LancamentosIndexRoute
+  ApiPublicWebhooksBankingRoute: typeof ApiPublicWebhooksBankingRoute
   ApiPublicWebhooksPdvRestauranteRoute: typeof ApiPublicWebhooksPdvRestauranteRoute
 }
 
@@ -411,6 +425,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicWebhooksPdvRestauranteRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/webhooks/banking': {
+      id: '/api/public/webhooks/banking'
+      path: '/api/public/webhooks/banking'
+      fullPath: '/api/public/webhooks/banking'
+      preLoaderRoute: typeof ApiPublicWebhooksBankingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -455,18 +476,9 @@ const rootRouteChildren: RootRouteChildren = {
   ApiChatReportsRoute: ApiChatReportsRoute,
   LancamentosNovoRoute: LancamentosNovoRoute,
   LancamentosIndexRoute: LancamentosIndexRoute,
+  ApiPublicWebhooksBankingRoute: ApiPublicWebhooksBankingRoute,
   ApiPublicWebhooksPdvRestauranteRoute: ApiPublicWebhooksPdvRestauranteRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}

@@ -24,6 +24,7 @@ import {
 } from "@/lib/pluggy.functions";
 import { parseStatementDocument, type StatementFormat } from "@/lib/statement-parser";
 import { PromoteLineDialog, type PendingLine } from "@/components/PromoteLineDialog";
+import { OpenFinanceImporter } from "@/components/OpenFinanceImporter";
 
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -486,6 +487,11 @@ function Conc() {
           <p className="text-muted-foreground">Confronte o extrato com os lançamentos do sistema</p>
         </div>
         <div className="flex gap-2">
+          <OpenFinanceImporter
+            onImported={() => {
+              qc.invalidateQueries({ queryKey: ["txs"] });
+            }}
+          />
           <Button variant="outline" onClick={syncPluggy} disabled={pluggyBusy}>
             <RefreshCw className={`h-4 w-4 mr-2 ${pluggyBusy ? "animate-spin" : ""}`} />
             Sincronizar Open Finance

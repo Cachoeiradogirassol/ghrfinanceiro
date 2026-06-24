@@ -24,6 +24,7 @@ import {
 } from "@/lib/pluggy.functions";
 import { parseStatementDocument, type StatementFormat } from "@/lib/statement-parser";
 import { PromoteLineDialog, type PendingLine } from "@/components/PromoteLineDialog";
+import { OpenFinanceImporter } from "@/components/OpenFinanceImporter";
 
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";

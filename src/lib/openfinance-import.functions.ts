@@ -4,7 +4,9 @@ import { z } from "zod";
 import { generateObject } from "ai";
 import { createLovableAiGatewayProvider } from "@/lib/ai-gateway.server";
 
-const RESTAURANT_COST_CENTER_ID = "d452db68-3a26-40d4-b0e1-e68001b579af";
+// Mapeamento institucional fixo (império GHR)
+const RESTAURANT_COST_CENTER_ID = "d452db68-3a26-40d4-b0e1-e68001b579af"; // Restaurante
+const CACHOEIRA_COST_CENTER_ID = "ceebd86d-68b7-4d9e-8b8b-ed76b1d1be85"; // Cachoeira do Girassol
 
 const InstitutionEnum = z.enum(["InfinitePay", "C6 Bank", "Mercado Pago", "Outro"]);
 
@@ -21,22 +23,37 @@ const ParsedTxSchema = z.object({
           .describe(
             "Valor numérico. POSITIVO para entradas/recebimentos/vendas/pix recebido; NEGATIVO para saídas/pix enviado/pagamentos.",
           ),
-        instituicao: InstitutionEnum,
+        instituicao: InstitutionEnum.describe(
+          "Banco/instituição da LINHA. Detecte por: InfinitePay (Infinite/InfinitePay), Mercado Pago (Mercado Pago/MercadoPago/MP), C6 Bank (C6/C6 BANK/Banco C6). Se não der pra identificar, use 'Outro'.",
+        ),
       }),
     )
     .max(500),
 });
 
+function mapCostCenter(institution: string, fallback?: string): string | undefined {
+  switch (institution) {
+    case "InfinitePay":
+      return RESTAURANT_COST_CENTER_ID;
+    case "Mercado Pago":
+    case "C6 Bank":
+      return CACHOEIRA_COST_CENTER_ID;
+    default:
+      return fallback;
+  }
+}
+
 export const importOpenFinanceText = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: { text: string; default_cost_center_id: string; default_account_id: string }) =>
-    z
-      .object({
-        text: z.string().trim().min(20).max(80000),
-        default_cost_center_id: z.string().uuid(),
-        default_account_id: z.string().uuid(),
-      })
-      .parse(d),
+  .inputValidator(
+    (d: { text: string; default_cost_center_id?: string; default_account_id: string }) =>
+      z
+        .object({
+          text: z.string().trim().min(20).max(80000),
+          default_cost_center_id: z.string().uuid().optional(),
+          default_account_id: z.string().uuid(),
+        })
+        .parse(d),
   )
   .handler(async ({ data, context }) => {
     const key = process.env.LOVABLE_API_KEY;
@@ -49,8 +66,8 @@ export const importOpenFinanceText = createServerFn({ method: "POST" })
       model: gateway("google/gemini-3-flash-preview"),
       schema: ParsedTxSchema,
       system:
-        "Você é um parser financeiro especialista em extratos brasileiros do Meu Pluggy (Open Finance). Extraia cada lançamento com data, descrição, valor (positivo entrada, negativo saída) e a instituição (InfinitePay, C6 Bank, Mercado Pago). Ignore cabeçalhos, totais e linhas de saldo.",
-      prompt: `Data de hoje: ${today}.\n\nTexto colado do Meu Pluggy:\n\n${data.text}`,
+        "Você é um parser financeiro especialista em extratos brasileiros do Meu Pluggy (Open Finance), que MISTURA múltiplas instituições no mesmo extrato. Para CADA linha, identifique de forma INDEPENDENTE: data, descrição, valor (positivo entrada, negativo saída) e a instituição da linha (InfinitePay, C6 Bank, Mercado Pago ou Outro). NUNCA herde a instituição de uma linha anterior — detecte sempre na própria linha. Ignore cabeçalhos, totais e linhas de saldo.",
+      prompt: `Data de hoje: ${today}.\n\nTexto colado do Meu Pluggy (multibancos):\n\n${data.text}`,
     });
 
     const parsed = object.transactions.filter(
@@ -61,20 +78,14 @@ export const importOpenFinanceText = createServerFn({ method: "POST" })
       return { inserted: 0, skipped: 0, total: 0, items: [] as Array<{ ok: boolean; reason?: string }> };
     }
 
-    // Helper: gera chave única determinística por transação
     const keyOf = (t: { data: string; valor: number; descricao: string }) =>
       `${t.data}_${t.valor.toFixed(2)}_${t.descricao.trim().slice(0, 80).toLowerCase()}`;
 
-    // Busca lançamentos existentes que já foram importados via este canal (por descrição com tag)
     const tags = parsed.map((t) => `[OFIMP ${keyOf(t)}]`);
     const { data: existing } = await context.supabase
       .from("transactions")
       .select("description")
-      .in(
-        "description",
-        // PostgREST .in tem limite, mas até 500 itens é viável
-        tags,
-      );
+      .in("description", tags);
     const existingSet = new Set((existing ?? []).map((r) => r.description as string));
 
     type Row = {
@@ -101,8 +112,15 @@ export const importOpenFinanceText = createServerFn({ method: "POST" })
         items.push({ ok: false, reason: "duplicado", description });
         continue;
       }
-      const cc =
-        t.instituicao === "InfinitePay" ? RESTAURANT_COST_CENTER_ID : data.default_cost_center_id;
+      const cc = mapCostCenter(t.instituicao, data.default_cost_center_id);
+      if (!cc) {
+        items.push({
+          ok: false,
+          reason: "sem centro de custo (instituição não mapeada e sem fallback)",
+          description,
+        });
+        continue;
+      }
       rows.push({
         cost_center_id: cc,
         account_id: data.default_account_id,

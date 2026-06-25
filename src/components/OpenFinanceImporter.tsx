@@ -27,7 +27,7 @@ import { importOpenFinanceText } from "@/lib/openfinance-import.functions";
 export function OpenFinanceImporter({ onImported }: { onImported?: () => void }) {
   const [open, setOpen] = useState(false);
   const [text, setText] = useState("");
-  const [costCenterId, setCostCenterId] = useState("");
+  const [fallbackCostCenterId, setFallbackCostCenterId] = useState<string>("");
   const [accountId, setAccountId] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -38,18 +38,15 @@ export function OpenFinanceImporter({ onImported }: { onImported?: () => void })
   const ccs = useQuery({ queryKey: ["cost-centers"], queryFn: () => ccFn(), enabled: open });
   const accs = useQuery({ queryKey: ["accounts"], queryFn: () => accFn(), enabled: open });
 
-  const availableAccounts = useMemo(
-    () => (accs.data ?? []).filter((a) => !costCenterId || a.cost_center_id === costCenterId),
-    [accs.data, costCenterId],
-  );
+  const availableAccounts = useMemo(() => accs.data ?? [], [accs.data]);
 
   const process = async () => {
     if (text.trim().length < 20) {
       toast.error("Cole o conteúdo do extrato do Meu Pluggy antes de processar.");
       return;
     }
-    if (!costCenterId || !accountId) {
-      toast.error("Selecione um centro de custo e uma conta padrão.");
+    if (!accountId) {
+      toast.error("Selecione a conta de destino.");
       return;
     }
     setLoading(true);
@@ -57,12 +54,12 @@ export function OpenFinanceImporter({ onImported }: { onImported?: () => void })
       const res = await importFn({
         data: {
           text,
-          default_cost_center_id: costCenterId,
+          default_cost_center_id: fallbackCostCenterId || undefined,
           default_account_id: accountId,
         },
       });
       toast.success(
-        `Importação concluída: ${res.inserted} criados, ${res.skipped} duplicados de ${res.total} detectados.`,
+        `Importação concluída: ${res.inserted} criados, ${res.skipped} ignorados de ${res.total} detectados.`,
       );
       setText("");
       setOpen(false);
@@ -89,30 +86,19 @@ export function OpenFinanceImporter({ onImported }: { onImported?: () => void })
           <DialogDescription>
             Dê <kbd className="px-1 rounded border">Ctrl+A</kbd> e{" "}
             <kbd className="px-1 rounded border">Ctrl+C</kbd> na página de fluxo de caixa do Meu
-            Pluggy e cole o conteúdo abaixo. A IA vai identificar data, valor, descrição e
-            instituição (InfinitePay → Restaurante automaticamente).
+            Pluggy e cole o conteúdo abaixo. A IA classifica <strong>linha por linha</strong>:
+            <br />• <strong>InfinitePay</strong> → Restaurante
+            <br />• <strong>Mercado Pago</strong> → Cachoeira do Girassol
+            <br />• <strong>C6 Bank</strong> → Cachoeira do Girassol
           </DialogDescription>
         </DialogHeader>
 
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-1">
-            <label className="text-xs text-muted-foreground">Centro de custo padrão</label>
-            <Select value={costCenterId} onValueChange={setCostCenterId}>
-              <SelectTrigger>
-                <SelectValue placeholder="Selecione" />
-              </SelectTrigger>
-              <SelectContent>
-                {(ccs.data ?? []).map((c) => (
-                  <SelectItem key={c.id} value={c.id}>
-                    {c.code} — {c.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-1">
-            <label className="text-xs text-muted-foreground">Conta padrão</label>
-            <Select value={accountId} onValueChange={setAccountId} disabled={!costCenterId}>
+            <label className="text-xs text-muted-foreground">
+              Conta de destino <span className="text-destructive">*</span>
+            </label>
+            <Select value={accountId} onValueChange={setAccountId}>
               <SelectTrigger>
                 <SelectValue placeholder="Selecione" />
               </SelectTrigger>
@@ -125,12 +111,29 @@ export function OpenFinanceImporter({ onImported }: { onImported?: () => void })
               </SelectContent>
             </Select>
           </div>
+          <div className="space-y-1">
+            <label className="text-xs text-muted-foreground">
+              Centro de custo de fallback <span className="opacity-60">(opcional)</span>
+            </label>
+            <Select value={fallbackCostCenterId} onValueChange={setFallbackCostCenterId}>
+              <SelectTrigger>
+                <SelectValue placeholder="Só usado se IA não identificar o banco" />
+              </SelectTrigger>
+              <SelectContent>
+                {(ccs.data ?? []).map((c) => (
+                  <SelectItem key={c.id} value={c.id}>
+                    {c.code} — {c.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
         </div>
 
         <Textarea
           value={text}
           onChange={(e) => setText(e.target.value)}
-          placeholder="Cole aqui o texto copiado da página de fluxo de caixa do Meu Pluggy…"
+          placeholder="Cole aqui o texto copiado da página de fluxo de caixa do Meu Pluggy (pode misturar InfinitePay, Mercado Pago e C6 — a IA separa)…"
           className="min-h-[260px] font-mono text-xs"
         />
 

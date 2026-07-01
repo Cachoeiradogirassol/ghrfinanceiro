@@ -343,8 +343,9 @@ function ProjectionsPage() {
         return hasName || hasAmount || hasAnyOther;
       });
       if (meaningful.length === 0) {
-        toast.error("Nenhuma linha preenchida para salvar.", { duration: 8000 });
-        return { created: 0 };
+        throw new Error(
+          "Nenhuma linha preenchida — informe pelo menos Nome, Valor, Conta e Data em uma linha.",
+        );
       }
 
       // 2) Validação explícita com mensagem por linha.

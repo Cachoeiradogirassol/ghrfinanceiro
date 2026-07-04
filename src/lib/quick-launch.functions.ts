@@ -152,11 +152,11 @@ export const deleteRecurringGroup = createServerFn({ method: "POST" })
     const today = new Date().toISOString().slice(0, 10);
     let q = context.supabase
       .from("transactions")
-      .delete()
+      .delete({ count: "exact" })
       .ilike("description", `%[REC ${data.group_id}]%`)
       .neq("status", "reconciled");
     if (data.only_future) q = q.gte("due_date", today);
-    const { error, count } = await q.select("id", { count: "exact" });
+    const { error, count } = await q;
     if (error) throw new Error(error.message);
     return { deleted: count ?? 0 };
   });

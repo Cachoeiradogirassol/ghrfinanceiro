@@ -63,21 +63,21 @@ export function AppLayout({ children }: { children?: React.ReactNode }) {
     masterOnly?: boolean;
   }> = [
     {
-      label: "⚜ Reino",
+      label: "Operacional",
       items: [
-        { to: "/", label: "👑 Trono do Rei", icon: Crown },
-        { to: "/lancamentos", label: "🗺 Mapa de Territórios", icon: Map },
-        { to: "/conciliacao", label: "⚔ Arsenal do Tesouro", icon: Swords },
-        { to: "/projecoes", label: "🔮 Oráculo do Reino", icon: Sparkle },
-        { to: "/contatos", label: "🛡 Vassalos e Aliados", icon: Shield },
+        { to: "/", label: "Painel Executivo", icon: Crown },
+        { to: "/lancamentos", label: "Lançamentos", icon: Map },
+        { to: "/conciliacao", label: "Conciliação Bancária", icon: Swords },
+        { to: "/projecoes", label: "Projeções Financeiras", icon: Sparkle },
+        { to: "/contatos", label: "Contatos", icon: Shield },
       ],
     },
     {
-      label: "⚜ Corte Real",
+      label: "Administração / Controladoria",
       masterOnly: true,
       items: [
-        { to: "/contas", label: "📜 Pergaminho de Contas", icon: ScrollText },
-        { to: "/relatorios", label: "📊 Crônicas do Reino", icon: BarChart3 },
+        { to: "/contas", label: "Plano de Contas", icon: ScrollText },
+        { to: "/relatorios", label: "Relatórios e DRE", icon: BarChart3 },
         {
           to: "/configuracoes",
           label: "Configurações",
@@ -96,11 +96,11 @@ export function AppLayout({ children }: { children?: React.ReactNode }) {
     <div className="flex h-screen bg-background text-foreground">
       <aside className="w-60 border-r border-border bg-sidebar flex flex-col">
         <div className="p-5 border-b border-border">
-          <h1 className="text-lg font-bold tracking-tight">⚜ TRONO DO IMPÉRIO ⚜</h1>
+          <h1 className="text-lg font-bold tracking-tight">CONTROLE.GHR</h1>
           <p className="text-xs text-muted-foreground mt-1">
             {isMaster ? (
               <span className="inline-flex items-center gap-1 text-primary">
-                <Lock className="h-3 w-3" /> Master
+                <Lock className="h-3 w-3" /> Controladoria
               </span>
             ) : (
               "Usuário"

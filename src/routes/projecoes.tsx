@@ -612,11 +612,16 @@ function ProjectionsPage() {
         </div>
       </div>
 
-      <Tabs defaultValue="gerenciar" className="w-full">
+      <Tabs defaultValue="fluxo" className="w-full">
         <TabsList>
-          <TabsTrigger value="gerenciar">Gerenciar Projeções</TabsTrigger>
+          <TabsTrigger value="fluxo">Fluxo Projetado (inteligente)</TabsTrigger>
+          <TabsTrigger value="gerenciar">Projeções Manuais</TabsTrigger>
           <TabsTrigger value="grafico">Gráfico Consolidado</TabsTrigger>
         </TabsList>
+
+        <TabsContent value="fluxo" className="mt-4">
+          <CashFlowProjectionPanel />
+        </TabsContent>
 
         <TabsContent value="gerenciar" className="space-y-6 mt-4">
           {gridMode && (

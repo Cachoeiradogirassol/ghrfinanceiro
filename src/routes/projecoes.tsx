@@ -74,6 +74,7 @@ import autoTable from "jspdf-autotable";
 import * as XLSX from "xlsx";
 import { supabase } from "@/integrations/supabase/client";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { CashFlowProjectionPanel } from "@/components/CashFlowProjectionPanel";
 
 export const Route = createFileRoute("/projecoes")({
   head: () => ({

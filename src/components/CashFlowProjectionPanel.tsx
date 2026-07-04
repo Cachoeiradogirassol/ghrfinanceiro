@@ -220,9 +220,8 @@ export function CashFlowProjectionPanel() {
                 const bd: BreakdownItem[] = q.data?.breakdown[m.month] ?? [];
                 const layerSum = (l: { in: number; out: number }) => l.in - l.out;
                 return (
-                  <>
+                  <Fragment key={m.month}>
                     <TableRow
-                      key={m.month}
                       className={m.negative ? "bg-red-500/5" : m.is_future ? "" : "bg-muted/30"}
                     >
                       <TableCell>

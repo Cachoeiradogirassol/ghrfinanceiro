@@ -35,7 +35,7 @@ import { z } from "zod";
  * Observação sobre a tabela:
  *   O cadastro real da GHR usa `public.transactions` (não existe
  *   `fluxo_de_caixa_consolidado`). É essa tabela que alimenta o DRE do
- *   👑 Trono do Rei e o 🔮 Oráculo do Reino, então é onde inserimos.
+ *   Painel Executivo e as Projeções Financeiras, então é onde inserimos.
  */
 
 // -------- Mapeamento Centro de Custo por origem --------

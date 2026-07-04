@@ -97,7 +97,19 @@ export const createQuickTransaction = createServerFn({ method: "POST" })
       : null;
     const total = useRec ? (rec!.installments as number) : 1;
 
-    const rows: Array<Record<string, unknown>> = [];
+    type TxInsert = {
+      cost_center_id: string;
+      account_id: string;
+      contact_id: string;
+      type: "receivable" | "payable";
+      amount: number;
+      due_date: string;
+      description: string;
+      status: "pending";
+      is_batch: boolean;
+      created_by: string;
+    };
+    const rows: TxInsert[] = [];
     for (let i = 0; i < total; i++) {
       const dueDate =
         !useRec || i === 0

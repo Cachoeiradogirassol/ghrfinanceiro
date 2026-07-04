@@ -249,6 +249,36 @@ function List() {
   });
   const [editing, setEditing] = useState<null | Record<string, unknown>>(null);
   const [gridMode, setGridMode] = useState(false);
+  const [quickMode, setQuickMode] = useState(true);
+  const [recDialog, setRecDialog] = useState<{
+    tx_id: string;
+    group_id: string;
+    description: string;
+  } | null>(null);
+
+  const delRecFn = useServerFn(deleteRecurringGroup);
+  const delRecMut = useMutation({
+    mutationFn: (group_id: string) => delRecFn({ data: { group_id, only_future: true } }),
+    onSuccess: (res) => {
+      toast.success(`${res.deleted} lançamentos futuros do grupo removidos.`);
+      qc.invalidateQueries({ queryKey: ["txs"] });
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Erro"),
+  });
+
+  const extractGroupId = (desc: string | null | undefined): string | null => {
+    if (!desc) return null;
+    const m = desc.match(/\[REC ([a-zA-Z0-9-]+)\]/);
+    return m ? m[1] : null;
+  };
+  const handleDeleteClick = (tx: Tx) => {
+    const gid = extractGroupId(tx.description);
+    if (gid) {
+      setRecDialog({ tx_id: tx.id, group_id: gid, description: tx.description ?? "" });
+    } else {
+      mut.mutate(tx.id);
+    }
+  };
 
   // Carrega CCs e Accounts apenas quando grade está ativa
   const ccFn = useServerFn(listCostCenters);

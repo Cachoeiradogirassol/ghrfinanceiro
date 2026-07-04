@@ -380,7 +380,14 @@ function List() {
           <h1 className="text-3xl font-bold">Lançamentos</h1>
           <p className="text-muted-foreground">Contas a Pagar e Receber</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
+          <Button
+            variant={quickMode ? "default" : "outline"}
+            onClick={() => setQuickMode((v) => !v)}
+          >
+            <Zap className="h-4 w-4 mr-2" />
+            {quickMode ? "Ocultar Rápido" : "Lançamento Rápido"}
+          </Button>
           <Button variant={gridMode ? "default" : "outline"} onClick={() => setGridMode((v) => !v)}>
             <Grid3x3 className="h-4 w-4 mr-2" />
             {gridMode ? "Sair da Grade" : "Modo Grade Rápida"}
@@ -406,6 +413,8 @@ function List() {
           </Link>
         </div>
       </div>
+
+      {quickMode && !gridMode && <QuickLaunchForm />}
 
       {gridMode && (
         <QuickGrid

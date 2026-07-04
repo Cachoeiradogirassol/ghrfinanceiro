@@ -556,6 +556,46 @@ function List() {
           if (!v) setEditing(null);
         }}
       />
+      <AlertDialog
+        open={!!recDialog}
+        onOpenChange={(v) => {
+          if (!v) setRecDialog(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Lançamento recorrente</AlertDialogTitle>
+            <AlertDialogDescription>
+              Este lançamento faz parte de uma recorrência. Deseja excluir apenas este ou todos os
+              futuros pendentes do mesmo grupo?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <Button
+              variant="outline"
+              onClick={() => {
+                if (recDialog) {
+                  mut.mutate(recDialog.tx_id);
+                  setRecDialog(null);
+                }
+              }}
+            >
+              Só este
+            </Button>
+            <AlertDialogAction
+              onClick={() => {
+                if (recDialog) {
+                  delRecMut.mutate(recDialog.group_id);
+                  setRecDialog(null);
+                }
+              }}
+            >
+              Todos futuros do grupo
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

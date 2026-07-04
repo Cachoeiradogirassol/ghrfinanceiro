@@ -21,13 +21,25 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Trash2, Layers, User, Download, Pencil, Grid3x3 } from "lucide-react";
+import { Plus, Trash2, Layers, User, Download, Pencil, Grid3x3, Zap } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/lib/auth";
 import { useMemo, useState } from "react";
 import { EditTransactionDialog } from "@/components/EditTransactionDialog";
 import { QuickGrid, type GridColumnDef } from "@/components/QuickGrid";
+import { QuickLaunchForm } from "@/components/QuickLaunchForm";
+import { deleteRecurringGroup } from "@/lib/quick-launch.functions";
 import { groupAccounts } from "@/lib/account-options";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 type Tx = {
   id: string;
@@ -237,6 +249,36 @@ function List() {
   });
   const [editing, setEditing] = useState<null | Record<string, unknown>>(null);
   const [gridMode, setGridMode] = useState(false);
+  const [quickMode, setQuickMode] = useState(true);
+  const [recDialog, setRecDialog] = useState<{
+    tx_id: string;
+    group_id: string;
+    description: string;
+  } | null>(null);
+
+  const delRecFn = useServerFn(deleteRecurringGroup);
+  const delRecMut = useMutation({
+    mutationFn: (group_id: string) => delRecFn({ data: { group_id, only_future: true } }),
+    onSuccess: (res) => {
+      toast.success(`${res.deleted} lançamentos futuros do grupo removidos.`);
+      qc.invalidateQueries({ queryKey: ["txs"] });
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Erro"),
+  });
+
+  const extractGroupId = (desc: string | null | undefined): string | null => {
+    if (!desc) return null;
+    const m = desc.match(/\[REC ([a-zA-Z0-9-]+)\]/);
+    return m ? m[1] : null;
+  };
+  const handleDeleteClick = (tx: Tx) => {
+    const gid = extractGroupId(tx.description);
+    if (gid) {
+      setRecDialog({ tx_id: tx.id, group_id: gid, description: tx.description ?? "" });
+    } else {
+      mut.mutate(tx.id);
+    }
+  };
 
   // Carrega CCs e Accounts apenas quando grade está ativa
   const ccFn = useServerFn(listCostCenters);
@@ -338,7 +380,14 @@ function List() {
           <h1 className="text-3xl font-bold">Lançamentos</h1>
           <p className="text-muted-foreground">Contas a Pagar e Receber</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
+          <Button
+            variant={quickMode ? "default" : "outline"}
+            onClick={() => setQuickMode((v) => !v)}
+          >
+            <Zap className="h-4 w-4 mr-2" />
+            {quickMode ? "Ocultar Rápido" : "Lançamento Rápido"}
+          </Button>
           <Button variant={gridMode ? "default" : "outline"} onClick={() => setGridMode((v) => !v)}>
             <Grid3x3 className="h-4 w-4 mr-2" />
             {gridMode ? "Sair da Grade" : "Modo Grade Rápida"}
@@ -364,6 +413,8 @@ function List() {
           </Link>
         </div>
       </div>
+
+      {quickMode && !gridMode && <QuickLaunchForm />}
 
       {gridMode && (
         <QuickGrid
@@ -476,7 +527,7 @@ function List() {
                         size="icon"
                         variant="ghost"
                         aria-label="Excluir lançamento"
-                        onClick={() => mut.mutate(t.id)}
+                        onClick={() => handleDeleteClick(t as unknown as Tx)}
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>
@@ -505,6 +556,46 @@ function List() {
           if (!v) setEditing(null);
         }}
       />
+      <AlertDialog
+        open={!!recDialog}
+        onOpenChange={(v) => {
+          if (!v) setRecDialog(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Lançamento recorrente</AlertDialogTitle>
+            <AlertDialogDescription>
+              Este lançamento faz parte de uma recorrência. Deseja excluir apenas este ou todos os
+              futuros pendentes do mesmo grupo?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <Button
+              variant="outline"
+              onClick={() => {
+                if (recDialog) {
+                  mut.mutate(recDialog.tx_id);
+                  setRecDialog(null);
+                }
+              }}
+            >
+              Só este
+            </Button>
+            <AlertDialogAction
+              onClick={() => {
+                if (recDialog) {
+                  delRecMut.mutate(recDialog.group_id);
+                  setRecDialog(null);
+                }
+              }}
+            >
+              Todos futuros do grupo
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

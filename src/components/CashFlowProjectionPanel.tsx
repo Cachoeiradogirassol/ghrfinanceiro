@@ -318,7 +318,7 @@ export function CashFlowProjectionPanel() {
                         </TableCell>
                       </TableRow>
                     )}
-                  </>
+                  </Fragment>
                 );
               })}
             </TableBody>

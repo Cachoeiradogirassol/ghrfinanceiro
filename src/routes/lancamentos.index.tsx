@@ -21,13 +21,25 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Trash2, Layers, User, Download, Pencil, Grid3x3 } from "lucide-react";
+import { Plus, Trash2, Layers, User, Download, Pencil, Grid3x3, Zap } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/lib/auth";
 import { useMemo, useState } from "react";
 import { EditTransactionDialog } from "@/components/EditTransactionDialog";
 import { QuickGrid, type GridColumnDef } from "@/components/QuickGrid";
+import { QuickLaunchForm } from "@/components/QuickLaunchForm";
+import { deleteRecurringGroup } from "@/lib/quick-launch.functions";
 import { groupAccounts } from "@/lib/account-options";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 type Tx = {
   id: string;

@@ -63,21 +63,21 @@ export function AppLayout({ children }: { children?: React.ReactNode }) {
     masterOnly?: boolean;
   }> = [
     {
-      label: "⚜ Reino",
+      label: "Operacional",
       items: [
-        { to: "/", label: "👑 Trono do Rei", icon: Crown },
-        { to: "/lancamentos", label: "🗺 Mapa de Territórios", icon: Map },
-        { to: "/conciliacao", label: "⚔ Arsenal do Tesouro", icon: Swords },
-        { to: "/projecoes", label: "🔮 Oráculo do Reino", icon: Sparkle },
-        { to: "/contatos", label: "🛡 Vassalos e Aliados", icon: Shield },
+        { to: "/", label: "Painel Executivo", icon: Crown },
+        { to: "/lancamentos", label: "Lançamentos", icon: Map },
+        { to: "/conciliacao", label: "Conciliação Bancária", icon: Swords },
+        { to: "/projecoes", label: "Projeções Financeiras", icon: Sparkle },
+        { to: "/contatos", label: "Contatos", icon: Shield },
       ],
     },
     {
-      label: "⚜ Corte Real",
+      label: "Administração / Controladoria",
       masterOnly: true,
       items: [
-        { to: "/contas", label: "📜 Pergaminho de Contas", icon: ScrollText },
-        { to: "/relatorios", label: "📊 Crônicas do Reino", icon: BarChart3 },
+        { to: "/contas", label: "Plano de Contas", icon: ScrollText },
+        { to: "/relatorios", label: "Relatórios e DRE", icon: BarChart3 },
         {
           to: "/configuracoes",
           label: "Configurações",

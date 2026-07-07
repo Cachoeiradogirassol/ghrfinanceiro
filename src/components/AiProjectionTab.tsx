@@ -215,12 +215,44 @@ export function AiProjectionTab() {
           confirmar.
         </p>
         <Textarea
-          value={text}
+          value={text + (speech.interim ? (text && !/\s$/.test(text) ? " " : "") + speech.interim : "")}
           onChange={(e) => setText(e.target.value)}
           rows={6}
-          placeholder="Descreva livremente as projeções que deseja criar…"
+          placeholder="Descreva livremente as projeções que deseja criar — ou clique no microfone e fale…"
         />
-        <div className="flex justify-end gap-2">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            {speech.supported ? (
+              <>
+                <Button
+                  type="button"
+                  variant={speech.listening ? "destructive" : "outline"}
+                  onClick={speech.toggle}
+                  className={speech.listening ? "animate-pulse" : ""}
+                >
+                  {speech.listening ? (
+                    <>
+                      <MicOff className="h-4 w-4 mr-1" /> Parar gravação
+                    </>
+                  ) : (
+                    <>
+                      <Mic className="h-4 w-4 mr-1" /> Falar projeção
+                    </>
+                  )}
+                </Button>
+                {speech.listening && (
+                  <span className="flex items-center gap-1.5 text-xs text-destructive">
+                    <span className="inline-block h-2 w-2 rounded-full bg-destructive animate-pulse" />
+                    ouvindo…
+                  </span>
+                )}
+              </>
+            ) : (
+              <span className="text-xs text-muted-foreground">
+                Reconhecimento de voz não suportado neste navegador — use o Chrome ou digite o texto.
+              </span>
+            )}
+          </div>
           <Button
             onClick={() => interpretMut.mutate()}
             disabled={interpretMut.isPending || text.trim().length < 3}

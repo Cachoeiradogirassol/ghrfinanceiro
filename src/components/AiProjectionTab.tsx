@@ -21,7 +21,8 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { Sparkles, Wand2, FileSpreadsheet, Trash2, CheckCircle2 } from "lucide-react";
+import { Sparkles, Wand2, FileSpreadsheet, Trash2, CheckCircle2, Mic, MicOff } from "lucide-react";
+import { useSpeechToText } from "@/hooks/use-speech-to-text";
 import { toast } from "sonner";
 import * as XLSX from "xlsx";
 import {
@@ -68,6 +69,31 @@ export function AiProjectionTab() {
   const [text, setText] = useState("");
   const [rows, setRows] = useState<Row[]>([]);
   const [confirmOpen, setConfirmOpen] = useState(false);
+
+  const speech = useSpeechToText({
+    lang: "pt-BR",
+    continuous: true,
+    interimResults: true,
+    onFinalChunk: (chunk) => {
+      setText((prev) => {
+        const sep = prev.length === 0 || /\s$/.test(prev) ? "" : " ";
+        return prev + sep + chunk.trim() + " ";
+      });
+    },
+    onError: ({ error }) => {
+      if (error === "not-allowed" || error === "service-not-allowed") {
+        toast.error(
+          "Permissão de microfone negada. Libere o acesso nas configurações do navegador ou digite o texto.",
+        );
+      } else if (error === "no-speech") {
+        // silent — normal when user pauses
+      } else if (error === "audio-capture") {
+        toast.error("Nenhum microfone detectado.");
+      } else {
+        toast.error(`Erro no reconhecimento de voz: ${error}`);
+      }
+    },
+  });
 
   const interpretMut = useMutation({
     mutationFn: async () => {
@@ -189,12 +215,44 @@ export function AiProjectionTab() {
           confirmar.
         </p>
         <Textarea
-          value={text}
+          value={text + (speech.interim ? (text && !/\s$/.test(text) ? " " : "") + speech.interim : "")}
           onChange={(e) => setText(e.target.value)}
           rows={6}
-          placeholder="Descreva livremente as projeções que deseja criar…"
+          placeholder="Descreva livremente as projeções que deseja criar — ou clique no microfone e fale…"
         />
-        <div className="flex justify-end gap-2">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            {speech.supported ? (
+              <>
+                <Button
+                  type="button"
+                  variant={speech.listening ? "destructive" : "outline"}
+                  onClick={speech.toggle}
+                  className={speech.listening ? "animate-pulse" : ""}
+                >
+                  {speech.listening ? (
+                    <>
+                      <MicOff className="h-4 w-4 mr-1" /> Parar gravação
+                    </>
+                  ) : (
+                    <>
+                      <Mic className="h-4 w-4 mr-1" /> Falar projeção
+                    </>
+                  )}
+                </Button>
+                {speech.listening && (
+                  <span className="flex items-center gap-1.5 text-xs text-destructive">
+                    <span className="inline-block h-2 w-2 rounded-full bg-destructive animate-pulse" />
+                    ouvindo…
+                  </span>
+                )}
+              </>
+            ) : (
+              <span className="text-xs text-muted-foreground">
+                Reconhecimento de voz não suportado neste navegador — use o Chrome ou digite o texto.
+              </span>
+            )}
+          </div>
           <Button
             onClick={() => interpretMut.mutate()}
             disabled={interpretMut.isPending || text.trim().length < 3}

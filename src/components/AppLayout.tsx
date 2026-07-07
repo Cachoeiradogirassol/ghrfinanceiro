@@ -16,11 +16,13 @@ import {
   FileBarChart,
   BarChart3,
   Sparkle,
-  ContactRound,
   Shield,
+  Menu,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Sheet, SheetContent, SheetTrigger, SheetTitle } from "@/components/ui/sheet";
+import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
 
 type NavItem = {
   to: string;
@@ -33,15 +35,27 @@ type NavItem = {
   }>;
 };
 
+type NavGroup = {
+  label: string;
+  items: NavItem[];
+  masterOnly?: boolean;
+};
+
 export function AppLayout({ children }: { children?: React.ReactNode }) {
   const { user, isMaster, loading } = useAuth();
   const navigate = useNavigate();
   const router = useRouter();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const [mobileOpen, setMobileOpen] = useState(false);
 
   useEffect(() => {
     if (!loading && !user) navigate({ to: "/auth" });
   }, [loading, user, navigate]);
+
+  // Close the mobile drawer whenever the route changes.
+  useEffect(() => {
+    setMobileOpen(false);
+  }, [pathname]);
 
   if (loading || !user) {
     return (
@@ -57,11 +71,7 @@ export function AppLayout({ children }: { children?: React.ReactNode }) {
     navigate({ to: "/auth", replace: true });
   };
 
-  const groups: Array<{
-    label: string;
-    items: NavItem[];
-    masterOnly?: boolean;
-  }> = [
+  const groups: NavGroup[] = [
     {
       label: "Operacional",
       items: [
@@ -92,63 +102,131 @@ export function AppLayout({ children }: { children?: React.ReactNode }) {
     },
   ];
 
+  const visibleGroups = groups.filter((g) => !g.masterOnly || isMaster);
+
+  const navBody = (
+    <NavContent
+      groups={visibleGroups}
+      pathname={pathname}
+      isMaster={isMaster}
+      email={user.email ?? ""}
+      onSignOut={signOut}
+      onNavigate={() => setMobileOpen(false)}
+    />
+  );
+
   return (
     <div className="flex h-screen bg-background text-foreground">
-      <aside className="w-60 border-r border-border bg-sidebar flex flex-col">
-        <div className="p-5 border-b border-border">
-          <h1 className="text-lg font-bold tracking-tight">CONTROLE.GHR</h1>
-          <p className="text-xs text-muted-foreground mt-1">
-            {isMaster ? (
-              <span className="inline-flex items-center gap-1 text-primary">
-                <Lock className="h-3 w-3" /> Controladoria
-              </span>
-            ) : (
-              "Usuário"
-            )}
-          </p>
-        </div>
-        <nav className="flex-1 p-3 space-y-4 overflow-y-auto">
-          {groups
-            .filter((g) => !g.masterOnly || isMaster)
-            .map((g) => (
-              <div key={g.label}>
-                <p className="text-[10px] uppercase tracking-wider text-muted-foreground px-2 mb-1.5">
-                  {g.label}
-                </p>
-                <div className="space-y-0.5">
-                  {g.items.map((n) =>
-                    n.children ? (
-                      <ExpandableNav key={n.to} item={n} pathname={pathname} />
-                    ) : (
-                      <Link
-                        key={n.to}
-                        to={n.to}
-                        activeProps={{ className: "bg-primary text-primary-foreground" }}
-                        activeOptions={{ exact: n.to === "/" }}
-                        className="flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium hover:bg-accent transition-colors"
-                      >
-                        <n.icon className="h-4 w-4" />
-                        {n.label}
-                      </Link>
-                    ),
-                  )}
-                </div>
-              </div>
-            ))}
-        </nav>
-        <div className="p-3 border-t border-border space-y-2">
-          <p className="text-xs text-muted-foreground px-2 truncate">{user.email}</p>
-          <Button variant="ghost" size="sm" className="w-full justify-start" onClick={signOut}>
-            <LogOut className="h-4 w-4 mr-2" /> Sair
-          </Button>
-        </div>
+      {/* Desktop sidebar */}
+      <aside className="hidden md:flex w-60 border-r border-border bg-sidebar flex-col">
+        {navBody}
       </aside>
-      <main className="flex-1 overflow-auto">{children ?? <Outlet />}</main>
+
+      {/* Mobile top bar + drawer */}
+      <div className="flex flex-1 flex-col min-w-0">
+        <header className="md:hidden flex items-center justify-between border-b border-border bg-sidebar px-4 h-14 shrink-0">
+          <h1 className="text-base font-bold tracking-tight">CONTROLE.GHR</h1>
+          <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
+            <SheetTrigger asChild>
+              <Button variant="ghost" size="icon" aria-label="Abrir menu">
+                <Menu className="h-5 w-5" />
+              </Button>
+            </SheetTrigger>
+            <SheetContent side="right" className="p-0 w-72 bg-sidebar flex flex-col">
+              <VisuallyHidden>
+                <SheetTitle>Menu de navegação</SheetTitle>
+              </VisuallyHidden>
+              {navBody}
+            </SheetContent>
+          </Sheet>
+        </header>
+        <main className="flex-1 overflow-auto">{children ?? <Outlet />}</main>
+      </div>
     </div>
   );
 }
 
-function ExpandableNav({ item, pathname }: { item: NavItem; pathname: string }) {
+function NavContent({
+  groups,
+  pathname,
+  isMaster,
+  email,
+  onSignOut,
+  onNavigate,
+}: {
+  groups: NavGroup[];
+  pathname: string;
+  isMaster: boolean;
+  email: string;
+  onSignOut: () => void;
+  onNavigate: () => void;
+}) {
+  return (
+    <>
+      <div className="p-5 border-b border-border">
+        <h1 className="text-lg font-bold tracking-tight">CONTROLE.GHR</h1>
+        <p className="text-xs text-muted-foreground mt-1">
+          {isMaster ? (
+            <span className="inline-flex items-center gap-1 text-primary">
+              <Lock className="h-3 w-3" /> Controladoria
+            </span>
+          ) : (
+            "Usuário"
+          )}
+        </p>
+      </div>
+      <nav className="flex-1 p-3 space-y-4 overflow-y-auto">
+        {groups.map((g) => (
+          <div key={g.label}>
+            <p className="text-[10px] uppercase tracking-wider text-muted-foreground px-2 mb-1.5">
+              {g.label}
+            </p>
+            <div className="space-y-0.5">
+              {g.items.map((n) =>
+                n.children ? (
+                  <ExpandableNav
+                    key={n.to}
+                    item={n}
+                    pathname={pathname}
+                    onNavigate={onNavigate}
+                  />
+                ) : (
+                  <Link
+                    key={n.to}
+                    to={n.to}
+                    onClick={onNavigate}
+                    activeProps={{ className: "bg-primary text-primary-foreground" }}
+                    activeOptions={{ exact: n.to === "/" }}
+                    className="flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium hover:bg-accent transition-colors"
+                  >
+                    <n.icon className="h-4 w-4" />
+                    {n.label}
+                  </Link>
+                ),
+              )}
+            </div>
+          </div>
+        ))}
+      </nav>
+      <div className="p-3 border-t border-border space-y-2">
+        <p className="text-xs text-muted-foreground px-2 truncate">{email}</p>
+        <Button variant="ghost" size="sm" className="w-full justify-start" onClick={onSignOut}>
+          <LogOut className="h-4 w-4 mr-2" /> Sair
+        </Button>
+      </div>
+    </>
+  );
+}
+
+function ExpandableNav({
+  item,
+  pathname,
+  onNavigate,
+}: {
+  item: NavItem;
+  pathname: string;
+  onNavigate: () => void;
+}) {
   const isActiveBranch = pathname.startsWith(item.to);
   const [open, setOpen] = useState(isActiveBranch);
   useEffect(() => {
@@ -172,6 +250,7 @@ function ExpandableNav({ item, pathname }: { item: NavItem; pathname: string }) 
             <Link
               key={c.to}
               to={c.to}
+              onClick={onNavigate}
               activeProps={{ className: "bg-primary text-primary-foreground" }}
               className="flex items-center gap-2 rounded-md px-3 py-1.5 text-xs font-medium hover:bg-accent transition-colors"
             >

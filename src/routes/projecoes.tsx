@@ -895,6 +895,9 @@ function ProjectionsPage() {
               </Button>
             </div>
           </Card>
+              </AccordionContent>
+            </AccordionItem>
+          </Accordion>
 
           <Card className="p-5">
             <h2 className="font-semibold mb-3">Projeções Ativas</h2>

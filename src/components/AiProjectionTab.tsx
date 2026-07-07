@@ -70,6 +70,31 @@ export function AiProjectionTab() {
   const [rows, setRows] = useState<Row[]>([]);
   const [confirmOpen, setConfirmOpen] = useState(false);
 
+  const speech = useSpeechToText({
+    lang: "pt-BR",
+    continuous: true,
+    interimResults: true,
+    onFinalChunk: (chunk) => {
+      setText((prev) => {
+        const sep = prev.length === 0 || /\s$/.test(prev) ? "" : " ";
+        return prev + sep + chunk.trim() + " ";
+      });
+    },
+    onError: ({ error }) => {
+      if (error === "not-allowed" || error === "service-not-allowed") {
+        toast.error(
+          "Permissão de microfone negada. Libere o acesso nas configurações do navegador ou digite o texto.",
+        );
+      } else if (error === "no-speech") {
+        // silent — normal when user pauses
+      } else if (error === "audio-capture") {
+        toast.error("Nenhum microfone detectado.");
+      } else {
+        toast.error(`Erro no reconhecimento de voz: ${error}`);
+      }
+    },
+  });
+
   const interpretMut = useMutation({
     mutationFn: async () => {
       if (text.trim().length < 3) throw new Error("Escreva o que deseja projetar.");

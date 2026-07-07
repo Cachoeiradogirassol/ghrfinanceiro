@@ -75,6 +75,7 @@ import * as XLSX from "xlsx";
 import { supabase } from "@/integrations/supabase/client";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { CashFlowProjectionPanel } from "@/components/CashFlowProjectionPanel";
+import { AiProjectionTab } from "@/components/AiProjectionTab";
 
 export const Route = createFileRoute("/projecoes")({
   head: () => ({
@@ -615,12 +616,17 @@ function ProjectionsPage() {
       <Tabs defaultValue="fluxo" className="w-full">
         <TabsList>
           <TabsTrigger value="fluxo">Fluxo Projetado (inteligente)</TabsTrigger>
+          <TabsTrigger value="ia">Projeção por IA</TabsTrigger>
           <TabsTrigger value="gerenciar">Projeções Manuais</TabsTrigger>
           <TabsTrigger value="grafico">Gráfico Consolidado</TabsTrigger>
         </TabsList>
 
         <TabsContent value="fluxo" className="mt-4">
           <CashFlowProjectionPanel />
+        </TabsContent>
+
+        <TabsContent value="ia" className="mt-4">
+          <AiProjectionTab />
         </TabsContent>
 
         <TabsContent value="gerenciar" className="space-y-6 mt-4">

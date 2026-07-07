@@ -603,10 +603,6 @@ function ProjectionsPage() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Button variant={gridMode ? "default" : "outline"} onClick={() => setGridMode((v) => !v)}>
-            <Grid3x3 className="h-4 w-4 mr-1" />
-            {gridMode ? "Sair da Grade" : "Modo Grade Rápida"}
-          </Button>
           <Button variant="outline" onClick={handleExportPDF}>
             <FileDown className="h-4 w-4 mr-1" /> Exportar Cenário (PDF)
           </Button>
@@ -619,11 +615,67 @@ function ProjectionsPage() {
         </div>
       </div>
 
+      {/* HERO — Projeção por IA como caminho principal */}
+      <Card className="p-6 border-2 border-primary/60 bg-gradient-to-br from-primary/5 via-background to-background shadow-md">
+        <div className="flex items-start gap-3 mb-4">
+          <div className="rounded-lg bg-primary/10 p-2">
+            <Sparkles className="h-6 w-6 text-primary" />
+          </div>
+          <div>
+            <h2 className="text-xl font-bold">Criar projeção com IA</h2>
+            <p className="text-sm text-muted-foreground">
+              Descreva em texto o que você espera de entradas e saídas — a IA monta a projeção pra
+              você. Nada é salvo antes da sua confirmação.
+            </p>
+          </div>
+        </div>
+        <AiProjectionTab />
+      </Card>
+
+      {/* Modo manual (avançado) — recolhido */}
+      <Accordion type="single" collapsible>
+        <AccordionItem value="manual" className="border rounded-md bg-card">
+          <AccordionTrigger className="px-4 hover:no-underline">
+            <span className="flex items-center gap-2 text-sm font-medium">
+              <TrendingUp className="h-4 w-4 text-muted-foreground" />
+              Criar manualmente (avançado)
+            </span>
+          </AccordionTrigger>
+          <AccordionContent className="px-4 pb-4 space-y-4">
+            <div className="flex justify-end">
+              <Button
+                variant={gridMode ? "default" : "outline"}
+                size="sm"
+                onClick={() => setGridMode((v) => !v)}
+              >
+                <Grid3x3 className="h-4 w-4 mr-1" />
+                {gridMode ? "Sair da Grade" : "Modo Grade Rápida"}
+              </Button>
+            </div>
+            {gridMode && (
+              <Card className="p-4">
+                <QuickGrid
+                  columns={gridColumns}
+                  initialRows={5}
+                  onSave={handleBulkSave}
+                  saveLabel="Salvar Projeções em Lote"
+                  emptyRow={{
+                    direction: "inflow",
+                    monthly_growth_rate: "0.7",
+                    horizon_months: "12",
+                  }}
+                />
+              </Card>
+            )}
+            <ManualProjectionFormMount />
+          </AccordionContent>
+        </AccordionItem>
+      </Accordion>
+
       <Tabs defaultValue="fluxo" className="w-full">
         <TabsList>
           <TabsTrigger value="fluxo">Fluxo Projetado (inteligente)</TabsTrigger>
-          <TabsTrigger value="ia">Projeção por IA</TabsTrigger>
-          <TabsTrigger value="gerenciar">Projeções Manuais</TabsTrigger>
+          <TabsTrigger value="gerenciar">Projeções Ativas</TabsTrigger>
           <TabsTrigger value="grafico">Gráfico Consolidado</TabsTrigger>
         </TabsList>
 
@@ -631,12 +683,8 @@ function ProjectionsPage() {
           <CashFlowProjectionPanel />
         </TabsContent>
 
-        <TabsContent value="ia" className="mt-4">
-          <AiProjectionTab />
-        </TabsContent>
-
         <TabsContent value="gerenciar" className="space-y-6 mt-4">
-          {gridMode && (
+          {false && (
             <Card className="p-4">
               <QuickGrid
                 columns={gridColumns}
@@ -649,14 +697,6 @@ function ProjectionsPage() {
                   horizon_months: "12",
                 }}
               />
-            </Card>
-          )}
-
-          <Card className="p-5 space-y-4">
-            <div className="flex items-center gap-2">
-              <TrendingUp className="h-5 w-5 text-primary" />
-              <h2 className="font-semibold">Nova Projeção</h2>
-            </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2 md:col-span-2">
                 <Label>Tipo da Projeção *</Label>

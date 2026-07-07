@@ -632,42 +632,33 @@ function ProjectionsPage() {
         <AiProjectionTab />
       </Card>
 
-      {/* Modo manual (avançado) — recolhido */}
+      {/* Modo Grade Rápida (avançado) — recolhido */}
       <Accordion type="single" collapsible>
         <AccordionItem value="manual" className="border rounded-md bg-card">
           <AccordionTrigger className="px-4 hover:no-underline">
             <span className="flex items-center gap-2 text-sm font-medium">
-              <TrendingUp className="h-4 w-4 text-muted-foreground" />
-              Criar manualmente (avançado)
+              <Grid3x3 className="h-4 w-4 text-muted-foreground" />
+              Modo Grade Rápida (avançado) — cadastro em lote linha a linha
             </span>
           </AccordionTrigger>
-          <AccordionContent className="px-4 pb-4 space-y-4">
-            <div className="flex justify-end">
-              <Button
-                variant={gridMode ? "default" : "outline"}
-                size="sm"
-                onClick={() => setGridMode((v) => !v)}
-              >
-                <Grid3x3 className="h-4 w-4 mr-1" />
-                {gridMode ? "Sair da Grade" : "Modo Grade Rápida"}
-              </Button>
-            </div>
-            {gridMode && (
-              <Card className="p-4">
-                <QuickGrid
-                  columns={gridColumns}
-                  initialRows={5}
-                  onSave={handleBulkSave}
-                  saveLabel="Salvar Projeções em Lote"
-                  emptyRow={{
-                    direction: "inflow",
-                    monthly_growth_rate: "0.7",
-                    horizon_months: "12",
-                  }}
-                />
-              </Card>
-            )}
-            <ManualProjectionFormMount />
+          <AccordionContent className="px-4 pb-4 space-y-3">
+            <p className="text-xs text-muted-foreground">
+              Alternativa manual para cadastrar várias projeções em planilha. Use apenas se
+              precisar de controle absoluto sobre cada campo — o método recomendado é a IA acima.
+            </p>
+            <Card className="p-4">
+              <QuickGrid
+                columns={gridColumns}
+                initialRows={5}
+                onSave={handleBulkSave}
+                saveLabel="Salvar Projeções em Lote"
+                emptyRow={{
+                  direction: "inflow",
+                  monthly_growth_rate: "0.7",
+                  horizon_months: "12",
+                }}
+              />
+            </Card>
           </AccordionContent>
         </AccordionItem>
       </Accordion>
@@ -684,20 +675,21 @@ function ProjectionsPage() {
         </TabsContent>
 
         <TabsContent value="gerenciar" className="space-y-6 mt-4">
-          {false && (
-            <Card className="p-4">
-              <QuickGrid
-                columns={gridColumns}
-                initialRows={5}
-                onSave={handleBulkSave}
-                saveLabel="Salvar Projeções em Lote"
-                emptyRow={{
-                  direction: "inflow",
-                  monthly_growth_rate: "0.7",
-                  horizon_months: "12",
-                }}
-              />
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <Accordion type="single" collapsible>
+            <AccordionItem value="novaproj" className="border rounded-md bg-card">
+              <AccordionTrigger className="px-4 hover:no-underline">
+                <span className="flex items-center gap-2 text-sm font-medium">
+                  <TrendingUp className="h-4 w-4 text-muted-foreground" />
+                  Cadastrar projeção manualmente (formulário completo)
+                </span>
+              </AccordionTrigger>
+              <AccordionContent className="px-4 pb-4">
+
+          <Card className="p-5 space-y-4">
+            <div className="flex items-center gap-2">
+              <TrendingUp className="h-5 w-5 text-primary" />
+              <h2 className="font-semibold">Nova Projeção</h2>
+            </div>
               <div className="space-y-2 md:col-span-2">
                 <Label>Tipo da Projeção *</Label>
                 <div className="flex gap-2">

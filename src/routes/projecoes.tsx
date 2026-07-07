@@ -74,6 +74,12 @@ import autoTable from "jspdf-autotable";
 import * as XLSX from "xlsx";
 import { supabase } from "@/integrations/supabase/client";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
 import { CashFlowProjectionPanel } from "@/components/CashFlowProjectionPanel";
 import { AiProjectionTab } from "@/components/AiProjectionTab";
 

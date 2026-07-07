@@ -21,7 +21,8 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { Sparkles, Wand2, FileSpreadsheet, Trash2, CheckCircle2 } from "lucide-react";
+import { Sparkles, Wand2, FileSpreadsheet, Trash2, CheckCircle2, Mic, MicOff } from "lucide-react";
+import { useSpeechToText } from "@/hooks/use-speech-to-text";
 import { toast } from "sonner";
 import * as XLSX from "xlsx";
 import {

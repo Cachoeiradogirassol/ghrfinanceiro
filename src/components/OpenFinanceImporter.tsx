@@ -46,6 +46,8 @@ type ParsedItem = {
   descricao: string;
   valor: number;
   instituicao: string;
+  bank_account_id: string | null;
+  bank_account_name: string | null;
   cost_center_id: string | null;
   cost_center_name: string | null;
   suggested_account_id: string | null;
@@ -61,6 +63,7 @@ type RowState = {
   action: "match" | "create" | "skip";
   account_id: string | null;
   cost_center_id: string | null;
+  bank_account_id: string | null;
   transaction_id: string | null;
 };
 

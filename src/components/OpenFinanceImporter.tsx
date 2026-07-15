@@ -359,10 +359,38 @@ export function OpenFinanceImporter({ onImported }: { onImported?: () => void })
                           {brl(it.valor)}
                         </TableCell>
                         <TableCell className="text-xs">
-                          <div>{it.instituicao}</div>
-                          <div className="text-muted-foreground">
-                            {it.cost_center_name ?? "—"}
+                          <div className="font-medium">{it.instituicao}</div>
+                          <div className="text-muted-foreground text-[10px]">
+                            {it.bank_account_name ?? "banco não reconhecido"}
                           </div>
+                          <Select
+                            value={row.cost_center_id ?? ""}
+                            onValueChange={(v) =>
+                              setRows((r) => ({
+                                ...r,
+                                [it.temp_id]: {
+                                  ...row,
+                                  cost_center_id: v,
+                                  // resetar categoria quando muda CC
+                                  account_id: null,
+                                },
+                              }))
+                            }
+                            disabled={disabled}
+                          >
+                            <SelectTrigger className="h-7 text-xs w-[220px] mt-1">
+                              <SelectValue placeholder="Centro de custo" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {(ccs.data ?? [])
+                                .filter((c) => c.is_active)
+                                .map((c) => (
+                                  <SelectItem key={c.id} value={c.id}>
+                                    {c.code} — {c.name}
+                                  </SelectItem>
+                                ))}
+                            </SelectContent>
+                          </Select>
                         </TableCell>
                         <TableCell>
                           {it.status === "duplicate" ? (

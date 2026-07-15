@@ -131,6 +131,7 @@ export function OpenFinanceImporter({ onImported }: { onImported?: () => void })
                 : "create",
           account_id: it.suggested_account_id,
           cost_center_id: it.cost_center_id,
+          bank_account_id: it.bank_account_id,
           transaction_id: it.match_transaction_id,
         };
       }

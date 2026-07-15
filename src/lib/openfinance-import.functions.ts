@@ -4,45 +4,6 @@ import { z } from "zod";
 import { generateObject } from "ai";
 import { createLovableAiGatewayProvider } from "@/lib/ai-gateway.server";
 
-// Mapeamento institucional fixo (império GHR)
-const RESTAURANT_COST_CENTER_ID = "d452db68-3a26-40d4-b0e1-e68001b579af";
-const CACHOEIRA_COST_CENTER_ID = "ceebd86d-68b7-4d9e-8b8b-ed76b1d1be85";
-
-const InstitutionEnum = z.enum(["InfinitePay", "C6 Bank", "Mercado Pago", "Outro"]);
-
-const ParsedTxSchema = z.object({
-  transactions: z
-    .array(
-      z.object({
-        data: z.string().describe("Data no formato YYYY-MM-DD."),
-        descricao: z.string(),
-        valor: z
-          .number()
-          .describe("POSITIVO para entradas/recebimentos; NEGATIVO para saídas."),
-        instituicao: InstitutionEnum,
-        categoria_sugerida: z
-          .string()
-          .describe(
-            "Nome EXATO de uma conta da lista fornecida para o centro de custo dessa linha. Se não houver correspondência clara, retorne string vazia.",
-          )
-          .default(""),
-      }),
-    )
-    .max(500),
-});
-
-function mapCostCenter(institution: string, fallback?: string | null): string | null {
-  switch (institution) {
-    case "InfinitePay":
-      return RESTAURANT_COST_CENTER_ID;
-    case "Mercado Pago":
-    case "C6 Bank":
-      return CACHOEIRA_COST_CENTER_ID;
-    default:
-      return fallback ?? null;
-  }
-}
-
 const keyOf = (t: { data: string; valor: number; descricao: string }) =>
   `${t.data}_${t.valor.toFixed(2)}_${t.descricao.trim().slice(0, 80).toLowerCase()}`;
 
@@ -62,6 +23,8 @@ type ParsedItem = {
   descricao: string;
   valor: number;
   instituicao: string;
+  bank_account_id: string | null;
+  bank_account_name: string | null;
   cost_center_id: string | null;
   cost_center_name: string | null;
   suggested_account_id: string | null;
@@ -88,19 +51,47 @@ export const parseOpenFinanceText = createServerFn({ method: "POST" })
     const key = process.env.LOVABLE_API_KEY;
     if (!key) throw new Error("LOVABLE_API_KEY ausente no servidor.");
 
-    // Carrega contas ativas dos centros de custo relevantes
+    // 1) Carrega contas bancárias reais (dinâmico, sem IDs chumbados)
+    const { data: bankAccountsRaw, error: baErr } = await context.supabase
+      .from("bank_accounts")
+      .select("id, name, bank, enterprise");
+    if (baErr) throw new Error(baErr.message);
+    const bankAccounts = (bankAccountsRaw ?? []) as Array<{
+      id: string;
+      name: string;
+      bank: string | null;
+      enterprise: string | null;
+    }>;
+
+    // 2) Centros de custo ativos por enterprise
+    const { data: costCentersRaw } = await context.supabase
+      .from("cost_centers")
+      .select("id, name, code, enterprise, is_active");
+    const costCenters = (costCentersRaw ?? []) as Array<{
+      id: string;
+      name: string;
+      code: number | string | null;
+      enterprise: string | null;
+      is_active: boolean;
+    }>;
+    const ccById = new Map(costCenters.map((c) => [c.id, c]));
+    const activeCcByEnterprise = new Map<string, typeof costCenters[number]>();
+    for (const cc of costCenters) {
+      if (cc.is_active && cc.enterprise && !activeCcByEnterprise.has(cc.enterprise)) {
+        activeCcByEnterprise.set(cc.enterprise, cc);
+      }
+    }
+
+    // Bank → default cost center (via enterprise)
+    const defaultCcForBank = (ba: (typeof bankAccounts)[number]) =>
+      ba.enterprise ? activeCcByEnterprise.get(ba.enterprise) ?? null : null;
+
+    // 3) Contas contábeis ativas — catálogo por CC envolvido
     const { data: accountsAll, error: accErr } = await context.supabase
       .from("accounts")
       .select("id, name, kind, cost_center_id, is_active")
       .eq("is_active", true);
     if (accErr) throw new Error(accErr.message);
-
-    const { data: costCenters } = await context.supabase
-      .from("cost_centers")
-      .select("id, name, code");
-    const ccById = new Map((costCenters ?? []).map((c) => [c.id, c]));
-
-    // Monta guia por cost_center para prompt
     const accByCc = new Map<string, Array<{ id: string; name: string; kind: string }>>();
     for (const a of accountsAll ?? []) {
       if (!a.cost_center_id) continue;
@@ -109,33 +100,76 @@ export const parseOpenFinanceText = createServerFn({ method: "POST" })
       accByCc.set(a.cost_center_id, arr);
     }
 
-    const relevantCcIds = [
-      RESTAURANT_COST_CENTER_ID,
-      CACHOEIRA_COST_CENTER_ID,
-      ...(data.default_cost_center_id ? [data.default_cost_center_id] : []),
-    ];
-    const catalog = relevantCcIds
+    // Catálogo cobre TODOS os CCs ativos referenciados pelas contas bancárias +
+    // o CC de fallback opcional
+    const relevantCcIds = new Set<string>();
+    for (const ba of bankAccounts) {
+      const cc = defaultCcForBank(ba);
+      if (cc) relevantCcIds.add(cc.id);
+    }
+    if (data.default_cost_center_id) relevantCcIds.add(data.default_cost_center_id);
+
+    const catalog = Array.from(relevantCcIds)
       .map((ccId) => {
         const cc = ccById.get(ccId);
         const accs = accByCc.get(ccId) ?? [];
         if (!cc || accs.length === 0) return null;
-        const lines = accs
-          .map((a) => `  - "${a.name}" (${a.kind})`)
-          .join("\n");
+        const lines = accs.map((a) => `  - "${a.name}" (${a.kind})`).join("\n");
         return `Centro de custo "${cc.name}":\n${lines}`;
       })
       .filter(Boolean)
       .join("\n\n");
 
+    // 4) Lista de bancos apresentada à IA (dinâmica).
+    const bankLabels = Array.from(
+      new Set(
+        bankAccounts
+          .flatMap((ba) => [ba.bank ?? "", ba.name ?? ""])
+          .map((s) => s.trim())
+          .filter(Boolean),
+      ),
+    );
+    // "Outro" continua permitido como escape.
+    const bankEnumValues = (bankLabels.length > 0
+      ? [...bankLabels, "Outro"]
+      : ["Outro"]) as unknown as [string, ...string[]];
+
+    const ParsedTxSchema = z.object({
+      transactions: z
+        .array(
+          z.object({
+            data: z.string().describe("Data no formato YYYY-MM-DD."),
+            descricao: z.string(),
+            valor: z
+              .number()
+              .describe("POSITIVO para entradas/recebimentos; NEGATIVO para saídas."),
+            instituicao: z
+              .enum(bankEnumValues)
+              .describe(
+                "Nome EXATO de um dos bancos cadastrados na lista fornecida, ou 'Outro' se não reconhecer.",
+              ),
+            categoria_sugerida: z
+              .string()
+              .describe(
+                "Nome EXATO de uma conta da lista fornecida para o centro de custo dessa linha. Se não houver correspondência clara, retorne string vazia.",
+              )
+              .default(""),
+          }),
+        )
+        .max(500),
+    });
+
     const gateway = createLovableAiGatewayProvider(key);
     const today = new Date().toISOString().slice(0, 10);
+
+    const bankList = bankLabels.map((b) => `  - "${b}"`).join("\n");
 
     const { object } = await generateObject({
       model: gateway("google/gemini-3-flash-preview"),
       schema: ParsedTxSchema,
       system:
-        "Você é um parser financeiro de extratos brasileiros do Meu Pluggy (Open Finance) multibancos. Para CADA linha, identifique de forma INDEPENDENTE: data, descrição, valor (positivo=entrada, negativo=saída) e a instituição (InfinitePay, C6 Bank, Mercado Pago ou Outro). Além disso, sugira a CATEGORIA usando EXATAMENTE um dos nomes da lista de contas do centro de custo daquela linha (regra: InfinitePay→Restaurante; Mercado Pago/C6→Cachoeira do Girassol). Se não houver conta claramente adequada, retorne categoria_sugerida vazia. Nunca invente nomes de contas. Ignore cabeçalhos, totais e saldos.",
-      prompt: `Data de hoje: ${today}.\n\nCATÁLOGO DE CONTAS DISPONÍVEIS:\n${catalog}\n\nTEXTO DO EXTRATO:\n${data.text}`,
+        "Você é um parser financeiro de extratos brasileiros do Meu Pluggy (Open Finance) multibancos. Para CADA linha, identifique de forma INDEPENDENTE: data, descrição, valor (positivo=entrada, negativo=saída) e a instituição — retornando o nome EXATO de um dos bancos da lista fornecida (ou 'Outro' se não reconhecer). Além disso, sugira a CATEGORIA usando EXATAMENTE um dos nomes da lista de contas do centro de custo daquele banco. Se não houver conta claramente adequada, retorne categoria_sugerida vazia. Nunca invente nomes de bancos nem de contas. Ignore cabeçalhos, totais e saldos.",
+      prompt: `Data de hoje: ${today}.\n\nBANCOS CADASTRADOS (use o nome EXATO):\n${bankList}\n\nCATÁLOGO DE CONTAS POR CENTRO DE CUSTO:\n${catalog}\n\nTEXTO DO EXTRATO:\n${data.text}`,
     });
 
     const parsed = object.transactions.filter(
@@ -143,6 +177,17 @@ export const parseOpenFinanceText = createServerFn({ method: "POST" })
     );
 
     if (parsed.length === 0) return { items: [] };
+
+    // Match instituição → bank_account por bank ou name (case-insensitive)
+    const findBankAccount = (label: string) => {
+      if (!label || label === "Outro") return null;
+      const norm = label.trim().toLowerCase();
+      return (
+        bankAccounts.find((ba) => (ba.bank ?? "").trim().toLowerCase() === norm) ||
+        bankAccounts.find((ba) => (ba.name ?? "").trim().toLowerCase() === norm) ||
+        null
+      );
+    };
 
     // Deduplicação por tag [OFIMP]
     const tags = parsed.map((t) => `[OFIMP ${keyOf(t)}]`);
@@ -152,7 +197,7 @@ export const parseOpenFinanceText = createServerFn({ method: "POST" })
       .in("description", tags);
     const dupSet = new Set((existingByTag ?? []).map((r) => r.description as string));
 
-    // Busca lançamentos pendentes com range global de datas para reduzir round-trips
+    // Range global de datas ±3d
     const dates = parsed.map((t) => t.data).sort();
     const minDate = new Date(dates[0]);
     minDate.setDate(minDate.getDate() - 3);
@@ -163,7 +208,9 @@ export const parseOpenFinanceText = createServerFn({ method: "POST" })
 
     const { data: pendingTx } = await context.supabase
       .from("transactions")
-      .select("id, type, amount, due_date, cost_center_id, account_id, description, status, accounts(name)")
+      .select(
+        "id, type, amount, due_date, cost_center_id, account_id, description, status, accounts(name)",
+      )
       .neq("status", "reconciled")
       .gte("due_date", rangeStart)
       .lte("due_date", rangeEnd);
@@ -183,15 +230,18 @@ export const parseOpenFinanceText = createServerFn({ method: "POST" })
 
     const items: ParsedItem[] = parsed.map((t, i) => {
       const tag = `[OFIMP ${keyOf(t)}]`;
-      const cc = mapCostCenter(t.instituicao, data.default_cost_center_id ?? null);
-      const ccName = cc ? ccById.get(cc)?.name ?? null : null;
 
-      // Resolve conta sugerida (por nome dentro do cc)
+      const ba = findBankAccount(t.instituicao);
+      const cc = ba ? defaultCcForBank(ba) : null;
+      const ccId = cc?.id ?? data.default_cost_center_id ?? null;
+      const ccName = ccId ? ccById.get(ccId)?.name ?? null : null;
+
+      // Categoria sugerida (por nome dentro do cc)
       let suggestedId: string | null = null;
       let suggestedName: string | null = null;
-      if (cc && t.categoria_sugerida) {
+      if (ccId && t.categoria_sugerida) {
         const norm = t.categoria_sugerida.trim().toLowerCase();
-        const list = accByCc.get(cc) ?? [];
+        const list = accByCc.get(ccId) ?? [];
         const expectedKind = t.valor >= 0 ? "revenue" : "expense";
         const match =
           list.find((a) => a.name.toLowerCase() === norm && a.kind === expectedKind) ||
@@ -201,7 +251,6 @@ export const parseOpenFinanceText = createServerFn({ method: "POST" })
           suggestedName = match.name;
         }
       }
-      // Fallback: default_account_id se fornecido e sem sugestão
       if (!suggestedId && data.default_account_id) {
         const fb = (accountsAll ?? []).find((a) => a.id === data.default_account_id);
         if (fb) {
@@ -210,64 +259,43 @@ export const parseOpenFinanceText = createServerFn({ method: "POST" })
         }
       }
 
-      if (dupSet.has(`${tag} ${t.instituicao} — ${t.descricao}`.slice(0, 500)) || dupSet.has(tag)) {
-        return {
-          temp_id: `t${i}`,
-          data: t.data,
-          descricao: t.descricao,
-          valor: t.valor,
-          instituicao: t.instituicao,
-          cost_center_id: cc,
-          cost_center_name: ccName,
-          suggested_account_id: suggestedId,
-          suggested_account_name: suggestedName,
-          dedupe_tag: tag,
-          status: "duplicate",
-          match_transaction_id: null,
-          candidates: [],
-        };
-      }
-      // Também considera duplicado se qualquer transaction description começa com o tag
-      const tagPrefixHit = (existingByTag ?? []).some((r) =>
-        (r.description as string).includes(tag),
-      );
+      const baseItem = {
+        temp_id: `t${i}`,
+        data: t.data,
+        descricao: t.descricao,
+        valor: t.valor,
+        instituicao: t.instituicao,
+        bank_account_id: ba?.id ?? null,
+        bank_account_name: ba?.name ?? null,
+        cost_center_id: ccId,
+        cost_center_name: ccName,
+        suggested_account_id: suggestedId,
+        suggested_account_name: suggestedName,
+        dedupe_tag: tag,
+      };
+
+      // Duplicado?
+      const tagPrefixHit =
+        dupSet.has(tag) ||
+        (existingByTag ?? []).some((r) => (r.description as string).includes(tag));
       if (tagPrefixHit) {
         return {
-          temp_id: `t${i}`,
-          data: t.data,
-          descricao: t.descricao,
-          valor: t.valor,
-          instituicao: t.instituicao,
-          cost_center_id: cc,
-          cost_center_name: ccName,
-          suggested_account_id: suggestedId,
-          suggested_account_name: suggestedName,
-          dedupe_tag: tag,
+          ...baseItem,
           status: "duplicate",
           match_transaction_id: null,
           candidates: [],
         };
       }
 
-      if (!cc) {
+      if (!ccId) {
         return {
-          temp_id: `t${i}`,
-          data: t.data,
-          descricao: t.descricao,
-          valor: t.valor,
-          instituicao: t.instituicao,
-          cost_center_id: null,
-          cost_center_name: null,
-          suggested_account_id: suggestedId,
-          suggested_account_name: suggestedName,
-          dedupe_tag: tag,
+          ...baseItem,
           status: "no_cost_center",
           match_transaction_id: null,
           candidates: [],
         };
       }
 
-      // Match: valor abs ±0.01, data ±3d, natureza
       const expectedType: "receivable" | "payable" = t.valor >= 0 ? "receivable" : "payable";
       const absVal = Math.abs(t.valor);
       const txDate = new Date(t.data);
@@ -278,9 +306,7 @@ export const parseOpenFinanceText = createServerFn({ method: "POST" })
         const diff = Math.abs(d.getTime() - txDate.getTime()) / 86400000;
         return diff <= 3;
       });
-
-      // Prefere mesmo centro de custo se houver
-      const sameCc = cands.filter((c) => c.cost_center_id === cc);
+      const sameCc = cands.filter((c) => c.cost_center_id === ccId);
       const finalCands = sameCc.length > 0 ? sameCc : cands;
 
       let status: ParsedItem["status"];
@@ -295,16 +321,7 @@ export const parseOpenFinanceText = createServerFn({ method: "POST" })
       }
 
       return {
-        temp_id: `t${i}`,
-        data: t.data,
-        descricao: t.descricao,
-        valor: t.valor,
-        instituicao: t.instituicao,
-        cost_center_id: cc,
-        cost_center_name: ccName,
-        suggested_account_id: suggestedId,
-        suggested_account_name: suggestedName,
-        dedupe_tag: tag,
+        ...baseItem,
         status,
         match_transaction_id: matchId,
         candidates: finalCands.map((c) => ({
@@ -329,6 +346,7 @@ const DecisionSchema = z.object({
   descricao: z.string(),
   valor: z.number(),
   instituicao: z.string(),
+  bank_account_id: z.string().uuid().nullable(),
   cost_center_id: z.string().uuid().nullable(),
   account_id: z.string().uuid().nullable(),
   transaction_id: z.string().uuid().nullable(),
@@ -356,7 +374,6 @@ export const confirmOpenFinanceImport = createServerFn({ method: "POST" })
           errors.push(`${dec.descricao}: sem transação alvo`);
           continue;
         }
-        // Revalida pendência
         const { data: tx } = await context.supabase
           .from("transactions")
           .select("id, status")
@@ -368,9 +385,15 @@ export const confirmOpenFinanceImport = createServerFn({ method: "POST" })
           continue;
         }
         const paidAt = new Date(`${dec.data}T12:00:00Z`).toISOString();
+        const updatePayload: {
+          status: "reconciled";
+          paid_at: string;
+          bank_account_id?: string;
+        } = { status: "reconciled", paid_at: paidAt };
+        if (dec.bank_account_id) updatePayload.bank_account_id = dec.bank_account_id;
         const { error } = await context.supabase
           .from("transactions")
-          .update({ status: "reconciled", paid_at: paidAt })
+          .update(updatePayload)
           .eq("id", dec.transaction_id);
         if (error) {
           errors.push(`${dec.descricao}: ${error.message}`);
@@ -385,7 +408,6 @@ export const confirmOpenFinanceImport = createServerFn({ method: "POST" })
         continue;
       }
       const description = `${dec.dedupe_tag} ${dec.instituicao} — ${dec.descricao}`.slice(0, 500);
-      // Recheca duplicidade por tag
       const { data: dup } = await context.supabase
         .from("transactions")
         .select("id")
@@ -399,6 +421,7 @@ export const confirmOpenFinanceImport = createServerFn({ method: "POST" })
       const { error } = await context.supabase.from("transactions").insert({
         cost_center_id: dec.cost_center_id,
         account_id: dec.account_id,
+        bank_account_id: dec.bank_account_id,
         type: dec.valor >= 0 ? "receivable" : "payable",
         amount: Math.abs(Number(dec.valor.toFixed(2))),
         description,

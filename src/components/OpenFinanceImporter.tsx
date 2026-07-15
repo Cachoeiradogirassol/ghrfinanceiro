@@ -46,6 +46,8 @@ type ParsedItem = {
   descricao: string;
   valor: number;
   instituicao: string;
+  bank_account_id: string | null;
+  bank_account_name: string | null;
   cost_center_id: string | null;
   cost_center_name: string | null;
   suggested_account_id: string | null;
@@ -61,6 +63,7 @@ type RowState = {
   action: "match" | "create" | "skip";
   account_id: string | null;
   cost_center_id: string | null;
+  bank_account_id: string | null;
   transaction_id: string | null;
 };
 
@@ -128,6 +131,7 @@ export function OpenFinanceImporter({ onImported }: { onImported?: () => void })
                 : "create",
           account_id: it.suggested_account_id,
           cost_center_id: it.cost_center_id,
+          bank_account_id: it.bank_account_id,
           transaction_id: it.match_transaction_id,
         };
       }
@@ -152,6 +156,7 @@ export function OpenFinanceImporter({ onImported }: { onImported?: () => void })
             descricao: it.descricao,
             valor: it.valor,
             instituicao: it.instituicao,
+            bank_account_id: it.bank_account_id,
             cost_center_id: it.cost_center_id,
             account_id: null,
             transaction_id: null,
@@ -165,6 +170,7 @@ export function OpenFinanceImporter({ onImported }: { onImported?: () => void })
           descricao: it.descricao,
           valor: it.valor,
           instituicao: it.instituicao,
+          bank_account_id: row.bank_account_id,
           cost_center_id: row.cost_center_id,
           account_id: row.action === "create" ? row.account_id : null,
           transaction_id: row.action === "match" ? row.transaction_id : null,
@@ -353,10 +359,38 @@ export function OpenFinanceImporter({ onImported }: { onImported?: () => void })
                           {brl(it.valor)}
                         </TableCell>
                         <TableCell className="text-xs">
-                          <div>{it.instituicao}</div>
-                          <div className="text-muted-foreground">
-                            {it.cost_center_name ?? "—"}
+                          <div className="font-medium">{it.instituicao}</div>
+                          <div className="text-muted-foreground text-[10px]">
+                            {it.bank_account_name ?? "banco não reconhecido"}
                           </div>
+                          <Select
+                            value={row.cost_center_id ?? ""}
+                            onValueChange={(v) =>
+                              setRows((r) => ({
+                                ...r,
+                                [it.temp_id]: {
+                                  ...row,
+                                  cost_center_id: v,
+                                  // resetar categoria quando muda CC
+                                  account_id: null,
+                                },
+                              }))
+                            }
+                            disabled={disabled}
+                          >
+                            <SelectTrigger className="h-7 text-xs w-[220px] mt-1">
+                              <SelectValue placeholder="Centro de custo" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {(ccs.data ?? [])
+                                .filter((c) => c.is_active)
+                                .map((c) => (
+                                  <SelectItem key={c.id} value={c.id}>
+                                    {c.code} — {c.name}
+                                  </SelectItem>
+                                ))}
+                            </SelectContent>
+                          </Select>
                         </TableCell>
                         <TableCell>
                           {it.status === "duplicate" ? (

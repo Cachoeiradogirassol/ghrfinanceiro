@@ -385,10 +385,11 @@ export const confirmOpenFinanceImport = createServerFn({ method: "POST" })
           continue;
         }
         const paidAt = new Date(`${dec.data}T12:00:00Z`).toISOString();
-        const updatePayload: Record<string, unknown> = {
-          status: "reconciled",
-          paid_at: paidAt,
-        };
+        const updatePayload: {
+          status: "reconciled";
+          paid_at: string;
+          bank_account_id?: string;
+        } = { status: "reconciled", paid_at: paidAt };
         if (dec.bank_account_id) updatePayload.bank_account_id = dec.bank_account_id;
         const { error } = await context.supabase
           .from("transactions")

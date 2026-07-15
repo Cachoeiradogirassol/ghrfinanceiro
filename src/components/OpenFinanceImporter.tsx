@@ -2,7 +2,16 @@ import { useMemo, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Download, Loader2, Sparkles, CheckCircle2, AlertCircle, Copy } from "lucide-react";
+import {
+  Download,
+  Loader2,
+  Sparkles,
+  CheckCircle2,
+  AlertCircle,
+  Copy,
+  ArrowRightLeft,
+  EyeOff,
+} from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -28,47 +37,27 @@ import { listAccounts, listCostCenters } from "@/lib/finance.functions";
 import {
   parseOpenFinanceText,
   confirmOpenFinanceImport,
+  type ParsedItem,
 } from "@/lib/openfinance-import.functions";
-
-type Candidate = {
-  id: string;
-  description: string;
-  amount: number;
-  due_date: string;
-  cost_center_id: string;
-  account_id: string;
-  account_name: string | null;
-};
-
-type ParsedItem = {
-  temp_id: string;
-  data: string;
-  descricao: string;
-  valor: number;
-  instituicao: string;
-  bank_account_id: string | null;
-  bank_account_name: string | null;
-  cost_center_id: string | null;
-  cost_center_name: string | null;
-  suggested_account_id: string | null;
-  suggested_account_name: string | null;
-  dedupe_tag: string;
-  status: "match" | "multiple" | "new" | "duplicate" | "no_cost_center";
-  match_transaction_id: string | null;
-  candidates: Candidate[];
-};
 
 type RowState = {
   include: boolean;
-  action: "match" | "create" | "skip";
+  action: "match" | "create" | "skip" | "aporte";
   account_id: string | null;
   cost_center_id: string | null;
   bank_account_id: string | null;
   transaction_id: string | null;
+  // Aporte
+  transfer_source_cc_id: string | null;
+  transfer_source_bank_account_id: string | null;
+  transfer_target_cc_id: string | null;
+  transfer_target_bank_account_id: string | null;
 };
 
 const brl = (v: number) =>
   v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+
+const PAGE_SIZE = 100;
 
 export function OpenFinanceImporter({ onImported }: { onImported?: () => void }) {
   const [open, setOpen] = useState(false);
@@ -78,6 +67,10 @@ export function OpenFinanceImporter({ onImported }: { onImported?: () => void })
   const [loading, setLoading] = useState(false);
   const [items, setItems] = useState<ParsedItem[]>([]);
   const [rows, setRows] = useState<Record<string, RowState>>({});
+  const [page, setPage] = useState(0);
+  const [filter, setFilter] = useState<
+    "all" | "match" | "new" | "aporte" | "aporte_incomplete" | "internal" | "duplicate" | "no_cost_center"
+  >("all");
 
   const ccFn = useServerFn(listCostCenters);
   const accFn = useServerFn(listAccounts);
@@ -98,10 +91,18 @@ export function OpenFinanceImporter({ onImported }: { onImported?: () => void })
     return map;
   }, [accs.data]);
 
+  const ccNameById = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const c of ccs.data ?? []) m.set(c.id, `${c.code} — ${c.name}`);
+    return m;
+  }, [ccs.data]);
+
   const reset = () => {
     setText("");
     setItems([]);
     setRows({});
+    setPage(0);
+    setFilter("all");
   };
 
   const doParse = async () => {
@@ -121,18 +122,25 @@ export function OpenFinanceImporter({ onImported }: { onImported?: () => void })
       setItems(res.items);
       const initialRows: Record<string, RowState> = {};
       for (const it of res.items) {
-        initialRows[it.temp_id] = {
-          include: it.status !== "duplicate",
-          action:
-            it.status === "match"
-              ? "match"
-              : it.status === "duplicate"
+        const defaultAction: RowState["action"] =
+          it.status === "match"
+            ? "match"
+            : it.status === "aporte" || it.status === "aporte_incomplete"
+              ? "aporte"
+              : it.status === "duplicate" || it.status === "internal"
                 ? "skip"
-                : "create",
+                : "create";
+        initialRows[it.temp_id] = {
+          include: it.status !== "duplicate" && it.status !== "internal",
+          action: defaultAction,
           account_id: it.suggested_account_id,
           cost_center_id: it.cost_center_id,
           bank_account_id: it.bank_account_id,
           transaction_id: it.match_transaction_id,
+          transfer_source_cc_id: it.transfer_source_cc_id,
+          transfer_source_bank_account_id: it.transfer_source_bank_account_id,
+          transfer_target_cc_id: it.transfer_target_cc_id,
+          transfer_target_bank_account_id: it.transfer_target_bank_account_id,
         };
       }
       setRows(initialRows);
@@ -145,44 +153,53 @@ export function OpenFinanceImporter({ onImported }: { onImported?: () => void })
   };
 
   const doConfirm = async () => {
-    const decisions = items
-      .map((it) => {
-        const row = rows[it.temp_id];
-        if (!row || !row.include) {
-          return {
-            temp_id: it.temp_id,
-            action: "skip" as const,
-            data: it.data,
-            descricao: it.descricao,
-            valor: it.valor,
-            instituicao: it.instituicao,
-            bank_account_id: it.bank_account_id,
-            cost_center_id: it.cost_center_id,
-            account_id: null,
-            transaction_id: null,
-            dedupe_tag: it.dedupe_tag,
-          };
-        }
+    const decisions = items.map((it) => {
+      const row = rows[it.temp_id];
+      if (!row || !row.include) {
         return {
           temp_id: it.temp_id,
-          action: row.action,
+          action: "skip" as const,
           data: it.data,
           descricao: it.descricao,
           valor: it.valor,
           instituicao: it.instituicao,
-          bank_account_id: row.bank_account_id,
-          cost_center_id: row.cost_center_id,
-          account_id: row.action === "create" ? row.account_id : null,
-          transaction_id: row.action === "match" ? row.transaction_id : null,
+          bank_account_id: it.bank_account_id,
+          cost_center_id: it.cost_center_id,
+          account_id: null,
+          transaction_id: null,
           dedupe_tag: it.dedupe_tag,
+          pair_temp_id: it.pair_temp_id,
+          transfer_source_cc_id: null,
+          transfer_source_bank_account_id: null,
+          transfer_target_cc_id: null,
+          transfer_target_bank_account_id: null,
         };
-      });
+      }
+      return {
+        temp_id: it.temp_id,
+        action: row.action,
+        data: it.data,
+        descricao: it.descricao,
+        valor: it.valor,
+        instituicao: it.instituicao,
+        bank_account_id: row.bank_account_id,
+        cost_center_id: row.cost_center_id,
+        account_id: row.action === "create" ? row.account_id : row.action === "aporte" ? row.account_id : null,
+        transaction_id: row.action === "match" ? row.transaction_id : null,
+        dedupe_tag: it.dedupe_tag,
+        pair_temp_id: it.pair_temp_id,
+        transfer_source_cc_id: row.transfer_source_cc_id,
+        transfer_source_bank_account_id: row.transfer_source_bank_account_id,
+        transfer_target_cc_id: row.transfer_target_cc_id,
+        transfer_target_bank_account_id: row.transfer_target_bank_account_id,
+      };
+    });
 
     setLoading(true);
     try {
       const res = await confirmFn({ data: { decisions } });
       toast.success(
-        `Concluído: ${res.reconciled} conciliados, ${res.created} criados, ${res.skipped} ignorados${res.errors.length ? `, ${res.errors.length} erros` : ""}.`,
+        `Concluído: ${res.reconciled} conciliados, ${res.created} criados, ${res.aportes} aportes, ${res.skipped} ignorados${res.errors.length ? `, ${res.errors.length} erros` : ""}.`,
       );
       if (res.errors.length > 0) {
         console.warn("Erros de importação Open Finance:", res.errors);
@@ -198,16 +215,63 @@ export function OpenFinanceImporter({ onImported }: { onImported?: () => void })
   };
 
   const summary = useMemo(() => {
-    let match = 0, create = 0, dup = 0, multi = 0, noCc = 0;
+    let match = 0, create = 0, dup = 0, multi = 0, noCc = 0, internal = 0, aporte = 0, aporteInc = 0;
     for (const it of items) {
       if (it.status === "match") match++;
       else if (it.status === "new") create++;
       else if (it.status === "duplicate") dup++;
       else if (it.status === "multiple") multi++;
       else if (it.status === "no_cost_center") noCc++;
+      else if (it.status === "internal") internal++;
+      else if (it.status === "aporte") aporte++;
+      else if (it.status === "aporte_incomplete") aporteInc++;
     }
-    return { match, create, dup, multi, noCc };
+    return { match, create, dup, multi, noCc, internal, aporte, aporteInc };
   }, [items]);
+
+  const filtered = useMemo(() => {
+    if (filter === "all") return items;
+    if (filter === "new") return items.filter((i) => i.status === "new" || i.status === "multiple");
+    return items.filter((i) => i.status === filter);
+  }, [items, filter]);
+
+  const pageItems = filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+
+  const toggleAllInternals = (include: boolean) => {
+    setRows((r) => {
+      const next = { ...r };
+      for (const it of items) {
+        if (it.status === "internal") next[it.temp_id] = { ...next[it.temp_id], include };
+      }
+      return next;
+    });
+  };
+
+  const togglePageAll = (include: boolean) => {
+    setRows((r) => {
+      const next = { ...r };
+      for (const it of pageItems) {
+        next[it.temp_id] = { ...next[it.temp_id], include };
+      }
+      return next;
+    });
+  };
+
+  const statusBadge = (s: ParsedItem["status"]) => {
+    const map: Record<ParsedItem["status"], { label: string; variant: "default" | "secondary" | "outline" | "destructive" }> = {
+      match: { label: "match", variant: "default" },
+      new: { label: "novo", variant: "secondary" },
+      multiple: { label: "múltiplos", variant: "outline" },
+      duplicate: { label: "duplicado", variant: "outline" },
+      no_cost_center: { label: "sem CC", variant: "destructive" },
+      internal: { label: "interna", variant: "outline" },
+      aporte: { label: "APORTE", variant: "default" },
+      aporte_incomplete: { label: "aporte ½", variant: "destructive" },
+    };
+    const m = map[s];
+    return <Badge variant={m.variant}>{m.label}</Badge>;
+  };
 
   return (
     <Dialog
@@ -223,12 +287,12 @@ export function OpenFinanceImporter({ onImported }: { onImported?: () => void })
           📥 Importador Open Finance
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-w-6xl max-h-[92vh] overflow-y-auto">
+      <DialogContent className="max-w-[95vw] max-h-[95vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>📥 Importador Open Finance</DialogTitle>
           <DialogDescription>
-            Cole o extrato do Meu Pluggy. A IA parseia, classifica por categoria e concilia com
-            lançamentos pendentes antes de você confirmar.
+            Cole o extrato completo do Meu Pluggy. O parser lê linha a linha (sem IA), concilia com
+            lançamentos pendentes e identifica aportes entre centros de custo.
           </DialogDescription>
         </DialogHeader>
 
@@ -239,12 +303,9 @@ export function OpenFinanceImporter({ onImported }: { onImported?: () => void })
                 <label className="text-xs text-muted-foreground">
                   Centro de custo de fallback <span className="opacity-60">(opcional)</span>
                 </label>
-                <Select
-                  value={fallbackCostCenterId}
-                  onValueChange={setFallbackCostCenterId}
-                >
+                <Select value={fallbackCostCenterId} onValueChange={setFallbackCostCenterId}>
                   <SelectTrigger>
-                    <SelectValue placeholder="Só se IA não identificar o banco" />
+                    <SelectValue placeholder="Só se banco não for reconhecido" />
                   </SelectTrigger>
                   <SelectContent>
                     {(ccs.data ?? []).map((c) => (
@@ -261,7 +322,7 @@ export function OpenFinanceImporter({ onImported }: { onImported?: () => void })
                 </label>
                 <Select value={fallbackAccountId} onValueChange={setFallbackAccountId}>
                   <SelectTrigger>
-                    <SelectValue placeholder="Só se IA não classificar" />
+                    <SelectValue placeholder="Só se não houver sugestão" />
                   </SelectTrigger>
                   <SelectContent>
                     {(accs.data ?? []).map((a) => (
@@ -277,7 +338,7 @@ export function OpenFinanceImporter({ onImported }: { onImported?: () => void })
             <Textarea
               value={text}
               onChange={(e) => setText(e.target.value)}
-              placeholder="Cole aqui o texto copiado do Meu Pluggy (multibancos)…"
+              placeholder="Cole aqui o texto copiado do Meu Pluggy (Ctrl+A / Ctrl+C na aba Fluxo de Caixa)…"
               className="min-h-[260px] font-mono text-xs"
             />
 
@@ -291,28 +352,96 @@ export function OpenFinanceImporter({ onImported }: { onImported?: () => void })
                 ) : (
                   <Sparkles className="h-4 w-4 mr-2" />
                 )}
-                Analisar com IA
+                Processar extrato
               </Button>
             </div>
           </>
         ) : (
           <>
-            <div className="flex flex-wrap gap-2 text-sm">
-              <Badge variant="default" className="gap-1">
-                <CheckCircle2 className="h-3 w-3" /> {summary.match} match
-              </Badge>
-              <Badge variant="secondary">{summary.create} novos</Badge>
+            <div className="flex flex-wrap gap-2 text-sm items-center">
+              <button onClick={() => { setFilter("all"); setPage(0); }}>
+                <Badge variant={filter === "all" ? "default" : "outline"}>{items.length} total</Badge>
+              </button>
+              <button onClick={() => { setFilter("match"); setPage(0); }}>
+                <Badge variant={filter === "match" ? "default" : "outline"} className="gap-1">
+                  <CheckCircle2 className="h-3 w-3" /> {summary.match} match
+                </Badge>
+              </button>
+              <button onClick={() => { setFilter("new"); setPage(0); }}>
+                <Badge variant={filter === "new" ? "default" : "outline"}>
+                  {summary.create + summary.multi} novos
+                </Badge>
+              </button>
+              <button onClick={() => { setFilter("aporte"); setPage(0); }}>
+                <Badge variant={filter === "aporte" ? "default" : "outline"} className="gap-1">
+                  <ArrowRightLeft className="h-3 w-3" /> {summary.aporte} aportes
+                </Badge>
+              </button>
+              {summary.aporteInc > 0 && (
+                <button onClick={() => { setFilter("aporte_incomplete"); setPage(0); }}>
+                  <Badge variant={filter === "aporte_incomplete" ? "destructive" : "outline"} className="gap-1">
+                    <AlertCircle className="h-3 w-3" /> {summary.aporteInc} aportes ½
+                  </Badge>
+                </button>
+              )}
+              <button onClick={() => { setFilter("internal"); setPage(0); }}>
+                <Badge variant={filter === "internal" ? "default" : "outline"} className="gap-1">
+                  <EyeOff className="h-3 w-3" /> {summary.internal} internas
+                </Badge>
+              </button>
+              {summary.dup > 0 && (
+                <button onClick={() => { setFilter("duplicate"); setPage(0); }}>
+                  <Badge variant={filter === "duplicate" ? "default" : "outline"}>
+                    {summary.dup} duplicados
+                  </Badge>
+                </button>
+              )}
+              {summary.noCc > 0 && (
+                <button onClick={() => { setFilter("no_cost_center"); setPage(0); }}>
+                  <Badge variant={filter === "no_cost_center" ? "destructive" : "outline"}>
+                    {summary.noCc} sem CC
+                  </Badge>
+                </button>
+              )}
               {summary.multi > 0 && (
                 <Badge variant="outline" className="gap-1">
                   <Copy className="h-3 w-3" /> {summary.multi} múltiplos
                 </Badge>
               )}
-              {summary.dup > 0 && <Badge variant="outline">{summary.dup} duplicados</Badge>}
-              {summary.noCc > 0 && (
-                <Badge variant="destructive" className="gap-1">
-                  <AlertCircle className="h-3 w-3" /> {summary.noCc} sem CC
-                </Badge>
-              )}
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2 text-xs">
+              <Button size="sm" variant="outline" onClick={() => togglePageAll(true)}>
+                Marcar página
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => togglePageAll(false)}>
+                Desmarcar página
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => toggleAllInternals(false)}>
+                Pular todas internas
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => toggleAllInternals(true)}>
+                Reincluir internas
+              </Button>
+              <span className="ml-auto flex items-center gap-2">
+                Página {page + 1}/{totalPages}
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  disabled={page === 0}
+                  onClick={() => setPage((p) => Math.max(0, p - 1))}
+                >
+                  ‹
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  disabled={page >= totalPages - 1}
+                  onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
+                >
+                  ›
+                </Button>
+              </span>
             </div>
 
             <div className="overflow-x-auto border rounded-md">
@@ -323,18 +452,22 @@ export function OpenFinanceImporter({ onImported }: { onImported?: () => void })
                     <TableHead>Data</TableHead>
                     <TableHead>Descrição</TableHead>
                     <TableHead className="text-right">Valor</TableHead>
-                    <TableHead>Instituição / CC</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Banco / CC</TableHead>
                     <TableHead>Ação</TableHead>
-                    <TableHead>Categoria / Lançamento</TableHead>
+                    <TableHead>Detalhe</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {items.map((it) => {
+                  {pageItems.map((it) => {
                     const row = rows[it.temp_id];
                     if (!row) return null;
                     const disabled = it.status === "duplicate";
                     const cc = row.cost_center_id;
                     const accountList = cc ? accountsByCc.get(cc) ?? [] : [];
+                    const isAporte = row.action === "aporte";
+                    const isIncomplete = it.status === "aporte_incomplete";
+
                     return (
                       <TableRow key={it.temp_id} className={disabled ? "opacity-50" : ""}>
                         <TableCell>
@@ -352,45 +485,52 @@ export function OpenFinanceImporter({ onImported }: { onImported?: () => void })
                         <TableCell className="text-xs whitespace-nowrap">{it.data}</TableCell>
                         <TableCell className="text-xs max-w-[280px] truncate" title={it.descricao}>
                           {it.descricao}
+                          {it.pluggy_category && (
+                            <div className="text-[10px] text-muted-foreground italic">
+                              {it.pluggy_category}
+                            </div>
+                          )}
                         </TableCell>
                         <TableCell
                           className={`text-right text-xs whitespace-nowrap ${it.valor >= 0 ? "text-emerald-600" : "text-red-600"}`}
                         >
                           {brl(it.valor)}
                         </TableCell>
+                        <TableCell>{statusBadge(it.status)}</TableCell>
                         <TableCell className="text-xs">
                           <div className="font-medium">{it.instituicao}</div>
                           <div className="text-muted-foreground text-[10px]">
                             {it.bank_account_name ?? "banco não reconhecido"}
                           </div>
-                          <Select
-                            value={row.cost_center_id ?? ""}
-                            onValueChange={(v) =>
-                              setRows((r) => ({
-                                ...r,
-                                [it.temp_id]: {
-                                  ...row,
-                                  cost_center_id: v,
-                                  // resetar categoria quando muda CC
-                                  account_id: null,
-                                },
-                              }))
-                            }
-                            disabled={disabled}
-                          >
-                            <SelectTrigger className="h-7 text-xs w-[220px] mt-1">
-                              <SelectValue placeholder="Centro de custo" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {(ccs.data ?? [])
-                                .filter((c) => c.is_active)
-                                .map((c) => (
-                                  <SelectItem key={c.id} value={c.id}>
-                                    {c.code} — {c.name}
-                                  </SelectItem>
-                                ))}
-                            </SelectContent>
-                          </Select>
+                          {!isAporte && (
+                            <Select
+                              value={row.cost_center_id ?? ""}
+                              onValueChange={(v) =>
+                                setRows((r) => ({
+                                  ...r,
+                                  [it.temp_id]: {
+                                    ...row,
+                                    cost_center_id: v,
+                                    account_id: null,
+                                  },
+                                }))
+                              }
+                              disabled={disabled}
+                            >
+                              <SelectTrigger className="h-7 text-xs w-[220px] mt-1">
+                                <SelectValue placeholder="Centro de custo" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {(ccs.data ?? [])
+                                  .filter((c) => c.is_active)
+                                  .map((c) => (
+                                    <SelectItem key={c.id} value={c.id}>
+                                      {c.code} — {c.name}
+                                    </SelectItem>
+                                  ))}
+                              </SelectContent>
+                            </Select>
+                          )}
                         </TableCell>
                         <TableCell>
                           {it.status === "duplicate" ? (
@@ -398,7 +538,7 @@ export function OpenFinanceImporter({ onImported }: { onImported?: () => void })
                           ) : (
                             <Select
                               value={row.action}
-                              onValueChange={(v: "match" | "create" | "skip") =>
+                              onValueChange={(v: "match" | "create" | "skip" | "aporte") =>
                                 setRows((r) => ({
                                   ...r,
                                   [it.temp_id]: {
@@ -412,7 +552,7 @@ export function OpenFinanceImporter({ onImported }: { onImported?: () => void })
                                 }))
                               }
                             >
-                              <SelectTrigger className="h-8 text-xs w-[130px]">
+                              <SelectTrigger className="h-8 text-xs w-[140px]">
                                 <SelectValue />
                               </SelectTrigger>
                               <SelectContent>
@@ -420,13 +560,89 @@ export function OpenFinanceImporter({ onImported }: { onImported?: () => void })
                                   <SelectItem value="match">Conciliar</SelectItem>
                                 )}
                                 <SelectItem value="create">Criar novo</SelectItem>
+                                {(it.status === "aporte" || it.status === "aporte_incomplete") && (
+                                  <SelectItem value="aporte">Registrar aporte</SelectItem>
+                                )}
                                 <SelectItem value="skip">Ignorar</SelectItem>
                               </SelectContent>
                             </Select>
                           )}
                         </TableCell>
                         <TableCell>
-                          {row.action === "match" ? (
+                          {isAporte ? (
+                            <div className="space-y-1 text-xs">
+                              <div className="font-medium text-primary">
+                                APORTE: {ccNameById.get(row.transfer_source_cc_id ?? "") ?? "?"} →{" "}
+                                {ccNameById.get(row.transfer_target_cc_id ?? "") ?? "?"}
+                              </div>
+                              {isIncomplete && it.incomplete_side === "source" && (
+                                <div>
+                                  <label className="text-[10px] text-muted-foreground">
+                                    CC destino:
+                                  </label>
+                                  <Select
+                                    value={row.transfer_target_cc_id ?? ""}
+                                    onValueChange={(v) =>
+                                      setRows((r) => ({
+                                        ...r,
+                                        [it.temp_id]: { ...row, transfer_target_cc_id: v },
+                                      }))
+                                    }
+                                  >
+                                    <SelectTrigger className="h-7 text-xs w-[220px]">
+                                      <SelectValue placeholder="Escolher CC destino" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      {(ccs.data ?? [])
+                                        .filter(
+                                          (c) =>
+                                            c.is_active && c.id !== row.transfer_source_cc_id,
+                                        )
+                                        .map((c) => (
+                                          <SelectItem key={c.id} value={c.id}>
+                                            {c.code} — {c.name}
+                                          </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                  </Select>
+                                </div>
+                              )}
+                              {isIncomplete && it.incomplete_side === "target" && (
+                                <div>
+                                  <label className="text-[10px] text-muted-foreground">
+                                    CC origem (+ banco):
+                                  </label>
+                                  <Select
+                                    value={row.transfer_source_cc_id ?? ""}
+                                    onValueChange={(v) => {
+                                      const banks = (accs.data ?? []) as never;
+                                      void banks;
+                                      setRows((r) => ({
+                                        ...r,
+                                        [it.temp_id]: { ...row, transfer_source_cc_id: v },
+                                      }));
+                                    }}
+                                  >
+                                    <SelectTrigger className="h-7 text-xs w-[220px]">
+                                      <SelectValue placeholder="Escolher CC origem" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      {(ccs.data ?? [])
+                                        .filter(
+                                          (c) =>
+                                            c.is_active && c.id !== row.transfer_target_cc_id,
+                                        )
+                                        .map((c) => (
+                                          <SelectItem key={c.id} value={c.id}>
+                                            {c.code} — {c.name}
+                                          </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                  </Select>
+                                </div>
+                              )}
+                            </div>
+                          ) : row.action === "match" ? (
                             <Select
                               value={row.transaction_id ?? ""}
                               onValueChange={(v) =>

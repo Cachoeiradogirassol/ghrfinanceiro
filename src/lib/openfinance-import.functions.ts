@@ -1,8 +1,203 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { z } from "zod";
-import { generateObject } from "ai";
-import { createLovableAiGatewayProvider } from "@/lib/ai-gateway.server";
+
+// ============================================================================
+// PARSER DETERMINÍSTICO (sem IA) para extrato do Meu Pluggy
+// ============================================================================
+
+const MONTHS_PT: Record<string, number> = {
+  janeiro: 1, fevereiro: 2, "março": 3, marco: 3, abril: 4, maio: 5, junho: 6,
+  julho: 7, agosto: 8, setembro: 9, outubro: 10, novembro: 11, dezembro: 12,
+};
+
+const WEEKDAYS_PT = new Set([
+  "segunda-feira", "terça-feira", "terca-feira", "quarta-feira", "quinta-feira",
+  "sexta-feira", "sábado", "sabado", "domingo",
+]);
+
+// Bancos reconhecidos textualmente no extrato. Chave = string alvo, valor = alias canônico (para casar com bank_accounts.bank/name).
+const BANK_ALIASES: Array<{ match: RegExp; canonical: string }> = [
+  { match: /mercado\s*pago/i, canonical: "Mercado Pago" },
+  { match: /infinite\s*pay/i, canonical: "InfinitePay" },
+  { match: /sicoob/i, canonical: "Sicoob" },
+  { match: /c6\s*bank/i, canonical: "C6 Bank" },
+  { match: /pagseguro|pagbank/i, canonical: "PagBank" },
+  { match: /nubank/i, canonical: "Nubank" },
+  { match: /asaas/i, canonical: "Asaas" },
+  { match: /banco\s*inter\b|^inter$/i, canonical: "Banco Inter" },
+];
+
+const NOISE_PATTERNS = [
+  /^despesas\s+futuras/i,
+  /^nenhuma/i,
+  /^\d+\s*transaç/i,
+  /^saldo\s*:/i,
+  /^total\b/i,
+  /^fluxo\s+de\s+caixa/i,
+  /^categorias?\s*:/i,
+  /^conta\s*:/i,
+  /^filtro/i,
+  /^exportar/i,
+  /^·+$/,
+];
+
+type RawTx = {
+  data: string; // YYYY-MM-DD
+  descricao: string;
+  banco_txt: string; // texto exato do banco encontrado
+  banco_canonical: string;
+  pluggy_category: string;
+  valor: number; // sinal
+};
+
+function detectBank(line: string): { canonical: string; text: string } | null {
+  for (const b of BANK_ALIASES) {
+    if (b.match.test(line)) return { canonical: b.canonical, text: line.trim() };
+  }
+  return null;
+}
+
+// Parse value line: "+R$ 90", "R$ -150,00", "R$ 32 052,98", "-R$ 1.234,56"
+const VALUE_LINE_RE = /^([+\-])?\s*R\$\s*(-)?\s*([\d\.\s]+)(?:,(\d{1,2}))?\s*$/;
+function parseValue(line: string): number | null {
+  const m = line.match(VALUE_LINE_RE);
+  if (!m) return null;
+  const sign1 = m[1] === "-" ? -1 : 1;
+  const sign2 = m[2] === "-" ? -1 : 1;
+  const intPart = (m[3] || "").replace(/[\.\s]/g, "");
+  const decPart = m[4] || "00";
+  if (!intPart) return null;
+  const n = parseFloat(`${intPart}.${decPart.padEnd(2, "0")}`);
+  if (!Number.isFinite(n)) return null;
+  return sign1 * sign2 * n;
+}
+
+function parseMonthHeader(line: string): { month: number; year: number } | null {
+  const m = line.match(/^([A-Za-zçãéóíúÀ-ÿ]+)\s+de\s+(\d{4})$/i);
+  if (!m) return null;
+  const monthName = m[1].toLowerCase().normalize("NFC");
+  const month = MONTHS_PT[monthName] ?? MONTHS_PT[monthName.replace("ç", "c")];
+  if (!month) return null;
+  return { month, year: parseInt(m[2], 10) };
+}
+
+function toIso(y: number, m: number, d: number): string {
+  return `${y.toString().padStart(4, "0")}-${m.toString().padStart(2, "0")}-${d
+    .toString()
+    .padStart(2, "0")}`;
+}
+
+export function parseStatementText(text: string): RawTx[] {
+  const rawLines = text.split(/\r?\n/).map((l) => l.trim());
+  const lines: string[] = [];
+  for (const l of rawLines) {
+    if (!l) continue;
+    if (NOISE_PATTERNS.some((r) => r.test(l))) continue;
+    lines.push(l);
+  }
+
+  let year: number | null = null;
+  let month: number | null = null;
+  let day: number | null = null;
+  let prevDay: number | null = null;
+
+  const results: RawTx[] = [];
+  // Buffer: linhas desde o último "evento" (fim de transação ou nova data)
+  let buffer: string[] = [];
+  let currentBank: { canonical: string; text: string } | null = null;
+  let bankIdx = -1; // índice no buffer onde o banco foi detectado
+
+  const flushOnValue = (val: number) => {
+    if (!year || !month || !day) return;
+    // Precisamos de banco
+    if (!currentBank || bankIdx < 0) return;
+    // descrição = linhas antes do banco (junte)
+    const descLines = buffer.slice(0, bankIdx).filter((l) => l && l !== "·");
+    // categoria = linhas depois do banco (ignorando "·")
+    const catLines = buffer.slice(bankIdx + 1).filter((l) => l && l !== "·");
+    const descricao = descLines.join(" ").replace(/\s+/g, " ").trim();
+    const pluggy_category = catLines.join(" ").replace(/\s+/g, " ").trim();
+    results.push({
+      data: toIso(year, month, day),
+      descricao: descricao || currentBank.text,
+      banco_txt: currentBank.text,
+      banco_canonical: currentBank.canonical,
+      pluggy_category,
+      valor: val,
+    });
+  };
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+
+    // Cabeçalho de mês
+    const mh = parseMonthHeader(line);
+    if (mh) {
+      month = mh.month;
+      year = mh.year;
+      prevDay = null;
+      buffer = [];
+      currentBank = null;
+      bankIdx = -1;
+      continue;
+    }
+
+    // Dia + weekday
+    const dayMatch = line.match(/^(\d{1,2})$/);
+    if (dayMatch) {
+      const next = lines[i + 1] ?? "";
+      const nextNorm = next.toLowerCase().normalize("NFC");
+      if (WEEKDAYS_PT.has(nextNorm) || WEEKDAYS_PT.has(nextNorm.replace("á", "a"))) {
+        const d = parseInt(dayMatch[1], 10);
+        if (d >= 1 && d <= 31 && month && year) {
+          if (prevDay !== null && d > prevDay) {
+            // rollover: mês anterior
+            month -= 1;
+            if (month < 1) {
+              month = 12;
+              year -= 1;
+            }
+          }
+          day = d;
+          prevDay = d;
+          i++; // consumir weekday
+          buffer = [];
+          currentBank = null;
+          bankIdx = -1;
+          continue;
+        }
+      }
+    }
+
+    // Valor → fecha transação
+    const v = parseValue(line);
+    if (v !== null && v !== 0) {
+      flushOnValue(v);
+      buffer = [];
+      currentBank = null;
+      bankIdx = -1;
+      continue;
+    }
+
+    // Banco?
+    const b = detectBank(line);
+    if (b) {
+      currentBank = b;
+      bankIdx = buffer.length;
+      buffer.push(line);
+      continue;
+    }
+
+    buffer.push(line);
+  }
+
+  return results;
+}
+
+// ============================================================================
+// Server-side: parseOpenFinanceText + confirmOpenFinanceImport
+// ============================================================================
 
 const keyOf = (t: { data: string; valor: number; descricao: string }) =>
   `${t.data}_${t.valor.toFixed(2)}_${t.descricao.trim().slice(0, 80).toLowerCase()}`;
@@ -17,7 +212,7 @@ type Candidate = {
   account_name: string | null;
 };
 
-type ParsedItem = {
+export type ParsedItem = {
   temp_id: string;
   data: string;
   descricao: string;
@@ -27,13 +222,41 @@ type ParsedItem = {
   bank_account_name: string | null;
   cost_center_id: string | null;
   cost_center_name: string | null;
+  pluggy_category: string;
   suggested_account_id: string | null;
   suggested_account_name: string | null;
   dedupe_tag: string;
-  status: "match" | "multiple" | "new" | "duplicate" | "no_cost_center";
+  status:
+    | "match"
+    | "multiple"
+    | "new"
+    | "duplicate"
+    | "no_cost_center"
+    | "internal"
+    | "aporte"
+    | "aporte_incomplete";
   match_transaction_id: string | null;
   candidates: Candidate[];
+  // Para aportes
+  pair_temp_id: string | null;
+  transfer_source_cc_id: string | null;
+  transfer_source_cc_name: string | null;
+  transfer_source_bank_account_id: string | null;
+  transfer_target_cc_id: string | null;
+  transfer_target_cc_name: string | null;
+  transfer_target_bank_account_id: string | null;
+  // Se aporte_incompleto: lado conhecido é "source" (perna que saiu) ou "target" (perna que entrou)
+  incomplete_side: "source" | "target" | null;
 };
+
+const isSamePersonTransfer = (cat: string) =>
+  /same\s*person\s*transfer|transfer[^a-z]*same|transfer[^a-z]*person|transferência\s+entre|entre\s+contas\s+próprias/i.test(
+    cat,
+  );
+
+const isInvestmentNoise = (cat: string, desc: string) =>
+  /investment/i.test(cat) ||
+  /libera[çc][ãa]o\s+de\s+dinheiro|resgate|aplica[çc][ãa]o/i.test(desc);
 
 export const parseOpenFinanceText = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -41,17 +264,14 @@ export const parseOpenFinanceText = createServerFn({ method: "POST" })
     (d: { text: string; default_cost_center_id?: string; default_account_id?: string }) =>
       z
         .object({
-          text: z.string().trim().min(20).max(80000),
+          text: z.string().trim().min(20).max(500000),
           default_cost_center_id: z.string().uuid().optional(),
           default_account_id: z.string().uuid().optional(),
         })
         .parse(d),
   )
   .handler(async ({ data, context }): Promise<{ items: ParsedItem[] }> => {
-    const key = process.env.LOVABLE_API_KEY;
-    if (!key) throw new Error("LOVABLE_API_KEY ausente no servidor.");
-
-    // 1) Carrega contas bancárias reais (dinâmico, sem IDs chumbados)
+    // 1) Contas bancárias
     const { data: bankAccountsRaw, error: baErr } = await context.supabase
       .from("bank_accounts")
       .select("id, name, bank, enterprise");
@@ -63,7 +283,7 @@ export const parseOpenFinanceText = createServerFn({ method: "POST" })
       enterprise: string | null;
     }>;
 
-    // 2) Centros de custo ativos por enterprise
+    // 2) Centros de custo ativos
     const { data: costCentersRaw } = await context.supabase
       .from("cost_centers")
       .select("id, name, code, enterprise, is_active");
@@ -75,23 +295,20 @@ export const parseOpenFinanceText = createServerFn({ method: "POST" })
       is_active: boolean;
     }>;
     const ccById = new Map(costCenters.map((c) => [c.id, c]));
-    const activeCcByEnterprise = new Map<string, typeof costCenters[number]>();
+    const activeCcByEnterprise = new Map<string, (typeof costCenters)[number]>();
     for (const cc of costCenters) {
       if (cc.is_active && cc.enterprise && !activeCcByEnterprise.has(cc.enterprise)) {
         activeCcByEnterprise.set(cc.enterprise, cc);
       }
     }
-
-    // Bank → default cost center (via enterprise)
     const defaultCcForBank = (ba: (typeof bankAccounts)[number]) =>
       ba.enterprise ? activeCcByEnterprise.get(ba.enterprise) ?? null : null;
 
-    // 3) Contas contábeis ativas — catálogo por CC envolvido
-    const { data: accountsAll, error: accErr } = await context.supabase
+    // 3) Contas contábeis por CC
+    const { data: accountsAll } = await context.supabase
       .from("accounts")
       .select("id, name, kind, cost_center_id, is_active")
       .eq("is_active", true);
-    if (accErr) throw new Error(accErr.message);
     const accByCc = new Map<string, Array<{ id: string; name: string; kind: string }>>();
     for (const a of accountsAll ?? []) {
       if (!a.cost_center_id) continue;
@@ -100,138 +317,31 @@ export const parseOpenFinanceText = createServerFn({ method: "POST" })
       accByCc.set(a.cost_center_id, arr);
     }
 
-    // Catálogo cobre TODOS os CCs ativos referenciados pelas contas bancárias +
-    // o CC de fallback opcional
-    const relevantCcIds = new Set<string>();
-    for (const ba of bankAccounts) {
-      const cc = defaultCcForBank(ba);
-      if (cc) relevantCcIds.add(cc.id);
-    }
-    if (data.default_cost_center_id) relevantCcIds.add(data.default_cost_center_id);
+    // 4) Parser determinístico
+    const rawTxs = parseStatementText(data.text);
 
-    const catalog = Array.from(relevantCcIds)
-      .map((ccId) => {
-        const cc = ccById.get(ccId);
-        const accs = accByCc.get(ccId) ?? [];
-        if (!cc || accs.length === 0) return null;
-        const lines = accs.map((a) => `  - "${a.name}" (${a.kind})`).join("\n");
-        return `Centro de custo "${cc.name}":\n${lines}`;
-      })
-      .filter(Boolean)
-      .join("\n\n");
+    if (rawTxs.length === 0) return { items: [] };
 
-    // 4) Lista de bancos apresentada à IA (dinâmica).
-    const bankLabels = Array.from(
-      new Set(
-        bankAccounts
-          .flatMap((ba) => [ba.bank ?? "", ba.name ?? ""])
-          .map((s) => s.trim())
-          .filter(Boolean),
-      ),
-    );
-    // Schema mínimo sem bounds/enums — evita AI_NoObjectGeneratedError por schema muito restritivo.
-    const ParsedTxSchema = z.object({
-      transactions: z.array(
-        z.object({
-          data: z.string().describe("Data no formato YYYY-MM-DD."),
-          descricao: z.string(),
-          valor: z
-            .number()
-            .describe("POSITIVO para entradas/recebimentos; NEGATIVO para saídas."),
-          instituicao: z
-            .string()
-            .describe(
-              "Nome do banco EXATAMENTE como aparece na lista fornecida, ou 'Outro' se não reconhecer.",
-            ),
-          categoria_sugerida: z
-            .string()
-            .describe(
-              "Nome EXATO de uma conta do catálogo do centro de custo daquele banco, ou string vazia.",
-            ),
-        }),
-      ),
-    });
-
-    const gateway = createLovableAiGatewayProvider(key);
-    const today = new Date().toISOString().slice(0, 10);
-
-    const bankList = bankLabels.map((b) => `  - "${b}"`).join("\n");
-
-    type ParsedTx = {
-      data: string;
-      descricao: string;
-      valor: number;
-      instituicao: string;
-      categoria_sugerida: string;
-    };
-    let transactions: ParsedTx[] = [];
-    try {
-      const { object } = await generateObject({
-        model: gateway("google/gemini-3-flash-preview"),
-        schema: ParsedTxSchema,
-        system:
-          "Você é um parser financeiro de extratos brasileiros do Meu Pluggy (Open Finance) multibancos. Para CADA linha identifique: data (YYYY-MM-DD), descrição, valor (positivo=entrada, negativo=saída) e a instituição — use EXATAMENTE um dos nomes da lista de bancos, ou 'Outro' se não reconhecer. Sugira categoria usando EXATAMENTE um nome do catálogo do centro de custo daquele banco, ou string vazia. Nunca invente. Ignore cabeçalhos, totais e saldos. Retorne no máximo 500 transações.",
-        prompt: `Data de hoje: ${today}.\n\nBANCOS CADASTRADOS (use o nome EXATO):\n${bankList}\n\nCATÁLOGO DE CONTAS POR CENTRO DE CUSTO:\n${catalog}\n\nTEXTO DO EXTRATO:\n${data.text}`,
-      });
-      transactions = object.transactions as ParsedTx[];
-    } catch (err: unknown) {
-      const { NoObjectGeneratedError } = await import("ai");
-      if (!NoObjectGeneratedError.isInstance(err) || typeof err.text !== "string") throw err;
-      // Fallback: recupera JSON do texto bruto quando o schema falha na validação.
-      try {
-        const cleaned = err.text.replace(/```json\s*/gi, "").replace(/```\s*/g, "").trim();
-        const s = cleaned.search(/[\{\[]/);
-        const e = Math.max(cleaned.lastIndexOf("}"), cleaned.lastIndexOf("]"));
-        const slice = s >= 0 && e > s ? cleaned.slice(s, e + 1) : cleaned;
-        const repaired = JSON.parse(slice.replace(/,\s*}/g, "}").replace(/,\s*]/g, "]"));
-        const arr = Array.isArray(repaired)
-          ? repaired
-          : Array.isArray(repaired?.transactions)
-            ? repaired.transactions
-            : [];
-        transactions = arr
-          .map((t: Record<string, unknown>) => ({
-            data: String(t?.data ?? ""),
-            descricao: String(t?.descricao ?? ""),
-            valor: Number(t?.valor),
-            instituicao: String(t?.instituicao ?? "Outro"),
-            categoria_sugerida: String(t?.categoria_sugerida ?? ""),
-          }))
-          .filter((t: ParsedTx) => t.data && Number.isFinite(t.valor));
-      } catch {
-        throw new Error(
-          "A IA retornou uma resposta em formato inválido. Tente colar um trecho menor do extrato.",
-        );
-      }
-    }
-
-    const parsed = transactions.filter(
-      (t) => Number.isFinite(t.valor) && t.valor !== 0 && /^\d{4}-\d{2}-\d{2}$/.test(t.data),
-    );
-
-    if (parsed.length === 0) return { items: [] };
-
-    // Match instituição → bank_account por bank ou name (case-insensitive)
-    const findBankAccount = (label: string) => {
-      if (!label || label === "Outro") return null;
-      const norm = label.trim().toLowerCase();
-      return (
-        bankAccounts.find((ba) => (ba.bank ?? "").trim().toLowerCase() === norm) ||
-        bankAccounts.find((ba) => (ba.name ?? "").trim().toLowerCase() === norm) ||
-        null
-      );
+    // 5) Match banco canonical -> bank_account. Sicoob prefere ghr_jk (default), mas mantém.
+    const findBankAccount = (canonical: string) => {
+      const norm = canonical.trim().toLowerCase();
+      // preferência: match exato pelo campo bank
+      const exact = bankAccounts.find((ba) => (ba.bank ?? "").trim().toLowerCase() === norm);
+      if (exact) return exact;
+      return bankAccounts.find((ba) => (ba.name ?? "").trim().toLowerCase() === norm) ?? null;
     };
 
-    // Deduplicação por tag [OFIMP]
-    const tags = parsed.map((t) => `[OFIMP ${keyOf(t)}]`);
+    // 6) Deduplicação [OFIMP]
+    const tags = rawTxs.map((t) => `[OFIMP ${keyOf(t)}]`);
     const { data: existingByTag } = await context.supabase
       .from("transactions")
       .select("description")
       .in("description", tags);
     const dupSet = new Set((existingByTag ?? []).map((r) => r.description as string));
+    const existingDescs = (existingByTag ?? []).map((r) => r.description as string);
 
-    // Range global de datas ±3d
-    const dates = parsed.map((t) => t.data).sort();
+    // 7) Pendentes para matching
+    const dates = rawTxs.map((t) => t.data).sort();
     const minDate = new Date(dates[0]);
     minDate.setDate(minDate.getDate() - 3);
     const maxDate = new Date(dates[dates.length - 1]);
@@ -261,27 +371,76 @@ export const parseOpenFinanceText = createServerFn({ method: "POST" })
     };
     const pendings = (pendingTx ?? []) as unknown as PendingRow[];
 
-    const items: ParsedItem[] = parsed.map((t, i) => {
-      const tag = `[OFIMP ${keyOf(t)}]`;
-
-      const ba = findBankAccount(t.instituicao);
-      const cc = ba ? defaultCcForBank(ba) : null;
-      const ccId = cc?.id ?? data.default_cost_center_id ?? null;
+    // ========================================================================
+    // Fase 1: montar items base com bank_account/cc resolvidos
+    // ========================================================================
+    type Base = {
+      temp_id: string;
+      raw: RawTx;
+      tag: string;
+      ba: (typeof bankAccounts)[number] | null;
+      cc: { id: string; name: string } | null;
+      isTransfer: boolean;
+      isInvestment: boolean;
+    };
+    const bases: Base[] = rawTxs.map((t, i) => {
+      const ba = findBankAccount(t.banco_canonical);
+      const ccRaw = ba ? defaultCcForBank(ba) : null;
+      const ccId = ccRaw?.id ?? data.default_cost_center_id ?? null;
       const ccName = ccId ? ccById.get(ccId)?.name ?? null : null;
+      return {
+        temp_id: `t${i}`,
+        raw: t,
+        tag: `[OFIMP ${keyOf(t)}]`,
+        ba,
+        cc: ccId && ccName ? { id: ccId, name: ccName } : null,
+        isTransfer: isSamePersonTransfer(t.pluggy_category),
+        isInvestment: isInvestmentNoise(t.pluggy_category, t.descricao),
+      };
+    });
 
-      // Categoria sugerida (por nome dentro do cc)
+    // ========================================================================
+    // Fase 2: parear same-person transfers
+    // ========================================================================
+    const pairedWith = new Map<string, string>(); // temp_id -> par temp_id
+    const transferPositives = bases.filter((b) => b.isTransfer && b.raw.valor > 0);
+    const transferNegatives = bases.filter((b) => b.isTransfer && b.raw.valor < 0);
+    const usedPos = new Set<string>();
+    for (const neg of transferNegatives) {
+      const negDate = new Date(neg.raw.data).getTime();
+      const negAbs = Math.abs(neg.raw.valor);
+      const match = transferPositives.find((pos) => {
+        if (usedPos.has(pos.temp_id)) return false;
+        if (Math.abs(Math.abs(pos.raw.valor) - negAbs) > 0.01) return false;
+        const posDate = new Date(pos.raw.data).getTime();
+        return Math.abs(posDate - negDate) / 86400000 <= 1;
+      });
+      if (match) {
+        pairedWith.set(neg.temp_id, match.temp_id);
+        pairedWith.set(match.temp_id, neg.temp_id);
+        usedPos.add(match.temp_id);
+      }
+    }
+
+    // ========================================================================
+    // Fase 3: montar ParsedItem[]
+    // ========================================================================
+    const items: ParsedItem[] = bases.map((b) => {
+      const t = b.raw;
+      const instituicao = b.raw.banco_canonical;
+      const bankName = b.ba?.name ?? null;
+
+      // categoria sugerida
       let suggestedId: string | null = null;
       let suggestedName: string | null = null;
-      if (ccId && t.categoria_sugerida) {
-        const norm = t.categoria_sugerida.trim().toLowerCase();
-        const list = accByCc.get(ccId) ?? [];
+      if (b.cc) {
+        const list = accByCc.get(b.cc.id) ?? [];
         const expectedKind = t.valor >= 0 ? "revenue" : "expense";
-        const match =
-          list.find((a) => a.name.toLowerCase() === norm && a.kind === expectedKind) ||
-          list.find((a) => a.name.toLowerCase() === norm);
-        if (match) {
-          suggestedId = match.id;
-          suggestedName = match.name;
+        // heurística fraca: sem IA, só sugere se houver 1 única conta desse kind
+        const sameKind = list.filter((a) => a.kind === expectedKind);
+        if (sameKind.length === 1) {
+          suggestedId = sameKind[0].id;
+          suggestedName = sameKind[0].name;
         }
       }
       if (!suggestedId && data.default_account_id) {
@@ -292,43 +451,112 @@ export const parseOpenFinanceText = createServerFn({ method: "POST" })
         }
       }
 
-      const baseItem = {
-        temp_id: `t${i}`,
+      const base = {
+        temp_id: b.temp_id,
         data: t.data,
         descricao: t.descricao,
         valor: t.valor,
-        instituicao: t.instituicao,
-        bank_account_id: ba?.id ?? null,
-        bank_account_name: ba?.name ?? null,
-        cost_center_id: ccId,
-        cost_center_name: ccName,
+        instituicao,
+        bank_account_id: b.ba?.id ?? null,
+        bank_account_name: bankName,
+        cost_center_id: b.cc?.id ?? null,
+        cost_center_name: b.cc?.name ?? null,
+        pluggy_category: t.pluggy_category,
         suggested_account_id: suggestedId,
         suggested_account_name: suggestedName,
-        dedupe_tag: tag,
+        dedupe_tag: b.tag,
+        pair_temp_id: null as string | null,
+        transfer_source_cc_id: null as string | null,
+        transfer_source_cc_name: null as string | null,
+        transfer_source_bank_account_id: null as string | null,
+        transfer_target_cc_id: null as string | null,
+        transfer_target_cc_name: null as string | null,
+        transfer_target_bank_account_id: null as string | null,
+        incomplete_side: null as "source" | "target" | null,
       };
 
-      // Duplicado?
-      const tagPrefixHit =
-        dupSet.has(tag) ||
-        (existingByTag ?? []).some((r) => (r.description as string).includes(tag));
-      if (tagPrefixHit) {
+      // Duplicado
+      if (dupSet.has(b.tag) || existingDescs.some((d) => d.includes(b.tag))) {
         return {
-          ...baseItem,
-          status: "duplicate",
+          ...base,
+          status: "duplicate" as const,
           match_transaction_id: null,
           candidates: [],
         };
       }
 
-      if (!ccId) {
+      // Investment noise
+      if (b.isInvestment) {
         return {
-          ...baseItem,
-          status: "no_cost_center",
+          ...base,
+          status: "internal" as const,
           match_transaction_id: null,
           candidates: [],
         };
       }
 
+      // Same person transfer
+      if (b.isTransfer) {
+        const pairId = pairedWith.get(b.temp_id) ?? null;
+        if (pairId) {
+          const partner = bases.find((x) => x.temp_id === pairId)!;
+          const negLeg = b.raw.valor < 0 ? b : partner;
+          const posLeg = b.raw.valor > 0 ? b : partner;
+          const sourceCc = negLeg.cc;
+          const targetCc = posLeg.cc;
+          const sameCc =
+            sourceCc && targetCc && sourceCc.id === targetCc.id;
+          if (sameCc) {
+            return {
+              ...base,
+              status: "internal" as const,
+              match_transaction_id: null,
+              candidates: [],
+              pair_temp_id: pairId,
+            };
+          }
+          // Aporte
+          return {
+            ...base,
+            status: "aporte" as const,
+            match_transaction_id: null,
+            candidates: [],
+            pair_temp_id: pairId,
+            transfer_source_cc_id: sourceCc?.id ?? null,
+            transfer_source_cc_name: sourceCc?.name ?? null,
+            transfer_source_bank_account_id: negLeg.ba?.id ?? null,
+            transfer_target_cc_id: targetCc?.id ?? null,
+            transfer_target_cc_name: targetCc?.name ?? null,
+            transfer_target_bank_account_id: posLeg.ba?.id ?? null,
+          };
+        }
+        // Sem par no lote
+        const isNeg = b.raw.valor < 0;
+        return {
+          ...base,
+          status: "aporte_incomplete" as const,
+          match_transaction_id: null,
+          candidates: [],
+          transfer_source_cc_id: isNeg ? b.cc?.id ?? null : null,
+          transfer_source_cc_name: isNeg ? b.cc?.name ?? null : null,
+          transfer_source_bank_account_id: isNeg ? b.ba?.id ?? null : null,
+          transfer_target_cc_id: isNeg ? null : b.cc?.id ?? null,
+          transfer_target_cc_name: isNeg ? null : b.cc?.name ?? null,
+          transfer_target_bank_account_id: isNeg ? null : b.ba?.id ?? null,
+          incomplete_side: isNeg ? "source" : "target",
+        };
+      }
+
+      if (!b.cc) {
+        return {
+          ...base,
+          status: "no_cost_center" as const,
+          match_transaction_id: null,
+          candidates: [],
+        };
+      }
+
+      // Matching regular
       const expectedType: "receivable" | "payable" = t.valor >= 0 ? "receivable" : "payable";
       const absVal = Math.abs(t.valor);
       const txDate = new Date(t.data);
@@ -336,12 +564,10 @@ export const parseOpenFinanceText = createServerFn({ method: "POST" })
         if (p.type !== expectedType) return false;
         if (Math.abs(Math.abs(Number(p.amount)) - absVal) > 0.01) return false;
         const d = new Date(p.due_date);
-        const diff = Math.abs(d.getTime() - txDate.getTime()) / 86400000;
-        return diff <= 3;
+        return Math.abs(d.getTime() - txDate.getTime()) / 86400000 <= 3;
       });
-      const sameCc = cands.filter((c) => c.cost_center_id === ccId);
+      const sameCc = cands.filter((c) => c.cost_center_id === b.cc!.id);
       const finalCands = sameCc.length > 0 ? sameCc : cands;
-
       let status: ParsedItem["status"];
       let matchId: string | null = null;
       if (finalCands.length === 1) {
@@ -352,9 +578,8 @@ export const parseOpenFinanceText = createServerFn({ method: "POST" })
       } else {
         status = "new";
       }
-
       return {
-        ...baseItem,
+        ...base,
         status,
         match_transaction_id: matchId,
         candidates: finalCands.map((c) => ({
@@ -372,9 +597,13 @@ export const parseOpenFinanceText = createServerFn({ method: "POST" })
     return { items };
   });
 
+// ============================================================================
+// confirmOpenFinanceImport
+// ============================================================================
+
 const DecisionSchema = z.object({
   temp_id: z.string(),
-  action: z.enum(["match", "create", "skip"]),
+  action: z.enum(["match", "create", "skip", "aporte"]),
   data: z.string(),
   descricao: z.string(),
   valor: z.number(),
@@ -384,24 +613,115 @@ const DecisionSchema = z.object({
   account_id: z.string().uuid().nullable(),
   transaction_id: z.string().uuid().nullable(),
   dedupe_tag: z.string(),
+  // Aporte
+  pair_temp_id: z.string().nullable().optional(),
+  transfer_source_cc_id: z.string().uuid().nullable().optional(),
+  transfer_source_bank_account_id: z.string().uuid().nullable().optional(),
+  transfer_target_cc_id: z.string().uuid().nullable().optional(),
+  transfer_target_bank_account_id: z.string().uuid().nullable().optional(),
 });
 
 export const confirmOpenFinanceImport = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: { decisions: unknown }) =>
-    z.object({ decisions: z.array(DecisionSchema).max(500) }).parse(d),
+    z.object({ decisions: z.array(DecisionSchema).max(2000) }).parse(d),
   )
   .handler(async ({ data, context }) => {
     let reconciled = 0;
     let created = 0;
     let skipped = 0;
+    let aportes = 0;
     const errors: string[] = [];
+
+    // Para aportes pareados: só processar uma perna por par
+    const processedPair = new Set<string>();
 
     for (const dec of data.decisions) {
       if (dec.action === "skip") {
         skipped++;
         continue;
       }
+
+      // -------------------- APORTE --------------------
+      if (dec.action === "aporte") {
+        if (dec.pair_temp_id) {
+          const pairKey = [dec.temp_id, dec.pair_temp_id].sort().join("::");
+          if (processedPair.has(pairKey)) {
+            skipped++;
+            continue;
+          }
+          processedPair.add(pairKey);
+        }
+        const srcCc = dec.transfer_source_cc_id;
+        const tgtCc = dec.transfer_target_cc_id;
+        const srcBank = dec.transfer_source_bank_account_id;
+        if (!srcCc || !tgtCc || !srcBank) {
+          errors.push(`${dec.descricao}: aporte incompleto (falta CC origem/destino ou banco).`);
+          continue;
+        }
+        if (srcCc === tgtCc) {
+          errors.push(`${dec.descricao}: aporte com mesmo CC origem/destino.`);
+          continue;
+        }
+
+        // account_id: se não veio, pega primeira expense do target CC (idealmente "Aportes para X")
+        let accountId = dec.account_id;
+        if (!accountId) {
+          const { data: acc } = await context.supabase
+            .from("accounts")
+            .select("id, name")
+            .eq("cost_center_id", tgtCc)
+            .eq("kind", "expense")
+            .eq("is_active", true)
+            .order("name")
+            .limit(50);
+          const list = (acc ?? []) as Array<{ id: string; name: string }>;
+          const preferAporte = list.find((a) => /aporte/i.test(a.name));
+          accountId = preferAporte?.id ?? list[0]?.id ?? null;
+        }
+        if (!accountId) {
+          errors.push(`${dec.descricao}: sem conta contábil disponível no CC destino.`);
+          continue;
+        }
+
+        // Dedupe
+        const tag = dec.dedupe_tag;
+        const { data: dup } = await context.supabase
+          .from("transactions")
+          .select("id")
+          .ilike("description", `%${tag}%`)
+          .limit(1);
+        if (dup && dup.length > 0) {
+          skipped++;
+          continue;
+        }
+
+        const paidAt = new Date(`${dec.data}T12:00:00Z`).toISOString();
+        const description =
+          `${tag} [APORTE] ${dec.instituicao} — ${dec.descricao}`.slice(0, 500);
+        // Cria payable no banco de origem com CC de destino → trigger auto-cria intercompany_transfers
+        const { error } = await context.supabase.from("transactions").insert({
+          cost_center_id: tgtCc,
+          account_id: accountId,
+          bank_account_id: srcBank,
+          type: "payable",
+          amount: Math.abs(Number(dec.valor.toFixed(2))),
+          description,
+          due_date: dec.data,
+          document_datetime: paidAt,
+          status: "reconciled",
+          paid_at: paidAt,
+          created_by: context.userId,
+        });
+        if (error) {
+          errors.push(`${dec.descricao}: ${error.message}`);
+          continue;
+        }
+        aportes++;
+        continue;
+      }
+
+      // -------------------- MATCH --------------------
       if (dec.action === "match") {
         if (!dec.transaction_id) {
           errors.push(`${dec.descricao}: sem transação alvo`);
@@ -435,7 +755,8 @@ export const confirmOpenFinanceImport = createServerFn({ method: "POST" })
         reconciled++;
         continue;
       }
-      // create
+
+      // -------------------- CREATE --------------------
       if (!dec.cost_center_id || !dec.account_id) {
         errors.push(`${dec.descricao}: falta centro de custo ou categoria`);
         continue;
@@ -471,5 +792,5 @@ export const confirmOpenFinanceImport = createServerFn({ method: "POST" })
       created++;
     }
 
-    return { reconciled, created, skipped, errors };
+    return { reconciled, created, aportes, skipped, errors };
   });

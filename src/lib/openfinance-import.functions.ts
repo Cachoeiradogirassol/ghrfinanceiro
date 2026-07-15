@@ -130,7 +130,9 @@ export const parseOpenFinanceText = createServerFn({ method: "POST" })
       ),
     );
     // "Outro" continua permitido como escape.
-    const bankEnumValues = [...bankLabels, "Outro"] as [string, ...string[]];
+    const bankEnumValues = (bankLabels.length > 0
+      ? [...bankLabels, "Outro"]
+      : ["Outro"]) as unknown as [string, ...string[]];
 
     const ParsedTxSchema = z.object({
       transactions: z

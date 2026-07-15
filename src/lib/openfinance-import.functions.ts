@@ -129,34 +129,27 @@ export const parseOpenFinanceText = createServerFn({ method: "POST" })
           .filter(Boolean),
       ),
     );
-    // "Outro" continua permitido como escape.
-    const bankEnumValues = (bankLabels.length > 0
-      ? [...bankLabels, "Outro"]
-      : ["Outro"]) as unknown as [string, ...string[]];
-
+    // Schema mínimo sem bounds/enums — evita AI_NoObjectGeneratedError por schema muito restritivo.
     const ParsedTxSchema = z.object({
-      transactions: z
-        .array(
-          z.object({
-            data: z.string().describe("Data no formato YYYY-MM-DD."),
-            descricao: z.string(),
-            valor: z
-              .number()
-              .describe("POSITIVO para entradas/recebimentos; NEGATIVO para saídas."),
-            instituicao: z
-              .enum(bankEnumValues)
-              .describe(
-                "Nome EXATO de um dos bancos cadastrados na lista fornecida, ou 'Outro' se não reconhecer.",
-              ),
-            categoria_sugerida: z
-              .string()
-              .describe(
-                "Nome EXATO de uma conta da lista fornecida para o centro de custo dessa linha. Se não houver correspondência clara, retorne string vazia.",
-              )
-              .default(""),
-          }),
-        )
-        .max(500),
+      transactions: z.array(
+        z.object({
+          data: z.string().describe("Data no formato YYYY-MM-DD."),
+          descricao: z.string(),
+          valor: z
+            .number()
+            .describe("POSITIVO para entradas/recebimentos; NEGATIVO para saídas."),
+          instituicao: z
+            .string()
+            .describe(
+              "Nome do banco EXATAMENTE como aparece na lista fornecida, ou 'Outro' se não reconhecer.",
+            ),
+          categoria_sugerida: z
+            .string()
+            .describe(
+              "Nome EXATO de uma conta do catálogo do centro de custo daquele banco, ou string vazia.",
+            ),
+        }),
+      ),
     });
 
     const gateway = createLovableAiGatewayProvider(key);
@@ -164,15 +157,55 @@ export const parseOpenFinanceText = createServerFn({ method: "POST" })
 
     const bankList = bankLabels.map((b) => `  - "${b}"`).join("\n");
 
-    const { object } = await generateObject({
-      model: gateway("google/gemini-3-flash-preview"),
-      schema: ParsedTxSchema,
-      system:
-        "Você é um parser financeiro de extratos brasileiros do Meu Pluggy (Open Finance) multibancos. Para CADA linha, identifique de forma INDEPENDENTE: data, descrição, valor (positivo=entrada, negativo=saída) e a instituição — retornando o nome EXATO de um dos bancos da lista fornecida (ou 'Outro' se não reconhecer). Além disso, sugira a CATEGORIA usando EXATAMENTE um dos nomes da lista de contas do centro de custo daquele banco. Se não houver conta claramente adequada, retorne categoria_sugerida vazia. Nunca invente nomes de bancos nem de contas. Ignore cabeçalhos, totais e saldos.",
-      prompt: `Data de hoje: ${today}.\n\nBANCOS CADASTRADOS (use o nome EXATO):\n${bankList}\n\nCATÁLOGO DE CONTAS POR CENTRO DE CUSTO:\n${catalog}\n\nTEXTO DO EXTRATO:\n${data.text}`,
-    });
+    type ParsedTx = {
+      data: string;
+      descricao: string;
+      valor: number;
+      instituicao: string;
+      categoria_sugerida: string;
+    };
+    let transactions: ParsedTx[] = [];
+    try {
+      const { object } = await generateObject({
+        model: gateway("google/gemini-3-flash-preview"),
+        schema: ParsedTxSchema,
+        system:
+          "Você é um parser financeiro de extratos brasileiros do Meu Pluggy (Open Finance) multibancos. Para CADA linha identifique: data (YYYY-MM-DD), descrição, valor (positivo=entrada, negativo=saída) e a instituição — use EXATAMENTE um dos nomes da lista de bancos, ou 'Outro' se não reconhecer. Sugira categoria usando EXATAMENTE um nome do catálogo do centro de custo daquele banco, ou string vazia. Nunca invente. Ignore cabeçalhos, totais e saldos. Retorne no máximo 500 transações.",
+        prompt: `Data de hoje: ${today}.\n\nBANCOS CADASTRADOS (use o nome EXATO):\n${bankList}\n\nCATÁLOGO DE CONTAS POR CENTRO DE CUSTO:\n${catalog}\n\nTEXTO DO EXTRATO:\n${data.text}`,
+      });
+      transactions = object.transactions as ParsedTx[];
+    } catch (err: unknown) {
+      const { NoObjectGeneratedError } = await import("ai");
+      if (!NoObjectGeneratedError.isInstance(err) || typeof err.text !== "string") throw err;
+      // Fallback: recupera JSON do texto bruto quando o schema falha na validação.
+      try {
+        const cleaned = err.text.replace(/```json\s*/gi, "").replace(/```\s*/g, "").trim();
+        const s = cleaned.search(/[\{\[]/);
+        const e = Math.max(cleaned.lastIndexOf("}"), cleaned.lastIndexOf("]"));
+        const slice = s >= 0 && e > s ? cleaned.slice(s, e + 1) : cleaned;
+        const repaired = JSON.parse(slice.replace(/,\s*}/g, "}").replace(/,\s*]/g, "]"));
+        const arr = Array.isArray(repaired)
+          ? repaired
+          : Array.isArray(repaired?.transactions)
+            ? repaired.transactions
+            : [];
+        transactions = arr
+          .map((t: Record<string, unknown>) => ({
+            data: String(t?.data ?? ""),
+            descricao: String(t?.descricao ?? ""),
+            valor: Number(t?.valor),
+            instituicao: String(t?.instituicao ?? "Outro"),
+            categoria_sugerida: String(t?.categoria_sugerida ?? ""),
+          }))
+          .filter((t: ParsedTx) => t.data && Number.isFinite(t.valor));
+      } catch {
+        throw new Error(
+          "A IA retornou uma resposta em formato inválido. Tente colar um trecho menor do extrato.",
+        );
+      }
+    }
 
-    const parsed = object.transactions.filter(
+    const parsed = transactions.filter(
       (t) => Number.isFinite(t.valor) && t.valor !== 0 && /^\d{4}-\d{2}-\d{2}$/.test(t.data),
     );
 

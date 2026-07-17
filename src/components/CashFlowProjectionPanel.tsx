@@ -11,8 +11,9 @@ import {
   YAxis,
   Tooltip,
   Legend,
+  ReferenceLine,
 } from "recharts";
-import { AlertTriangle, ChevronDown, ChevronRight } from "lucide-react";
+import { AlertTriangle, ChevronDown, ChevronRight, Wallet, Sparkles, Layers } from "lucide-react";
 
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -37,7 +38,7 @@ import {
   type BreakdownItem,
   type CashFlowSource,
 } from "@/lib/cash-flow-projection.functions";
-import { listCostCenters } from "@/lib/finance.functions";
+import { listCostCenters, buildProjection } from "@/lib/finance.functions";
 
 const fmt = (n: number) =>
   n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -55,7 +56,7 @@ const sourceLabel: Record<CashFlowSource, string> = {
   realized: "Realizado",
   committed: "Compromisso",
   estimated: "Estimado",
-  manual: "Manual",
+  manual: "Simulação",
 };
 const sourceBadge: Record<
   CashFlowSource,
@@ -67,12 +68,34 @@ const sourceBadge: Record<
   manual: "outline",
 };
 
+type Scenario = "real" | "sim" | "mixed";
+
+const scenarioMeta: Record<Scenario, { label: string; desc: string; icon: typeof Wallet }> = {
+  real: {
+    label: "Somente Real",
+    desc: "Caixa real projetado: conciliado + compromissos + estimativa histórica.",
+    icon: Wallet,
+  },
+  sim: {
+    label: "Somente Simulação",
+    desc: "Isola as hipóteses (projeções manuais/IA) partindo de zero.",
+    icon: Sparkles,
+  },
+  mixed: {
+    label: "Real + Simulação",
+    desc: "Caixa real projetado com as hipóteses sobrepostas — veja o impacto.",
+    icon: Layers,
+  },
+};
+
 export function CashFlowProjectionPanel() {
   const buildFn = useServerFn(buildCashFlowProjection);
+  const balanceFn = useServerFn(buildProjection);
   const ccFn = useServerFn(listCostCenters);
 
   const [enterprise, setEnterprise] = useState<string>("__all__");
   const [ccId, setCcId] = useState<string>("__all__");
+  const [scenario, setScenario] = useState<Scenario>("real");
   const [expanded, setExpanded] = useState<string | null>(null);
 
   const ccs = useQuery({ queryKey: ["ccs"], queryFn: () => ccFn() });
@@ -96,29 +119,166 @@ export function CashFlowProjectionPanel() {
       }),
   });
 
-  const chartData = useMemo(() => {
-    return (q.data?.months ?? []).map((m) => ({
-      month: m.label,
-      Entradas:
-        m.realized.in + m.committed.in + m.estimated.in + m.manual.in,
-      Saídas:
-        m.realized.out + m.committed.out + m.estimated.out + m.manual.out,
-      Saldo: m.cumulative_balance,
-      RealIn: m.realized.in,
-      RealOut: m.realized.out,
-    }));
-  }, [q.data]);
+  // Saldo consolidado atual — ancora do "Caixa Real Projetado".
+  // buildProjection só aceita enterprise; quando um centro de custo específico
+  // está selecionado, ancoramos a partir de 0 (evita atribuir o saldo do grupo
+  // inteiro a um único CC).
+  const balanceEnterprise = enterprise === "__all__" ? "all" : enterprise;
+  const balanceQ = useQuery({
+    queryKey: ["cash-flow-current-balance", balanceEnterprise],
+    queryFn: () => balanceFn({ data: { enterprise: balanceEnterprise as never } }),
+  });
+  const currentBalance = ccId === "__all__" ? balanceQ.data?.currentBalance ?? 0 : 0;
+
+  type ChartPoint = {
+    month: string;
+    Entradas: number;
+    Saídas: number;
+    Real?: number;
+    Simulação?: number;
+    "Real + Simulação"?: number;
+  };
+
+  const { chartData, monthRows, scenarioAlerts } = useMemo(() => {
+    const months = q.data?.months ?? [];
+    const chart: ChartPoint[] = [];
+    const rows: Array<{
+      month: string;
+      label: string;
+      is_future: boolean;
+      layers: (typeof months)[number];
+      net: number;
+      cumulative: number;
+      negative: boolean;
+    }> = [];
+    const alerts: string[] = [];
+
+    let cumReal = currentBalance;
+    let cumSim = 0;
+    let cumMixed = currentBalance;
+
+    for (const m of months) {
+      const realNet =
+        m.realized.in + m.committed.in + m.estimated.in -
+        (m.realized.out + m.committed.out + m.estimated.out);
+      const simNet = m.manual.in - m.manual.out;
+
+      cumReal += realNet;
+      cumSim += simNet;
+      cumMixed += realNet + simNet;
+
+      let net = 0;
+      let cumulative = 0;
+      let entradas = 0;
+      let saidas = 0;
+      if (scenario === "real") {
+        net = realNet;
+        cumulative = cumReal;
+        entradas = m.realized.in + m.committed.in + m.estimated.in;
+        saidas = m.realized.out + m.committed.out + m.estimated.out;
+      } else if (scenario === "sim") {
+        net = simNet;
+        cumulative = cumSim;
+        entradas = m.manual.in;
+        saidas = m.manual.out;
+      } else {
+        net = realNet + simNet;
+        cumulative = cumMixed;
+        entradas = m.realized.in + m.committed.in + m.estimated.in + m.manual.in;
+        saidas = m.realized.out + m.committed.out + m.estimated.out + m.manual.out;
+      }
+
+      const negative = cumulative < 0;
+      if (negative) {
+        alerts.push(
+          `Saldo acumulado NEGATIVO em ${m.label}: ${fmt(cumulative)} (${scenarioMeta[scenario].label})`,
+        );
+      }
+
+      const point: ChartPoint = { month: m.label, Entradas: entradas, Saídas: saidas };
+      if (scenario === "real") point["Real"] = cumReal;
+      else if (scenario === "sim") point["Simulação"] = cumSim;
+      else {
+        point["Real"] = cumReal;
+        point["Real + Simulação"] = cumMixed;
+      }
+      chart.push(point);
+      rows.push({
+        month: m.month,
+        label: m.label,
+        is_future: m.is_future,
+        layers: m,
+        net,
+        cumulative,
+        negative,
+      });
+    }
+    return { chartData: chart, monthRows: rows, scenarioAlerts: alerts };
+  }, [q.data, scenario, currentBalance]);
+
+  const scenarioLineColor: Record<string, string> = {
+    Real: "hsl(221 83% 53%)",
+    Simulação: "hsl(280 70% 55%)",
+    "Real + Simulação": "hsl(160 84% 39%)",
+  };
 
   return (
     <div className="space-y-4">
-      {(q.data?.alerts.length ?? 0) > 0 && (
+      {/* Seletor de cenário */}
+      <Card className="p-4">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="space-y-1">
+            <div className="text-sm font-semibold flex items-center gap-2">
+              <Layers className="h-4 w-4 text-primary" />
+              Cenário de projeção
+            </div>
+            <p className="text-xs text-muted-foreground max-w-xl">
+              {scenarioMeta[scenario].desc} Real = caixa de verdade; Simulação = hipóteses (IA /
+              manual). No modo Misto o saldo parte do caixa consolidado atual.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {(Object.keys(scenarioMeta) as Scenario[]).map((s) => {
+              const Icon = scenarioMeta[s].icon;
+              const active = scenario === s;
+              return (
+                <Button
+                  key={s}
+                  variant={active ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setScenario(s)}
+                  className={active ? "" : "text-muted-foreground"}
+                >
+                  <Icon className="h-4 w-4 mr-1" />
+                  {scenarioMeta[s].label}
+                </Button>
+              );
+            })}
+          </div>
+        </div>
+        {(scenario === "real" || scenario === "mixed") && (
+          <div className="mt-3 text-xs text-muted-foreground flex items-center gap-2">
+            <Wallet className="h-3.5 w-3.5" />
+            Saldo inicial (caixa consolidado{" "}
+            {enterprise === "__all__" ? "geral" : ENTERPRISES.find((e) => e.value === enterprise)?.label}
+            ):{" "}
+            <span className="font-mono font-semibold text-foreground">
+              {ccId === "__all__" ? fmt(currentBalance) : "— (filtrado por CC)"}
+            </span>
+          </div>
+        )}
+      </Card>
+
+      {scenarioAlerts.length > 0 && (
         <Card className="p-4 border-red-500/50 bg-red-500/5">
           <div className="flex items-start gap-2">
             <AlertTriangle className="h-5 w-5 text-red-500 mt-0.5" />
             <div className="space-y-1">
-              <div className="font-semibold text-red-500">Atenção — saldo negativo projetado</div>
+              <div className="font-semibold text-red-500">
+                Atenção — saldo negativo projetado
+              </div>
               <ul className="text-sm space-y-0.5">
-                {q.data!.alerts.map((a, i) => (
+                {scenarioAlerts.map((a, i) => (
                   <li key={i}>• {a}</li>
                 ))}
               </ul>
@@ -165,9 +325,9 @@ export function CashFlowProjectionPanel() {
             </SelectContent>
           </Select>
         </div>
-        <div className="text-xs text-muted-foreground ml-auto">
-          Horizonte: mês atual + 6 meses · Estimativa = média dos últimos 3 meses realizados
-          por categoria
+        <div className="text-xs text-muted-foreground ml-auto max-w-md text-right">
+          Horizonte: mês atual + 6 meses · Estimativa = média dos últimos 3 meses realizados por
+          categoria · Simulação = projeções manuais/IA
         </div>
       </div>
 
@@ -177,29 +337,64 @@ export function CashFlowProjectionPanel() {
             Calculando fluxo projetado…
           </div>
         ) : (
-          <ResponsiveContainer width="100%" height={340}>
+          <ResponsiveContainer width="100%" height={360}>
             <ComposedChart data={chartData}>
               <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
               <XAxis dataKey="month" fontSize={12} />
               <YAxis fontSize={12} tickFormatter={(v) => `${Math.round(v / 1000)}k`} />
               <Tooltip formatter={(v: number) => fmt(v)} />
               <Legend />
+              <ReferenceLine y={0} stroke="hsl(0 84% 60%)" strokeDasharray="4 4" />
               <Bar dataKey="Entradas" fill="hsl(142 71% 45%)" />
               <Bar dataKey="Saídas" fill="hsl(0 84% 60%)" />
-              <Line
-                type="monotone"
-                dataKey="Saldo"
-                stroke="hsl(221 83% 53%)"
-                strokeWidth={2}
-                dot
-              />
+              {scenario === "real" && (
+                <Line
+                  type="monotone"
+                  dataKey="Real"
+                  stroke={scenarioLineColor.Real}
+                  strokeWidth={2.5}
+                  dot
+                />
+              )}
+              {scenario === "sim" && (
+                <Line
+                  type="monotone"
+                  dataKey="Simulação"
+                  stroke={scenarioLineColor["Simulação"]}
+                  strokeWidth={2.5}
+                  strokeDasharray="6 3"
+                  dot
+                />
+              )}
+              {scenario === "mixed" && (
+                <>
+                  <Line
+                    type="monotone"
+                    dataKey="Real"
+                    stroke={scenarioLineColor.Real}
+                    strokeWidth={2}
+                    dot
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="Real + Simulação"
+                    stroke={scenarioLineColor["Real + Simulação"]}
+                    strokeWidth={2.5}
+                    strokeDasharray="6 3"
+                    dot
+                  />
+                </>
+              )}
             </ComposedChart>
           </ResponsiveContainer>
         )}
       </Card>
 
       <Card className="p-4">
-        <h3 className="font-semibold mb-3">Detalhamento por mês</h3>
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="font-semibold">Detalhamento por mês</h3>
+          <Badge variant="outline">{scenarioMeta[scenario].label}</Badge>
+        </div>
         <div className="rounded-md border overflow-x-auto">
           <Table>
             <TableHeader>
@@ -209,26 +404,33 @@ export function CashFlowProjectionPanel() {
                 <TableHead className="text-right">Realizado</TableHead>
                 <TableHead className="text-right">Compromissos</TableHead>
                 <TableHead className="text-right">Estimado</TableHead>
-                <TableHead className="text-right">Manual</TableHead>
-                <TableHead className="text-right">Líquido</TableHead>
+                <TableHead className="text-right">Simulação</TableHead>
+                <TableHead className="text-right">Líquido ({scenarioMeta[scenario].label})</TableHead>
                 <TableHead className="text-right">Saldo acum.</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {(q.data?.months ?? []).map((m) => {
-                const isOpen = expanded === m.month;
-                const bd: BreakdownItem[] = q.data?.breakdown[m.month] ?? [];
+              {monthRows.map((row) => {
+                const m = row.layers;
+                const isOpen = expanded === row.month;
+                const bd: BreakdownItem[] = q.data?.breakdown[row.month] ?? [];
                 const layerSum = (l: { in: number; out: number }) => l.in - l.out;
                 return (
-                  <Fragment key={m.month}>
+                  <Fragment key={row.month}>
                     <TableRow
-                      className={m.negative ? "bg-red-500/5" : m.is_future ? "" : "bg-muted/30"}
+                      className={
+                        row.negative
+                          ? "bg-red-500/5"
+                          : row.is_future
+                            ? ""
+                            : "bg-muted/30"
+                      }
                     >
                       <TableCell>
                         <Button
                           size="icon"
                           variant="ghost"
-                          onClick={() => setExpanded(isOpen ? null : m.month)}
+                          onClick={() => setExpanded(isOpen ? null : row.month)}
                           aria-label="Expandir"
                         >
                           {isOpen ? (
@@ -239,29 +441,42 @@ export function CashFlowProjectionPanel() {
                         </Button>
                       </TableCell>
                       <TableCell className="font-medium">
-                        {m.label} {m.is_future && <Badge variant="outline" className="ml-1">futuro</Badge>}
+                        {row.label}{" "}
+                        {row.is_future && (
+                          <Badge variant="outline" className="ml-1">
+                            futuro
+                          </Badge>
+                        )}
                       </TableCell>
-                      <TableCell className="text-right font-mono text-xs">
+                      <TableCell
+                        className={`text-right font-mono text-xs ${scenario === "sim" ? "opacity-40" : ""}`}
+                      >
                         {fmt(layerSum(m.realized))}
                       </TableCell>
-                      <TableCell className="text-right font-mono text-xs">
+                      <TableCell
+                        className={`text-right font-mono text-xs ${scenario === "sim" ? "opacity-40" : ""}`}
+                      >
                         {fmt(layerSum(m.committed))}
                       </TableCell>
-                      <TableCell className="text-right font-mono text-xs opacity-70 italic">
+                      <TableCell
+                        className={`text-right font-mono text-xs italic ${scenario === "sim" ? "opacity-40" : "opacity-70"}`}
+                      >
                         {fmt(layerSum(m.estimated))}
                       </TableCell>
-                      <TableCell className="text-right font-mono text-xs">
+                      <TableCell
+                        className={`text-right font-mono text-xs ${scenario === "real" ? "opacity-40" : ""}`}
+                      >
                         {fmt(layerSum(m.manual))}
                       </TableCell>
                       <TableCell
-                        className={`text-right font-mono ${m.net < 0 ? "text-red-600" : "text-emerald-600"}`}
+                        className={`text-right font-mono ${row.net < 0 ? "text-red-600" : "text-emerald-600"}`}
                       >
-                        {fmt(m.net)}
+                        {fmt(row.net)}
                       </TableCell>
                       <TableCell
-                        className={`text-right font-mono font-semibold ${m.negative ? "text-red-600" : ""}`}
+                        className={`text-right font-mono font-semibold ${row.negative ? "text-red-600" : ""}`}
                       >
-                        {fmt(m.cumulative_balance)}
+                        {fmt(row.cumulative)}
                       </TableCell>
                     </TableRow>
                     {isOpen && (
@@ -285,14 +500,27 @@ export function CashFlowProjectionPanel() {
                                 </TableHeader>
                                 <TableBody>
                                   {bd
+                                    .filter((it) => {
+                                      if (scenario === "real") return it.source !== "manual";
+                                      if (scenario === "sim") return it.source === "manual";
+                                      return true;
+                                    })
                                     .slice()
                                     .sort((a, b) => b.amount - a.amount)
                                     .map((it, idx) => (
                                       <TableRow
                                         key={idx}
-                                        className={it.source === "estimated" ? "opacity-70 italic" : ""}
+                                        className={
+                                          it.source === "estimated"
+                                            ? "opacity-70 italic"
+                                            : it.source === "manual"
+                                              ? "bg-purple-500/5"
+                                              : ""
+                                        }
                                       >
-                                        <TableCell className="text-xs">{it.account_name}</TableCell>
+                                        <TableCell className="text-xs">
+                                          {it.account_name}
+                                        </TableCell>
                                         <TableCell className="text-xs">
                                           {it.cost_center_name}
                                         </TableCell>

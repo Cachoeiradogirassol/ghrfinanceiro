@@ -110,6 +110,7 @@ function Dashboard() {
   const projFn = useServerFn(buildProjection);
   const dreFn = useServerFn(buildDRE);
   const projectionsFn = useServerFn(listProjections);
+  const balancesFn = useServerFn(buildAccountBalances);
 
   const txs = useQuery({ queryKey: ["txs"], queryFn: () => txFn() });
   const banks = useQuery({ queryKey: ["banks"], queryFn: () => bkFn() });

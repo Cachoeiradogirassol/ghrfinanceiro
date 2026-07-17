@@ -163,6 +163,7 @@ export type Database = {
           matched_by: string | null
           matched_transaction_id: string | null
           reconciled: boolean
+          sales_batch_id: string | null
           statement_date: string
           updated_by: string | null
         }
@@ -177,6 +178,7 @@ export type Database = {
           matched_by?: string | null
           matched_transaction_id?: string | null
           reconciled?: boolean
+          sales_batch_id?: string | null
           statement_date: string
           updated_by?: string | null
         }
@@ -191,6 +193,7 @@ export type Database = {
           matched_by?: string | null
           matched_transaction_id?: string | null
           reconciled?: boolean
+          sales_batch_id?: string | null
           statement_date?: string
           updated_by?: string | null
         }
@@ -207,6 +210,13 @@ export type Database = {
             columns: ["matched_transaction_id"]
             isOneToOne: false
             referencedRelation: "transactions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bank_statement_lines_sales_batch_id_fkey"
+            columns: ["sales_batch_id"]
+            isOneToOne: false
+            referencedRelation: "sales_batches"
             referencedColumns: ["id"]
           },
         ]
@@ -503,6 +513,88 @@ export type Database = {
         }
         Relationships: []
       }
+      sales_batches: {
+        Row: {
+          closed_at: string | null
+          closed_by: string | null
+          cost_center_id: string
+          created_at: string
+          created_by: string | null
+          fee_amount: number | null
+          fee_transaction_id: string | null
+          gross_credit: number
+          gross_debit: number
+          gross_pix: number
+          gross_total: number | null
+          id: string
+          received_amount: number
+          reference_date: string
+          revenue_transaction_id: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          closed_at?: string | null
+          closed_by?: string | null
+          cost_center_id: string
+          created_at?: string
+          created_by?: string | null
+          fee_amount?: number | null
+          fee_transaction_id?: string | null
+          gross_credit?: number
+          gross_debit?: number
+          gross_pix?: number
+          gross_total?: number | null
+          id?: string
+          received_amount?: number
+          reference_date: string
+          revenue_transaction_id?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          closed_at?: string | null
+          closed_by?: string | null
+          cost_center_id?: string
+          created_at?: string
+          created_by?: string | null
+          fee_amount?: number | null
+          fee_transaction_id?: string | null
+          gross_credit?: number
+          gross_debit?: number
+          gross_pix?: number
+          gross_total?: number | null
+          id?: string
+          received_amount?: number
+          reference_date?: string
+          revenue_transaction_id?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sales_batches_cost_center_id_fkey"
+            columns: ["cost_center_id"]
+            isOneToOne: false
+            referencedRelation: "cost_centers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sales_batches_fee_transaction_id_fkey"
+            columns: ["fee_transaction_id"]
+            isOneToOne: false
+            referencedRelation: "transactions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sales_batches_revenue_transaction_id_fkey"
+            columns: ["revenue_transaction_id"]
+            isOneToOne: false
+            referencedRelation: "transactions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       transaction_allocations: {
         Row: {
           amount: number
@@ -759,6 +851,10 @@ export type Database = {
       }
       is_date_locked: { Args: { _date: string }; Returns: boolean }
       is_master: { Args: never; Returns: boolean }
+      recalc_sales_batch_received: {
+        Args: { _batch_id: string }
+        Returns: undefined
+      }
       reopen_period_month: {
         Args: { _month: number; _year: number }
         Returns: boolean

@@ -137,6 +137,8 @@ function Conc() {
   const syncPluggyFn = useServerFn(syncPluggyExtracts);
   const suggestPluggyFn = useServerFn(suggestPluggyMatches);
   const confirmPluggyFn = useServerFn(confirmPluggyMatches);
+  const salesBatchesFn = useServerFn(listSalesBatches);
+  const attachBatchFn = useServerFn(attachLinesToBatch);
   const { isMaster } = useAuth();
   const qc = useQueryClient();
 

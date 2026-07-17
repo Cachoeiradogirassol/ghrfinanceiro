@@ -667,9 +667,9 @@ function ProjectionsPage() {
 
       <Tabs defaultValue="fluxo" className="w-full">
         <TabsList>
-          <TabsTrigger value="fluxo">Fluxo Projetado (inteligente)</TabsTrigger>
+          <TabsTrigger value="fluxo">Fluxo Projetado (Real / Simulação / Misto)</TabsTrigger>
           <TabsTrigger value="gerenciar">Projeções Ativas</TabsTrigger>
-          <TabsTrigger value="grafico">Gráfico Consolidado</TabsTrigger>
+          <TabsTrigger value="grafico">Curva de Simulação (isolada)</TabsTrigger>
         </TabsList>
 
         <TabsContent value="fluxo" className="mt-4">

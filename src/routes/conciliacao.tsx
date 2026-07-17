@@ -963,6 +963,34 @@ function Conc() {
         </Card>
       )}
 
+      {selectedLines.size > 0 && !selectedTx && (
+        <SalesBatchAttachPanel
+          selectedLineIds={Array.from(selectedLines)}
+          lines={filteredLines}
+          banks={banks.data ?? []}
+          openBatches={(salesBatches.data ?? []).filter((b) => b.status === "open")}
+          onAttach={async (batchId) => {
+            try {
+              const res = await attachBatchFn({
+                data: {
+                  sales_batch_id: batchId,
+                  statement_line_ids: Array.from(selectedLines),
+                },
+              });
+              toast.success(`${res.attached} linha(s) vinculada(s) ao lote de venda.`);
+              setSelectedLines(new Set());
+              await Promise.all([
+                qc.invalidateQueries({ queryKey: ["lines"] }),
+                qc.invalidateQueries({ queryKey: ["sales-batches"] }),
+              ]);
+            } catch (e) {
+              toast.error(e instanceof Error ? e.message : "Erro ao vincular ao lote.");
+            }
+          }}
+        />
+      )}
+
+
       {cashAudit &&
         (() => {
           const audited = Math.abs(cashAudit.difference) < 0.01;

@@ -598,8 +598,8 @@ function ProjectionsPage() {
             Projeções e Simulador Preditivo
           </h1>
           <p className="text-muted-foreground">
-            Simulações multilistas de entradas e saídas com crescimento composto · isoladas do fluxo
-            real
+            Projeção ancorada no caixa real, com camada opcional de simulação (IA / manual) por
+            cima. Alterne entre Real, Simulação e Misto no seletor de cenário.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">

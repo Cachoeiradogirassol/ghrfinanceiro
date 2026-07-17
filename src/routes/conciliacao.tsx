@@ -25,6 +25,7 @@ import {
 import { parseStatementDocument, type StatementFormat } from "@/lib/statement-parser";
 import { PromoteLineDialog, type PendingLine } from "@/components/PromoteLineDialog";
 import { OpenFinanceImporter } from "@/components/OpenFinanceImporter";
+import { listSalesBatches, attachLinesToBatch } from "@/lib/sales.functions";
 
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -55,6 +56,7 @@ import {
   AlertTriangle,
   RefreshCw,
   CheckCheck,
+  ShoppingBag,
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/lib/auth";
@@ -135,12 +137,18 @@ function Conc() {
   const syncPluggyFn = useServerFn(syncPluggyExtracts);
   const suggestPluggyFn = useServerFn(suggestPluggyMatches);
   const confirmPluggyFn = useServerFn(confirmPluggyMatches);
+  const salesBatchesFn = useServerFn(listSalesBatches);
+  const attachBatchFn = useServerFn(attachLinesToBatch);
   const { isMaster } = useAuth();
   const qc = useQueryClient();
 
   const banks = useQuery({ queryKey: ["banks"], queryFn: () => banksFn() });
   const lines = useQuery({ queryKey: ["lines"], queryFn: () => linesFn() });
   const txs = useQuery({ queryKey: ["txs"], queryFn: () => txFn() });
+  const salesBatches = useQuery({
+    queryKey: ["sales-batches"],
+    queryFn: () => salesBatchesFn(),
+  });
   const periods = useQuery({
     queryKey: ["periods"],
     queryFn: () => periodsFn(),
@@ -955,6 +963,34 @@ function Conc() {
         </Card>
       )}
 
+      {selectedLines.size > 0 && !selectedTx && (
+        <SalesBatchAttachPanel
+          selectedLineIds={Array.from(selectedLines)}
+          lines={filteredLines}
+          banks={banks.data ?? []}
+          openBatches={(salesBatches.data ?? []).filter((b) => b.status === "open")}
+          onAttach={async (batchId) => {
+            try {
+              const res = await attachBatchFn({
+                data: {
+                  sales_batch_id: batchId,
+                  statement_line_ids: Array.from(selectedLines),
+                },
+              });
+              toast.success(`${res.attached} linha(s) vinculada(s) ao lote de venda.`);
+              setSelectedLines(new Set());
+              await Promise.all([
+                qc.invalidateQueries({ queryKey: ["lines"] }),
+                qc.invalidateQueries({ queryKey: ["sales-batches"] }),
+              ]);
+            } catch (e) {
+              toast.error(e instanceof Error ? e.message : "Erro ao vincular ao lote.");
+            }
+          }}
+        />
+      )}
+
+
       {cashAudit &&
         (() => {
           const audited = Math.abs(cashAudit.difference) < 0.01;
@@ -1159,3 +1195,121 @@ function Conc() {
     </div>
   );
 }
+
+type StatementLine = { id: string; bank_account_id: string; amount: number };
+type BankAccount = { id: string; name: string; enterprise: string | null };
+type OpenBatch = {
+  id: string;
+  cost_center_id: string;
+  reference_date: string;
+  gross_total: number;
+  received_amount: number;
+  cost_centers?: { name: string; enterprise: string | null } | null;
+};
+
+const ENT_TO_BANKS: Record<string, string[]> = {
+  restaurante: ["InfinitePay", "PagBank"],
+  turismo: ["Mercado Pago", "Banco C6"],
+};
+
+function SalesBatchAttachPanel({
+  selectedLineIds,
+  lines,
+  banks,
+  openBatches,
+  onAttach,
+}: {
+  selectedLineIds: string[];
+  lines: StatementLine[];
+  banks: BankAccount[];
+  openBatches: OpenBatch[];
+  onAttach: (batchId: string) => Promise<void>;
+}) {
+  const [batchId, setBatchId] = useState<string>("");
+  const [busy, setBusy] = useState(false);
+
+  const selected = lines.filter((l) => selectedLineIds.includes(l.id));
+  const sum = selected.reduce((s, l) => s + Math.abs(Number(l.amount)), 0);
+  const bankIds = new Set(selected.map((l) => l.bank_account_id));
+  const enterprises = new Set(
+    banks.filter((b) => bankIds.has(b.id)).map((b) => b.enterprise).filter(Boolean) as string[],
+  );
+
+  const suggestedBatches = openBatches.filter((b) => {
+    const ent = b.cost_centers?.enterprise;
+    if (enterprises.size > 0 && ent && !enterprises.has(ent)) return false;
+    return true;
+  });
+  // Sugere o lote aberto mais antigo do CC compatível
+  const oldestFirst = [...suggestedBatches].sort((a, b) =>
+    a.reference_date.localeCompare(b.reference_date),
+  );
+
+  const submit = async () => {
+    const id = batchId || oldestFirst[0]?.id;
+    if (!id) return;
+    setBusy(true);
+    try {
+      await onAttach(id);
+      setBatchId("");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Card className="p-4 border-amber-500/40 bg-amber-500/5">
+      <div className="flex flex-col md:flex-row md:items-center gap-3 justify-between">
+        <div className="text-sm">
+          <p className="font-medium flex items-center gap-2">
+            <ShoppingBag className="h-4 w-4" /> Vincular a um lote de venda
+          </p>
+          <p className="text-xs text-muted-foreground">
+            {selectedLineIds.length} linha(s) • soma {sum.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
+            {enterprises.size > 0 && ` • banco(s): ${Array.from(enterprises).join(", ")}`}
+          </p>
+        </div>
+        <div className="flex gap-2 items-center">
+          <Select value={batchId} onValueChange={setBatchId}>
+            <SelectTrigger className="w-72">
+              <SelectValue
+                placeholder={
+                  oldestFirst[0]
+                    ? `Sugestão: ${oldestFirst[0].cost_centers?.name ?? ""} · ${oldestFirst[0].reference_date}`
+                    : "Nenhum lote aberto compatível"
+                }
+              />
+            </SelectTrigger>
+            <SelectContent>
+              {oldestFirst.map((b) => {
+                const missing = Math.max(0, Number(b.gross_total) - Number(b.received_amount));
+                return (
+                  <SelectItem key={b.id} value={b.id}>
+                    {b.cost_centers?.name} · {b.reference_date} · falta{" "}
+                    {missing.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
+                  </SelectItem>
+                );
+              })}
+            </SelectContent>
+          </Select>
+          <Button size="sm" onClick={submit} disabled={busy || oldestFirst.length === 0}>
+            <Link2 className="h-4 w-4 mr-1" /> Vincular
+          </Button>
+        </div>
+      </div>
+      {oldestFirst.length === 0 && (
+        <p className="text-xs text-muted-foreground mt-2">
+          Nenhum lote de venda em aberto compatível. Registre um lote em <b>Vendas Consolidadas</b>{" "}
+          antes de vincular as entradas de{" "}
+          {enterprises.size > 0
+            ? Array.from(enterprises)
+                .flatMap((e) => ENT_TO_BANKS[e] ?? [])
+                .join(" / ")
+            : "cartão/pix"}
+          .
+        </p>
+      )}
+    </Card>
+  );
+}
+

@@ -79,6 +79,7 @@ export function AppLayout({ children }: { children?: React.ReactNode }) {
         { to: "/", label: "Painel Executivo", icon: Crown },
         { to: "/lancamentos", label: "Lançamentos", icon: Map },
         { to: "/conciliacao", label: "Conciliação Bancária", icon: Swords },
+        { to: "/vendas", label: "Vendas Consolidadas", icon: ShoppingBag },
         { to: "/projecoes", label: "Projeções Financeiras", icon: Sparkle },
         { to: "/contatos", label: "Contatos", icon: Shield },
       ],

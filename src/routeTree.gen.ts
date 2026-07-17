@@ -9,6 +9,7 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as VendasRouteImport } from './routes/vendas'
 import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
 import { Route as RelatoriosRouteImport } from './routes/relatorios'
 import { Route as ProjecoesRouteImport } from './routes/projecoes'
@@ -30,6 +31,11 @@ import { Route as ApiChatRouteImport } from './routes/api/chat'
 import { Route as ApiPublicWebhooksPdvRestauranteRouteImport } from './routes/api/public/webhooks/pdv-restaurante'
 import { Route as ApiPublicWebhooksBankingRouteImport } from './routes/api/public/webhooks/banking'
 
+const VendasRoute = VendasRouteImport.update({
+  id: '/vendas',
+  path: '/vendas',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
   id: '/sitemap.xml',
   path: '/sitemap.xml',
@@ -146,6 +152,7 @@ export interface FileRoutesByFullPath {
   '/projecoes': typeof ProjecoesRoute
   '/relatorios': typeof RelatoriosRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
+  '/vendas': typeof VendasRoute
   '/api/chat': typeof ApiChatRoute
   '/api/chat-reports': typeof ApiChatReportsRoute
   '/auth/redefinir-senha': typeof AuthRedefinirSenhaRoute
@@ -168,6 +175,7 @@ export interface FileRoutesByTo {
   '/projecoes': typeof ProjecoesRoute
   '/relatorios': typeof RelatoriosRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
+  '/vendas': typeof VendasRoute
   '/api/chat': typeof ApiChatRoute
   '/api/chat-reports': typeof ApiChatReportsRoute
   '/auth/redefinir-senha': typeof AuthRedefinirSenhaRoute
@@ -191,6 +199,7 @@ export interface FileRoutesById {
   '/projecoes': typeof ProjecoesRoute
   '/relatorios': typeof RelatoriosRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
+  '/vendas': typeof VendasRoute
   '/api/chat': typeof ApiChatRoute
   '/api/chat-reports': typeof ApiChatReportsRoute
   '/auth/redefinir-senha': typeof AuthRedefinirSenhaRoute
@@ -215,6 +224,7 @@ export interface FileRouteTypes {
     | '/projecoes'
     | '/relatorios'
     | '/sitemap.xml'
+    | '/vendas'
     | '/api/chat'
     | '/api/chat-reports'
     | '/auth/redefinir-senha'
@@ -237,6 +247,7 @@ export interface FileRouteTypes {
     | '/projecoes'
     | '/relatorios'
     | '/sitemap.xml'
+    | '/vendas'
     | '/api/chat'
     | '/api/chat-reports'
     | '/auth/redefinir-senha'
@@ -259,6 +270,7 @@ export interface FileRouteTypes {
     | '/projecoes'
     | '/relatorios'
     | '/sitemap.xml'
+    | '/vendas'
     | '/api/chat'
     | '/api/chat-reports'
     | '/auth/redefinir-senha'
@@ -282,6 +294,7 @@ export interface RootRouteChildren {
   ProjecoesRoute: typeof ProjecoesRoute
   RelatoriosRoute: typeof RelatoriosRoute
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
+  VendasRoute: typeof VendasRoute
   ApiChatRoute: typeof ApiChatRoute
   ApiChatReportsRoute: typeof ApiChatReportsRoute
   LancamentosNovoRoute: typeof LancamentosNovoRoute
@@ -292,6 +305,13 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/vendas': {
+      id: '/vendas'
+      path: '/vendas'
+      fullPath: '/vendas'
+      preLoaderRoute: typeof VendasRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/sitemap.xml': {
       id: '/sitemap.xml'
       path: '/sitemap.xml'
@@ -472,6 +492,7 @@ const rootRouteChildren: RootRouteChildren = {
   ProjecoesRoute: ProjecoesRoute,
   RelatoriosRoute: RelatoriosRoute,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
+  VendasRoute: VendasRoute,
   ApiChatRoute: ApiChatRoute,
   ApiChatReportsRoute: ApiChatReportsRoute,
   LancamentosNovoRoute: LancamentosNovoRoute,

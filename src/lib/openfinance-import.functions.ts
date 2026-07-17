@@ -643,6 +643,17 @@ export const confirmOpenFinanceImport = createServerFn({ method: "POST" })
       }
 
       // -------------------- APORTE --------------------
+      // Ciclo esperado:
+      //  (a) APORTE COMPLETO: temos banco de ORIGEM (perna que saiu). Inserimos UMA payable com
+      //      bank_account_id = srcBank, cost_center_id = tgtCc, conta "Aportes Concedidos" do tgtCc.
+      //      O trigger public.sync_transaction_intercompany cria o registro em
+      //      intercompany_transfers automaticamente (origem = CC do enterprise do srcBank,
+      //      destino = tgtCc). NÃO inserimos manualmente em intercompany_transfers.
+      //  (b) APORTE INCOMPLETO — perna SAÍDA conhecida (source-side): idêntico ao (a).
+      //  (c) APORTE INCOMPLETO — perna ENTRADA conhecida (target-side, origem desconhecida):
+      //      o trigger não consegue derivar a origem (não temos banco em outro enterprise).
+      //      Criamos uma receivable no banco de entrada e ÚNICO caso em que gravamos
+      //      intercompany_transfers manualmente, usando o srcCc escolhido pelo operador.
       if (dec.action === "aporte") {
         if (dec.pair_temp_id) {
           const pairKey = [dec.temp_id, dec.pair_temp_id].sort().join("::");
@@ -655,16 +666,22 @@ export const confirmOpenFinanceImport = createServerFn({ method: "POST" })
         const srcCc = dec.transfer_source_cc_id;
         const tgtCc = dec.transfer_target_cc_id;
         const srcBank = dec.transfer_source_bank_account_id;
-        if (!srcCc || !tgtCc || !srcBank) {
-          errors.push(`${dec.descricao}: aporte incompleto (falta CC origem/destino ou banco).`);
+        const tgtBank = dec.transfer_target_bank_account_id;
+        if (!srcCc || !tgtCc) {
+          errors.push(`${dec.descricao}: aporte incompleto (falta CC origem/destino).`);
           continue;
         }
         if (srcCc === tgtCc) {
           errors.push(`${dec.descricao}: aporte com mesmo CC origem/destino.`);
           continue;
         }
+        if (!srcBank && !tgtBank) {
+          errors.push(`${dec.descricao}: aporte sem nenhum banco identificado.`);
+          continue;
+        }
 
-        // account_id: se não veio, pega primeira expense do target CC (idealmente "Aportes para X")
+        // account_id: se não veio, prefere "Aportes Concedidos" do CC destino (não-operacional
+        // — não polui DRE, coerente com v_dre_consolidada).
         let accountId = dec.account_id;
         if (!accountId) {
           const { data: acc } = await context.supabase
@@ -676,15 +693,18 @@ export const confirmOpenFinanceImport = createServerFn({ method: "POST" })
             .order("name")
             .limit(50);
           const list = (acc ?? []) as Array<{ id: string; name: string }>;
-          const preferAporte = list.find((a) => /aporte/i.test(a.name));
-          accountId = preferAporte?.id ?? list[0]?.id ?? null;
+          accountId =
+            list.find((a) => /^aportes\s+concedidos\b/i.test(a.name))?.id ??
+            list.find((a) => /aporte/i.test(a.name))?.id ??
+            list[0]?.id ??
+            null;
         }
         if (!accountId) {
           errors.push(`${dec.descricao}: sem conta contábil disponível no CC destino.`);
           continue;
         }
 
-        // Dedupe
+        // Dedupe pela tag [OFIMP ...]
         const tag = dec.dedupe_tag;
         const { data: dup } = await context.supabase
           .from("transactions")
@@ -697,25 +717,64 @@ export const confirmOpenFinanceImport = createServerFn({ method: "POST" })
         }
 
         const paidAt = new Date(`${dec.data}T12:00:00Z`).toISOString();
-        const description =
-          `${tag} [APORTE] ${dec.instituicao} — ${dec.descricao}`.slice(0, 500);
-        // Cria payable no banco de origem com CC de destino → trigger auto-cria intercompany_transfers
-        const { error } = await context.supabase.from("transactions").insert({
-          cost_center_id: tgtCc,
-          account_id: accountId,
-          bank_account_id: srcBank,
-          type: "payable",
-          amount: Math.abs(Number(dec.valor.toFixed(2))),
-          description,
-          due_date: dec.data,
-          document_datetime: paidAt,
-          status: "reconciled",
-          paid_at: paidAt,
-          created_by: context.userId,
-        });
-        if (error) {
-          errors.push(`${dec.descricao}: ${error.message}`);
-          continue;
+        const description = `${tag} [APORTE] ${dec.instituicao} — ${dec.descricao}`.slice(0, 500);
+        const amount = Math.abs(Number(dec.valor.toFixed(2)));
+
+        if (srcBank) {
+          // Casos (a) e (b): payable no banco de origem, CC destino → trigger cria intercompany.
+          const { error } = await context.supabase.from("transactions").insert({
+            cost_center_id: tgtCc,
+            account_id: accountId,
+            bank_account_id: srcBank,
+            type: "payable",
+            amount,
+            description,
+            due_date: dec.data,
+            document_datetime: paidAt,
+            status: "reconciled",
+            paid_at: paidAt,
+            created_by: context.userId,
+          });
+          if (error) {
+            errors.push(`${dec.descricao}: ${error.message}`);
+            continue;
+          }
+        } else {
+          // Caso (c): apenas perna de ENTRADA visível. Trigger não cobre origem desconhecida.
+          // Criamos receivable no banco de entrada e inserimos intercompany_transfers manualmente
+          // (ÚNICO caso em que gravamos essa tabela à mão).
+          const { data: newTx, error } = await context.supabase
+            .from("transactions")
+            .insert({
+              cost_center_id: tgtCc,
+              account_id: accountId,
+              bank_account_id: tgtBank,
+              type: "receivable",
+              amount,
+              description,
+              due_date: dec.data,
+              document_datetime: paidAt,
+              status: "reconciled",
+              paid_at: paidAt,
+              created_by: context.userId,
+            })
+            .select("id")
+            .single();
+          if (error || !newTx) {
+            errors.push(`${dec.descricao}: ${error?.message ?? "falha ao criar receivable"}`);
+            continue;
+          }
+          const { error: ictErr } = await context.supabase.from("intercompany_transfers").insert({
+            transaction_id: newTx.id,
+            source_cost_center_id: srcCc,
+            target_cost_center_id: tgtCc,
+            amount,
+            created_by: context.userId,
+          });
+          if (ictErr) {
+            errors.push(`${dec.descricao}: intercompany manual falhou — ${ictErr.message}`);
+            continue;
+          }
         }
         aportes++;
         continue;

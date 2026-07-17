@@ -145,6 +145,10 @@ function Conc() {
   const banks = useQuery({ queryKey: ["banks"], queryFn: () => banksFn() });
   const lines = useQuery({ queryKey: ["lines"], queryFn: () => linesFn() });
   const txs = useQuery({ queryKey: ["txs"], queryFn: () => txFn() });
+  const salesBatches = useQuery({
+    queryKey: ["sales-batches"],
+    queryFn: () => salesBatchesFn(),
+  });
   const periods = useQuery({
     queryKey: ["periods"],
     queryFn: () => periodsFn(),

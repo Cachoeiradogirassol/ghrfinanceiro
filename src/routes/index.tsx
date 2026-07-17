@@ -126,6 +126,10 @@ function Dashboard() {
     queryKey: ["projections"],
     queryFn: () => projectionsFn() as never,
   });
+  const accountBalances = useQuery({
+    queryKey: ["account-balances", enterprise],
+    queryFn: () => balancesFn({ data: { enterprise } }),
+  });
   const [showPredictive, setShowPredictive] = useState(false);
 
   const today = new Date().toISOString().slice(0, 10);

@@ -1326,6 +1326,106 @@ export const buildProjection = createServerFn({ method: "POST" })
     };
   });
 
+// Saldo calculado por conta bancária — coerente com currentBalance de buildProjection.
+// Retorna também indicadores de confiabilidade (última conciliação e pendências)
+// para que o Dashboard alerte quando o saldo pode estar defasado.
+export const buildAccountBalances = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) =>
+    z.object({ enterprise: EnterpriseFilter }).parse(d ?? { enterprise: "all" }),
+  )
+  .handler(async ({ context, data }) => {
+    const { banks, txs } = await loadFinanceData(context.supabase as never);
+    const set = enterpriseSet(data.enterprise);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const filteredBanks = set ? banks.filter((b) => set.has(b.enterprise)) : banks;
+
+    // Índice de transações por banco (apenas as que possuem bank_account_id).
+    const byBank = new Map<
+      string,
+      Array<{ type: "payable" | "receivable"; amount: number; due_date: string; status: string }>
+    >();
+    for (const t of txs) {
+      if (!t.bank_account_id) continue;
+      const arr = byBank.get(t.bank_account_id) ?? [];
+      arr.push({
+        type: t.type,
+        amount: Number(t.amount),
+        due_date: t.due_date,
+        status: t.status,
+      });
+      byBank.set(t.bank_account_id, arr);
+    }
+
+    // Precisamos de paid_at para reconciled_through — não vem em loadFinanceData.
+    // Buscamos separadamente só as conciliadas.
+    const bankIds = filteredBanks.map((b) => b.id);
+    let paidAtByTx = new Map<string, string | null>();
+    if (bankIds.length > 0) {
+      const { data: rec } = await context.supabase
+        .from("transactions")
+        .select("id, bank_account_id, paid_at, due_date, status")
+        .in("bank_account_id", bankIds)
+        .eq("status", "reconciled");
+      paidAtByTx = new Map((rec ?? []).map((r) => [r.id, r.paid_at]));
+    }
+    // Reindex reconciled por banco com paid_at/due_date.
+    const reconciledByBank = new Map<string, Array<{ date: string }>>();
+    if (bankIds.length > 0) {
+      const { data: rec2 } = await context.supabase
+        .from("transactions")
+        .select("bank_account_id, paid_at, due_date")
+        .in("bank_account_id", bankIds)
+        .eq("status", "reconciled");
+      for (const r of rec2 ?? []) {
+        const d = (r.paid_at ? String(r.paid_at).slice(0, 10) : null) ?? r.due_date;
+        const arr = reconciledByBank.get(r.bank_account_id!) ?? [];
+        arr.push({ date: d });
+        reconciledByBank.set(r.bank_account_id!, arr);
+      }
+    }
+    void paidAtByTx;
+
+    const items = filteredBanks.map((b) => {
+      const list = byBank.get(b.id) ?? [];
+      let balance = Number(b.initial_balance);
+      let pending_count = 0;
+      let pending_sum = 0;
+      for (const t of list) {
+        const amt = t.type === "receivable" ? t.amount : -t.amount;
+        const d = new Date(t.due_date);
+        if (d < today) {
+          if (t.status === "paid" || t.status === "reconciled") balance += amt;
+        }
+        if (t.status === "pending") {
+          pending_count += 1;
+          pending_sum += amt;
+        }
+      }
+      const rec = reconciledByBank.get(b.id) ?? [];
+      const reconciled_through =
+        rec.length > 0 ? rec.map((r) => r.date).sort().slice(-1)[0] : null;
+
+      return {
+        id: b.id,
+        name: b.name,
+        bank: (b as { bank?: string | null }).bank ?? null,
+        enterprise: b.enterprise as string,
+        initial_balance: Number(b.initial_balance),
+        calculated_balance: Math.round(balance * 100) / 100,
+        reconciled_through,
+        pending_count,
+        pending_sum: Math.round(pending_sum * 100) / 100,
+      };
+    });
+
+    return { items };
+  });
+
+
+
 // ---------- RECONCILIATION PERIODS ----------
 export const listReconciliationPeriods = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])

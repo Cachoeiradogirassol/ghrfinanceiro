@@ -7,6 +7,7 @@ import {
   listBankAccounts,
   buildProjection,
   buildDRE,
+  buildAccountBalances,
 } from "@/lib/finance.functions";
 import { listProjections } from "@/lib/projections.functions";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -109,6 +110,7 @@ function Dashboard() {
   const projFn = useServerFn(buildProjection);
   const dreFn = useServerFn(buildDRE);
   const projectionsFn = useServerFn(listProjections);
+  const balancesFn = useServerFn(buildAccountBalances);
 
   const txs = useQuery({ queryKey: ["txs"], queryFn: () => txFn() });
   const banks = useQuery({ queryKey: ["banks"], queryFn: () => bkFn() });
@@ -123,6 +125,10 @@ function Dashboard() {
   const projections = useQuery({
     queryKey: ["projections"],
     queryFn: () => projectionsFn() as never,
+  });
+  const accountBalances = useQuery({
+    queryKey: ["account-balances", enterprise],
+    queryFn: () => balancesFn({ data: { enterprise } }),
   });
   const [showPredictive, setShowPredictive] = useState(false);
 
@@ -361,23 +367,99 @@ function Dashboard() {
 
         </Card>
 
-        {/* Contas bancárias filtradas */}
+        {/* Contas bancárias filtradas — saldo calculado */}
         <Card className="p-5">
-          <h2 className="font-semibold mb-3">Contas Bancárias</h2>
-          <div className="space-y-1">
-            {filteredBanks.map((b) => (
-              <div key={b.id} className="flex justify-between py-2 border-b border-border last:border-0">
-                <span className="text-sm">
-                  {b.name} <span className="text-muted-foreground">— {b.bank}</span>
-                </span>
-                <span className="text-sm font-mono">{fmt(Number(b.initial_balance))}</span>
-              </div>
-            ))}
-            {filteredBanks.length === 0 && (
-              <p className="text-sm text-muted-foreground">Nenhuma conta neste filtro.</p>
-            )}
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="font-semibold">Contas Bancárias</h2>
+            <span className="text-xs text-muted-foreground">saldo calculado</span>
           </div>
+          {(() => {
+            const items = accountBalances.data?.items ?? [];
+            const total = items.reduce((s, i) => s + i.calculated_balance, 0);
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            const staleThreshold = new Date(today);
+            staleThreshold.setDate(staleThreshold.getDate() - 7);
+            const fmtDate = (d: string) => {
+              const [y, m, day] = d.split("-");
+              return `${day}/${m}/${y.slice(2)}`;
+            };
+            return (
+              <>
+                <div className="space-y-1">
+                  {items.map((b) => {
+                    const negative = b.calculated_balance < 0;
+                    const stale =
+                      !b.reconciled_through ||
+                      new Date(b.reconciled_through) < staleThreshold;
+                    return (
+                      <div
+                        key={b.id}
+                        className="py-2 border-b border-border last:border-0"
+                      >
+                        <div className="flex justify-between items-baseline">
+                          <span className="text-sm">
+                            {b.name}{" "}
+                            {b.bank && (
+                              <span className="text-muted-foreground">— {b.bank}</span>
+                            )}
+                          </span>
+                          <span
+                            className={`text-sm font-mono ${
+                              negative ? "text-destructive font-semibold" : ""
+                            }`}
+                          >
+                            {fmt(b.calculated_balance)}
+                          </span>
+                        </div>
+                        <div className="flex justify-between items-center mt-0.5">
+                          <span
+                            className={`text-[11px] ${
+                              stale ? "text-amber-600 dark:text-amber-500" : "text-muted-foreground"
+                            }`}
+                          >
+                            {b.reconciled_through
+                              ? `atualizado até ${fmtDate(b.reconciled_through)}`
+                              : "nunca conciliado"}
+                          </span>
+                          {b.pending_count > 0 && (
+                            <span className="text-[11px] text-muted-foreground">
+                              {b.pending_count} pendência{b.pending_count > 1 ? "s" : ""} ·{" "}
+                              {fmt(b.pending_sum)}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {items.length === 0 && (
+                    <p className="text-sm text-muted-foreground">
+                      Nenhuma conta neste filtro.
+                    </p>
+                  )}
+                </div>
+                {items.length > 0 && (
+                  <div className="flex justify-between items-center mt-3 pt-3 border-t border-border">
+                    <span className="text-sm font-medium">Total consolidado</span>
+                    <span
+                      className={`text-sm font-mono font-semibold ${
+                        total < 0 ? "text-destructive" : ""
+                      }`}
+                    >
+                      {fmt(total)}
+                    </span>
+                  </div>
+                )}
+                <p className="text-[11px] text-muted-foreground mt-3 leading-snug">
+                  Saldo calculado a partir dos lançamentos conciliados e pagos.
+                  Pode diferir do saldo real do banco enquanto houver extratos não
+                  importados ou lançamentos pendentes de conciliação.
+                </p>
+              </>
+            );
+          })()}
         </Card>
+
       </div>
 
       <div>

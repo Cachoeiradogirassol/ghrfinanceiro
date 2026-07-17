@@ -622,10 +622,12 @@ function ProjectionsPage() {
             <Sparkles className="h-6 w-6 text-primary" />
           </div>
           <div>
-            <h2 className="text-xl font-bold">Criar projeção com IA</h2>
+            <h2 className="text-xl font-bold">Criar projeção com IA (camada de simulação)</h2>
             <p className="text-sm text-muted-foreground">
               Descreva em texto o que você espera de entradas e saídas — a IA monta a projeção pra
-              você. Nada é salvo antes da sua confirmação.
+              você. O resultado entra como <strong>simulação sobre o caixa real</strong> e aparece
+              no gráfico ao alternar para os modos “Simulação” ou “Real + Simulação”. Nada é salvo
+              antes da sua confirmação.
             </p>
           </div>
         </div>

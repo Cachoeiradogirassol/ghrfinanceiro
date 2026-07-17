@@ -56,6 +56,7 @@ import {
   AlertTriangle,
   RefreshCw,
   CheckCheck,
+  ShoppingBag,
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/lib/auth";

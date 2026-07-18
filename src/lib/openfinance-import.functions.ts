@@ -403,6 +403,8 @@ export const parseOpenFinanceText = createServerFn({ method: "POST" })
       const arr = accByCc.get(a.cost_center_id) ?? [];
       arr.push({ id: a.id, name: a.name, kind: a.kind });
       accByCc.set(a.cost_center_id, arr);
+    }
+
 
     // 3b) Lotes de venda ABERTOS (para sugestão de vinculação de entradas de cartão/PIX)
     const { data: openBatchesRaw } = await context.supabase

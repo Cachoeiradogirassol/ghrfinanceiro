@@ -1135,11 +1135,10 @@ export const confirmOpenFinanceImport = createServerFn({ method: "POST" })
         continue;
       }
       const description = `${dec.dedupe_tag} ${dec.instituicao} — ${dec.descricao}`.slice(0, 500);
-      const { data: dup } = await context.supabase
-        .from("transactions")
-        .select("id")
-        .ilike("description", `%${dec.dedupe_tag}%`)
-        .limit(1);
+      const dupQ = context.supabase.from("transactions").select("id").limit(1);
+      const { data: dup } = dec.of_dedupe_key
+        ? await dupQ.or(`of_dedupe_key.eq.${dec.of_dedupe_key},description.ilike.%${dec.dedupe_tag}%`)
+        : await dupQ.ilike("description", `%${dec.dedupe_tag}%`);
       if (dup && dup.length > 0) {
         skipped++;
         continue;
@@ -1157,6 +1156,7 @@ export const confirmOpenFinanceImport = createServerFn({ method: "POST" })
         status: "reconciled",
         paid_at: paidAt,
         created_by: context.userId,
+        of_dedupe_key: dec.of_dedupe_key ?? null,
       });
       if (error) {
         errors.push(`${dec.descricao}: ${error.message}`);

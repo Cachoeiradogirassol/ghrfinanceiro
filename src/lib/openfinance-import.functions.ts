@@ -957,7 +957,7 @@ export const parseOpenFinanceText = createServerFn({ method: "POST" })
 
 const DecisionSchema = z.object({
   temp_id: z.string(),
-  action: z.enum(["match", "create", "skip", "aporte"]),
+  action: z.enum(["match", "create", "skip", "aporte", "sales_batch"]),
   data: z.string(),
   descricao: z.string(),
   valor: z.number(),
@@ -974,6 +974,8 @@ const DecisionSchema = z.object({
   transfer_source_bank_account_id: z.string().uuid().nullable().optional(),
   transfer_target_cc_id: z.string().uuid().nullable().optional(),
   transfer_target_bank_account_id: z.string().uuid().nullable().optional(),
+  // Vincular a lote de venda consolidada
+  sales_batch_id: z.string().uuid().nullable().optional(),
 });
 
 export const confirmOpenFinanceImport = createServerFn({ method: "POST" })

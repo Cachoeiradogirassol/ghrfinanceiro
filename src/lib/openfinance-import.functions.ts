@@ -988,6 +988,7 @@ export const confirmOpenFinanceImport = createServerFn({ method: "POST" })
     let created = 0;
     let skipped = 0;
     let aportes = 0;
+    let attached_to_batch = 0;
     const errors: string[] = [];
 
     // Para aportes pareados: só processar uma perna por par
@@ -998,6 +999,57 @@ export const confirmOpenFinanceImport = createServerFn({ method: "POST" })
         skipped++;
         continue;
       }
+
+      // -------------------- VINCULAR A LOTE DE VENDA --------------------
+      // Cria uma bank_statement_lines com sales_batch_id preenchido. O trigger
+      // trg_bsl_sales_batch_sync recalcula sales_batches.received_amount.
+      // NÃO cria transactions.
+      if (dec.action === "sales_batch") {
+        if (!dec.sales_batch_id) {
+          errors.push(`${dec.descricao}: sem lote de venda selecionado.`);
+          continue;
+        }
+        if (!dec.bank_account_id) {
+          errors.push(`${dec.descricao}: sem banco identificado para vincular ao lote.`);
+          continue;
+        }
+        if (dec.valor <= 0) {
+          errors.push(`${dec.descricao}: só entradas podem ser vinculadas a lote de venda.`);
+          continue;
+        }
+        // Dedupe por of_dedupe_key nas linhas de extrato
+        if (dec.of_dedupe_key) {
+          const { data: dupBsl } = await context.supabase
+            .from("bank_statement_lines")
+            .select("id")
+            .eq("of_dedupe_key", dec.of_dedupe_key)
+            .limit(1);
+          if (dupBsl && dupBsl.length > 0) {
+            skipped++;
+            continue;
+          }
+        }
+        const description = `${dec.dedupe_tag} [LOTE] ${dec.instituicao} — ${dec.descricao}`.slice(0, 500);
+        const { error } = await context.supabase.from("bank_statement_lines").insert({
+          bank_account_id: dec.bank_account_id,
+          statement_date: dec.data,
+          amount: Math.abs(Number(dec.valor.toFixed(2))),
+          description,
+          sales_batch_id: dec.sales_batch_id,
+          reconciled: true,
+          matched_by: context.userId,
+          matched_at: new Date().toISOString(),
+          of_dedupe_key: dec.of_dedupe_key ?? null,
+          created_by: context.userId,
+        });
+        if (error) {
+          errors.push(`${dec.descricao}: ${error.message}`);
+          continue;
+        }
+        attached_to_batch++;
+        continue;
+      }
+
 
       // -------------------- APORTE --------------------
       // Ciclo esperado:

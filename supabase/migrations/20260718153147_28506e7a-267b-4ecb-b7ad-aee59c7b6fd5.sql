@@ -1,0 +1,2 @@
+ALTER TABLE public.bank_statement_lines ADD COLUMN IF NOT EXISTS of_dedupe_key text;
+CREATE INDEX IF NOT EXISTS idx_bsl_of_dedupe_key ON public.bank_statement_lines (of_dedupe_key) WHERE of_dedupe_key IS NOT NULL;

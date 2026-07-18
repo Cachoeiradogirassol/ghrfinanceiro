@@ -258,6 +258,15 @@ export type ParsedItem = {
   transfer_target_cc_name: string | null;
   transfer_target_bank_account_id: string | null;
   incomplete_side: "source" | "target" | null;
+  // Lotes de venda abertos elegíveis para vinculação (entradas)
+  sales_batch_candidates: Array<{
+    id: string;
+    cost_center_id: string;
+    cost_center_name: string;
+    reference_date: string;
+    gross_total: number;
+    remaining: number;
+  }>;
 };
 
 
@@ -396,6 +405,21 @@ export const parseOpenFinanceText = createServerFn({ method: "POST" })
       accByCc.set(a.cost_center_id, arr);
     }
 
+
+    // 3b) Lotes de venda ABERTOS (para sugestão de vinculação de entradas de cartão/PIX)
+    const { data: openBatchesRaw } = await context.supabase
+      .from("sales_batches")
+      .select("id, cost_center_id, reference_date, gross_total, received_amount")
+      .eq("status", "open");
+    type OpenBatch = {
+      id: string;
+      cost_center_id: string;
+      reference_date: string;
+      gross_total: number | null;
+      received_amount: number | null;
+    };
+    const openBatches = (openBatchesRaw ?? []) as OpenBatch[];
+
     // 4) Parser determinístico
     const rawTxs = parseStatementText(data.text);
 
@@ -444,14 +468,23 @@ export const parseOpenFinanceText = createServerFn({ method: "POST" })
       buildDedupeKey(w.raw.data, Math.abs(w.raw.valor), w.ba?.id ?? null, w.idx),
     );
 
-    // (a) Match direto por of_dedupe_key
+    // (a) Match direto por of_dedupe_key — checar em transactions E em bank_statement_lines
+    //     (linhas de extrato vinculadas a lote de venda também consomem a chave).
     const { data: existingByKey } = await context.supabase
       .from("transactions")
       .select("of_dedupe_key")
       .in("of_dedupe_key", newKeys);
-    const dupKeySet = new Set(
-      (existingByKey ?? []).map((r) => (r as { of_dedupe_key: string }).of_dedupe_key),
-    );
+    const { data: existingBslByKey } = await context.supabase
+      .from("bank_statement_lines")
+      .select("of_dedupe_key")
+      .in("of_dedupe_key", newKeys);
+    const dupKeySet = new Set<string>();
+    for (const r of (existingByKey ?? []) as Array<{ of_dedupe_key: string }>) {
+      if (r.of_dedupe_key) dupKeySet.add(r.of_dedupe_key);
+    }
+    for (const r of (existingBslByKey ?? []) as Array<{ of_dedupe_key: string | null }>) {
+      if (r.of_dedupe_key) dupKeySet.add(r.of_dedupe_key);
+    }
 
     // (b) Contagem por triple (legacy + novos) para desempatar duplicatas em quem não tem of_dedupe_key
     const tripleExistingCount = new Map<string, number>();
@@ -634,6 +667,33 @@ export const parseOpenFinanceText = createServerFn({ method: "POST" })
         transfer_target_cc_name: null as string | null,
         transfer_target_bank_account_id: null as string | null,
         incomplete_side: null as "source" | "target" | null,
+        sales_batch_candidates: (() => {
+          // Só faz sentido para ENTRADAS com banco reconhecido.
+          if (t.valor <= 0 || !b.ba || !b.ba.enterprise) return [];
+          const txMs = new Date(t.data).getTime();
+          const windowMs = 31 * 86400000;
+          return openBatches
+            .filter((sb) => {
+              const cc = ccById.get(sb.cost_center_id);
+              if (!cc || cc.enterprise !== b.ba!.enterprise) return false;
+              const dMs = new Date(sb.reference_date).getTime();
+              return Math.abs(dMs - txMs) <= windowMs;
+            })
+            .map((sb) => {
+              const cc = ccById.get(sb.cost_center_id)!;
+              const gross = Number(sb.gross_total ?? 0);
+              const received = Number(sb.received_amount ?? 0);
+              return {
+                id: sb.id,
+                cost_center_id: sb.cost_center_id,
+                cost_center_name: `${cc.code ?? ""} — ${cc.name}`.trim(),
+                reference_date: sb.reference_date,
+                gross_total: gross,
+                remaining: Math.max(0, gross - received),
+              };
+            })
+            .sort((a, z) => (a.reference_date < z.reference_date ? -1 : 1));
+        })(),
       };
 
       // Duplicado (chave nova, legacy ou contagem)
@@ -897,7 +957,7 @@ export const parseOpenFinanceText = createServerFn({ method: "POST" })
 
 const DecisionSchema = z.object({
   temp_id: z.string(),
-  action: z.enum(["match", "create", "skip", "aporte"]),
+  action: z.enum(["match", "create", "skip", "aporte", "sales_batch"]),
   data: z.string(),
   descricao: z.string(),
   valor: z.number(),
@@ -914,6 +974,8 @@ const DecisionSchema = z.object({
   transfer_source_bank_account_id: z.string().uuid().nullable().optional(),
   transfer_target_cc_id: z.string().uuid().nullable().optional(),
   transfer_target_bank_account_id: z.string().uuid().nullable().optional(),
+  // Vincular a lote de venda consolidada
+  sales_batch_id: z.string().uuid().nullable().optional(),
 });
 
 export const confirmOpenFinanceImport = createServerFn({ method: "POST" })
@@ -926,6 +988,7 @@ export const confirmOpenFinanceImport = createServerFn({ method: "POST" })
     let created = 0;
     let skipped = 0;
     let aportes = 0;
+    let attached_to_batch = 0;
     const errors: string[] = [];
 
     // Para aportes pareados: só processar uma perna por par
@@ -936,6 +999,57 @@ export const confirmOpenFinanceImport = createServerFn({ method: "POST" })
         skipped++;
         continue;
       }
+
+      // -------------------- VINCULAR A LOTE DE VENDA --------------------
+      // Cria uma bank_statement_lines com sales_batch_id preenchido. O trigger
+      // trg_bsl_sales_batch_sync recalcula sales_batches.received_amount.
+      // NÃO cria transactions.
+      if (dec.action === "sales_batch") {
+        if (!dec.sales_batch_id) {
+          errors.push(`${dec.descricao}: sem lote de venda selecionado.`);
+          continue;
+        }
+        if (!dec.bank_account_id) {
+          errors.push(`${dec.descricao}: sem banco identificado para vincular ao lote.`);
+          continue;
+        }
+        if (dec.valor <= 0) {
+          errors.push(`${dec.descricao}: só entradas podem ser vinculadas a lote de venda.`);
+          continue;
+        }
+        // Dedupe por of_dedupe_key nas linhas de extrato
+        if (dec.of_dedupe_key) {
+          const { data: dupBsl } = await context.supabase
+            .from("bank_statement_lines")
+            .select("id")
+            .eq("of_dedupe_key", dec.of_dedupe_key)
+            .limit(1);
+          if (dupBsl && dupBsl.length > 0) {
+            skipped++;
+            continue;
+          }
+        }
+        const description = `${dec.dedupe_tag} [LOTE] ${dec.instituicao} — ${dec.descricao}`.slice(0, 500);
+        const { error } = await context.supabase.from("bank_statement_lines").insert({
+          bank_account_id: dec.bank_account_id,
+          statement_date: dec.data,
+          amount: Math.abs(Number(dec.valor.toFixed(2))),
+          description,
+          sales_batch_id: dec.sales_batch_id,
+          reconciled: true,
+          matched_by: context.userId,
+          matched_at: new Date().toISOString(),
+          of_dedupe_key: dec.of_dedupe_key ?? null,
+          created_by: context.userId,
+        });
+        if (error) {
+          errors.push(`${dec.descricao}: ${error.message}`);
+          continue;
+        }
+        attached_to_batch++;
+        continue;
+      }
+
 
       // -------------------- APORTE --------------------
       // Ciclo esperado:
@@ -1165,5 +1279,5 @@ export const confirmOpenFinanceImport = createServerFn({ method: "POST" })
       created++;
     }
 
-    return { reconciled, created, aportes, skipped, errors };
+    return { reconciled, created, aportes, attached_to_batch, skipped, errors };
   });

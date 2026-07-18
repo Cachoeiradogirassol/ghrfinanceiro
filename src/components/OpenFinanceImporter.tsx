@@ -42,7 +42,7 @@ import {
 
 type RowState = {
   include: boolean;
-  action: "match" | "create" | "skip" | "aporte";
+  action: "match" | "create" | "skip" | "aporte" | "sales_batch";
   account_id: string | null;
   cost_center_id: string | null;
   bank_account_id: string | null;
@@ -52,6 +52,8 @@ type RowState = {
   transfer_source_bank_account_id: string | null;
   transfer_target_cc_id: string | null;
   transfer_target_bank_account_id: string | null;
+  // Vincular a lote
+  sales_batch_id: string | null;
 };
 
 const brl = (v: number) =>
@@ -126,6 +128,7 @@ export function OpenFinanceImporter({ onImported }: { onImported?: () => void })
       setItems(res.items);
       const initialRows: Record<string, RowState> = {};
       for (const it of res.items) {
+        const hasBatch = (it.sales_batch_candidates ?? []).length > 0;
         const defaultAction: RowState["action"] =
           it.status === "match"
             ? "match"
@@ -133,7 +136,9 @@ export function OpenFinanceImporter({ onImported }: { onImported?: () => void })
               ? "aporte"
               : it.status === "duplicate" || it.status === "internal"
                 ? "skip"
-                : "create";
+                : hasBatch && it.valor > 0
+                  ? "sales_batch"
+                  : "create";
         initialRows[it.temp_id] = {
           include: it.status !== "duplicate" && it.status !== "internal",
           action: defaultAction,
@@ -145,6 +150,7 @@ export function OpenFinanceImporter({ onImported }: { onImported?: () => void })
           transfer_source_bank_account_id: it.transfer_source_bank_account_id,
           transfer_target_cc_id: it.transfer_target_cc_id,
           transfer_target_bank_account_id: it.transfer_target_bank_account_id,
+          sales_batch_id: hasBatch ? it.sales_batch_candidates[0].id : null,
         };
       }
       setRows(initialRows);
@@ -202,14 +208,16 @@ export function OpenFinanceImporter({ onImported }: { onImported?: () => void })
         transfer_source_bank_account_id: row.transfer_source_bank_account_id,
         transfer_target_cc_id: row.transfer_target_cc_id,
         transfer_target_bank_account_id: row.transfer_target_bank_account_id,
+        sales_batch_id: row.action === "sales_batch" ? row.sales_batch_id : null,
       };
     });
 
     setLoading(true);
     try {
       const res = await confirmFn({ data: { decisions } });
+      const attached = (res as { attached_to_batch?: number }).attached_to_batch ?? 0;
       toast.success(
-        `Concluído: ${res.reconciled} conciliados, ${res.created} criados, ${res.aportes} aportes, ${res.skipped} ignorados${res.errors.length ? `, ${res.errors.length} erros` : ""}.`,
+        `Concluído: ${res.reconciled} conciliados, ${res.created} criados, ${attached} vinculados a lote, ${res.aportes} aportes, ${res.skipped} ignorados${res.errors.length ? `, ${res.errors.length} erros` : ""}.`,
       );
       if (res.errors.length > 0) {
         console.warn("Erros de importação Open Finance:", res.errors);
@@ -631,7 +639,7 @@ export function OpenFinanceImporter({ onImported }: { onImported?: () => void })
                           ) : (
                             <Select
                               value={row.action}
-                              onValueChange={(v: "match" | "create" | "skip" | "aporte") =>
+                              onValueChange={(v: "match" | "create" | "skip" | "aporte" | "sales_batch") =>
                                 setRows((r) => ({
                                   ...r,
                                   [it.temp_id]: {
@@ -641,11 +649,15 @@ export function OpenFinanceImporter({ onImported }: { onImported?: () => void })
                                       v === "match"
                                         ? row.transaction_id ?? it.candidates[0]?.id ?? null
                                         : null,
+                                    sales_batch_id:
+                                      v === "sales_batch"
+                                        ? row.sales_batch_id ?? it.sales_batch_candidates?.[0]?.id ?? null
+                                        : row.sales_batch_id,
                                   },
                                 }))
                               }
                             >
-                              <SelectTrigger className="h-8 text-xs w-[140px]">
+                              <SelectTrigger className="h-8 text-xs w-[160px]">
                                 <SelectValue />
                               </SelectTrigger>
                               <SelectContent>
@@ -653,6 +665,9 @@ export function OpenFinanceImporter({ onImported }: { onImported?: () => void })
                                   <SelectItem value="match">Conciliar</SelectItem>
                                 )}
                                 <SelectItem value="create">Criar novo</SelectItem>
+                                {(it.sales_batch_candidates?.length ?? 0) > 0 && it.valor > 0 && (
+                                  <SelectItem value="sales_batch">Vincular a lote</SelectItem>
+                                )}
                                 {(it.status === "aporte" || it.status === "aporte_incomplete") && (
                                   <SelectItem value="aporte">Registrar aporte</SelectItem>
                                 )}
@@ -735,6 +750,27 @@ export function OpenFinanceImporter({ onImported }: { onImported?: () => void })
                                 </div>
                               )}
                             </div>
+                          ) : row.action === "sales_batch" ? (
+                            <Select
+                              value={row.sales_batch_id ?? ""}
+                              onValueChange={(v) =>
+                                setRows((r) => ({
+                                  ...r,
+                                  [it.temp_id]: { ...row, sales_batch_id: v },
+                                }))
+                              }
+                            >
+                              <SelectTrigger className="h-8 text-xs w-[320px]">
+                                <SelectValue placeholder="Escolher lote aberto" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {(it.sales_batch_candidates ?? []).map((sb) => (
+                                  <SelectItem key={sb.id} value={sb.id}>
+                                    {sb.reference_date} · {sb.cost_center_name} · restante {brl(sb.remaining)}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
                           ) : row.action === "match" ? (
                             <Select
                               value={row.transaction_id ?? ""}

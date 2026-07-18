@@ -25,6 +25,7 @@ import {
 import { parseStatementDocument, type StatementFormat } from "@/lib/statement-parser";
 import { PromoteLineDialog, type PendingLine } from "@/components/PromoteLineDialog";
 import { OpenFinanceImporter } from "@/components/OpenFinanceImporter";
+import { BatchManualReconcilePanel } from "@/components/BatchManualReconcilePanel";
 import { listSalesBatches, attachLinesToBatch } from "@/lib/sales.functions";
 
 import { Card } from "@/components/ui/card";

@@ -416,6 +416,11 @@ function ProjectionsPage() {
   }, [selectableCCs, accs.data, ccs.data, banks.data]);
 
   const handleBulkSave = async (rows: Record<string, string>[]) => {
+    if (!activeScenarioId) {
+      toast.error("Selecione um cenário antes de salvar projeções em lote.");
+      throw new Error("Cenário não selecionado.");
+    }
+
     try {
       // 1) Descartar linhas em branco (sem nome E sem valor) ANTES de validar.
       const meaningful = rows.filter((r) => {

@@ -239,9 +239,11 @@ function ProjectionsPage() {
   const banks = useQuery({ queryKey: ["banks"], queryFn: () => bankFn() });
   const contacts = useQuery({ queryKey: ["contacts"], queryFn: () => contactFn() });
   const projs = useQuery<ProjectionRow[]>({
-    queryKey: ["projections"],
-    queryFn: () => listFn() as never,
+    queryKey: ["projections", activeScenarioId],
+    queryFn: () => listFn({ data: { scenario_id: activeScenarioId } }) as never,
+    enabled: !!activeScenarioId,
   });
+
 
   // Form state
   const [direction, setDirection] = useState<"inflow" | "outflow">("inflow");

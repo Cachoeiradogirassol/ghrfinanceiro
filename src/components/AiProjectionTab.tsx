@@ -42,7 +42,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import pauloAvatar from "@/assets/bot_minipaulo.png";
+import pauloAsset from "@/assets/bot_minipaulo.png.asset.json";
+const pauloAvatar = pauloAsset.url;
 
 
 const SELECTABLE_CC = ["turismo", "restaurante", "vinhedo", "ghr_aldeia", "ghr_jk"];

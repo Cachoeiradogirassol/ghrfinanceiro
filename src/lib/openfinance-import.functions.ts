@@ -403,7 +403,20 @@ export const parseOpenFinanceText = createServerFn({ method: "POST" })
       const arr = accByCc.get(a.cost_center_id) ?? [];
       arr.push({ id: a.id, name: a.name, kind: a.kind });
       accByCc.set(a.cost_center_id, arr);
-    }
+
+    // 3b) Lotes de venda ABERTOS (para sugestão de vinculação de entradas de cartão/PIX)
+    const { data: openBatchesRaw } = await context.supabase
+      .from("sales_batches")
+      .select("id, cost_center_id, reference_date, gross_total, received_amount")
+      .eq("status", "open");
+    type OpenBatch = {
+      id: string;
+      cost_center_id: string;
+      reference_date: string;
+      gross_total: number | null;
+      received_amount: number | null;
+    };
+    const openBatches = (openBatchesRaw ?? []) as OpenBatch[];
 
     // 4) Parser determinístico
     const rawTxs = parseStatementText(data.text);

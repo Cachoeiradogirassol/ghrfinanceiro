@@ -1,6 +1,9 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { z } from "zod";
+import { generateObject } from "ai";
+import { createLovableAiGatewayProvider } from "@/lib/ai-gateway.server";
+
 
 // ============================================================================
 // PARSER DETERMINÍSTICO (sem IA) para extrato do Meu Pluggy
@@ -258,9 +261,72 @@ const isInvestmentNoise = (cat: string, desc: string) =>
   /investment/i.test(cat) ||
   /libera[çc][ãa]o\s+de\s+dinheiro|resgate|aplica[çc][ãa]o/i.test(desc);
 
+// ============================================================================
+// DE-PARA determinístico: Pluggy category -> padrões de conta contábil
+// ============================================================================
+type MapKind = "revenue" | "expense" | "both";
+const CATEGORY_MAP: Array<{ match: RegExp; kind: MapKind; accountPatterns: RegExp[] }> = [
+  { match: /groceries|food\s*and\s*drinks|supermercado|mercado|alimento/i, kind: "expense",
+    accountPatterns: [/alimento/i, /insumo/i, /mercado/i, /suprimento/i, /alimenta/i] },
+  { match: /restaurant|refei[çc]/i, kind: "expense",
+    accountPatterns: [/alimenta/i, /restaurante/i, /refei[çc]/i] },
+  { match: /^taxes?\b|imposto|tributo|iss\b|icms|pis|cofins|irrf|inss/i, kind: "expense",
+    accountPatterns: [/imposto/i, /tributo/i, /^taxa/i, /iss\b|icms|pis|cofins|irrf|inss/i] },
+  { match: /non[- ]?recurring\s*income|recurring\s*income|receita|venda|faturamento/i, kind: "revenue",
+    accountPatterns: [/faturamento/i, /venda/i, /receita/i] },
+  { match: /gas\s*stations?|combust|posto/i, kind: "expense",
+    accountPatterns: [/combust/i, /gasolina/i, /diesel/i, /posto/i] },
+  { match: /health\s*insurance|plano\s*de\s*sa[uú]de/i, kind: "expense",
+    accountPatterns: [/sa[uú]de/i, /plano/i, /benef[ií]cio/i] },
+  { match: /pharmacy|farm[aá]cia|drogaria/i, kind: "expense",
+    accountPatterns: [/farm[aá]cia/i, /medicamento/i, /sa[uú]de/i] },
+  { match: /digital\s*services|software|streaming|subscription|assinatura/i, kind: "expense",
+    accountPatterns: [/digital/i, /software/i, /assinatura/i, /internet/i, /tecnologia/i] },
+  { match: /marketing|ads?\b|an[uú]ncio/i, kind: "expense",
+    accountPatterns: [/marketing/i, /publicidade/i, /an[uú]ncio/i, /propaganda/i] },
+  { match: /^services\b|servi[çc]os?/i, kind: "expense",
+    accountPatterns: [/servi[çc]os?\s+de\s+terceiros?/i, /servi[çc]o/i, /prestador/i] },
+  { match: /shopping|materia(l|is)|escrit[oó]rio|papelaria/i, kind: "expense",
+    accountPatterns: [/material/i, /escrit[oó]rio/i, /despesas?\s+gerais/i, /papelaria/i] },
+  { match: /salary|sal[aá]rio|folha|payroll/i, kind: "expense",
+    accountPatterns: [/sal[aá]rio/i, /folha/i, /pessoal/i, /pr[oó]-labore/i] },
+  { match: /utilit|energia|luz|el[eé]trica|[aá]gua|water|electricity/i, kind: "expense",
+    accountPatterns: [/energia|luz|el[eé]trica/i, /[aá]gua/i, /utilidade/i, /concession/i] },
+  { match: /transport|uber|99\s*pop|taxi|t[aá]xi/i, kind: "expense",
+    accountPatterns: [/transporte/i, /viagem/i, /combust/i] },
+  { match: /bank\s*fees?|tarifa|taxa\s*banc/i, kind: "expense",
+    accountPatterns: [/tarifa/i, /banc[aá]ria/i, /taxa\s*banc/i, /despesa\s*banc/i] },
+  { match: /loan|empr[eé]stimo|financ/i, kind: "expense",
+    accountPatterns: [/empr[eé]stimo/i, /financ/i, /juros/i] },
+  { match: /rent|aluguel/i, kind: "expense",
+    accountPatterns: [/aluguel/i, /loca[çc][ãa]o/i] },
+  { match: /telecom|celular|telefon|internet/i, kind: "expense",
+    accountPatterns: [/telefon/i, /celular/i, /internet/i, /telecom/i] },
+];
+
+function matchAccountByDictionary(
+  pluggyCategory: string,
+  kind: "revenue" | "expense",
+  list: Array<{ id: string; name: string; kind: string }>,
+): { id: string; name: string } | null {
+  if (!pluggyCategory) return null;
+  const candidates = list.filter((a) => a.kind === kind);
+  if (candidates.length === 0) return null;
+  for (const row of CATEGORY_MAP) {
+    if (row.kind !== "both" && row.kind !== kind) continue;
+    if (!row.match.test(pluggyCategory)) continue;
+    for (const pat of row.accountPatterns) {
+      const hit = candidates.find((a) => pat.test(a.name));
+      if (hit) return { id: hit.id, name: hit.name };
+    }
+  }
+  return null;
+}
+
 export const parseOpenFinanceText = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator(
+
     (d: { text: string; default_cost_center_id?: string; default_account_id?: string }) =>
       z
         .object({
@@ -270,7 +336,11 @@ export const parseOpenFinanceText = createServerFn({ method: "POST" })
         })
         .parse(d),
   )
-  .handler(async ({ data, context }): Promise<{ items: ParsedItem[] }> => {
+  .handler(async ({ data, context }): Promise<{
+    items: ParsedItem[];
+    stats: { from_dictionary: number; from_ai: number; pending: number };
+  }> => {
+
     // 1) Contas bancárias
     const { data: bankAccountsRaw, error: baErr } = await context.supabase
       .from("bank_accounts")
@@ -320,7 +390,9 @@ export const parseOpenFinanceText = createServerFn({ method: "POST" })
     // 4) Parser determinístico
     const rawTxs = parseStatementText(data.text);
 
-    if (rawTxs.length === 0) return { items: [] };
+    if (rawTxs.length === 0)
+      return { items: [], stats: { from_dictionary: 0, from_ai: 0, pending: 0 } };
+
 
     // 5) Match banco canonical -> bank_account. Sicoob prefere ghr_jk (default), mas mantém.
     const findBankAccount = (canonical: string) => {
@@ -443,13 +515,9 @@ export const parseOpenFinanceText = createServerFn({ method: "POST" })
           suggestedName = sameKind[0].name;
         }
       }
-      if (!suggestedId && data.default_account_id) {
-        const fb = (accountsAll ?? []).find((a) => a.id === data.default_account_id);
-        if (fb) {
-          suggestedId = fb.id;
-          suggestedName = fb.name;
-        }
-      }
+      // fallback global (default_account_id) fica para a Fase 6, depois do dicionário + IA
+
+
 
       const base = {
         temp_id: b.temp_id,
@@ -594,8 +662,121 @@ export const parseOpenFinanceText = createServerFn({ method: "POST" })
       };
     });
 
-    return { items };
+    // ========================================================================
+    // Fase 4: preencher categoria (suggested_account_id) — de-para determinístico
+    // ========================================================================
+    let fromDict = 0;
+    let fromAi = 0;
+    for (const it of items) {
+      if (it.status !== "new" && it.status !== "multiple") continue;
+      if (!it.cost_center_id || it.suggested_account_id) continue;
+      const list = accByCc.get(it.cost_center_id) ?? [];
+      const kind: "revenue" | "expense" = it.valor >= 0 ? "revenue" : "expense";
+      const hit = matchAccountByDictionary(it.pluggy_category, kind, list);
+      if (hit) {
+        it.suggested_account_id = hit.id;
+        it.suggested_account_name = hit.name;
+        fromDict++;
+      }
+    }
+
+    // ========================================================================
+    // Fase 5: IA em LOTES pequenos (≤40) — só para o que sobrou. Nunca manda o
+    // extrato bruto; só a linha já estruturada + as contas contábeis do CC dela.
+    // ========================================================================
+    const needAi = items.filter(
+      (it) =>
+        (it.status === "new" || it.status === "multiple") &&
+        it.cost_center_id &&
+        !it.suggested_account_id,
+    );
+    const apiKey = process.env.LOVABLE_API_KEY;
+    if (apiKey && needAi.length > 0) {
+      const gateway = createLovableAiGatewayProvider(apiKey);
+      const model = gateway("google/gemini-3.5-flash");
+      const BATCH = 40;
+      for (let i = 0; i < needAi.length; i += BATCH) {
+        const chunk = needAi.slice(i, i + BATCH);
+        // opções por item: só contas do kind certo, no CC certo, limitadas
+        const payload = chunk.map((it) => {
+          const list = accByCc.get(it.cost_center_id!) ?? [];
+          const kind: "revenue" | "expense" = it.valor >= 0 ? "revenue" : "expense";
+          const opts = list
+            .filter((a) => a.kind === kind)
+            .slice(0, 40)
+            .map((a) => ({ id: a.id, name: a.name }));
+          return {
+            temp_id: it.temp_id,
+            descricao: it.descricao.slice(0, 160),
+            pluggy_category: it.pluggy_category.slice(0, 80),
+            kind,
+            cost_center: it.cost_center_name,
+            options: opts,
+          };
+        });
+        try {
+          const { object } = await generateObject({
+            model,
+            schema: z.object({
+              assignments: z.array(
+                z.object({
+                  temp_id: z.string(),
+                  account_id: z.string().nullable(),
+                }),
+              ),
+            }),
+            prompt:
+              "Você é um classificador contábil. Para cada item, escolha o UUID da conta contábil mais apropriada entre 'options'. " +
+              "Respeite o kind (revenue/expense). Se nenhuma opção couber com confiança, retorne account_id=null. " +
+              "Nunca invente UUIDs — copie exatamente de 'options'.\n\n" +
+              "ITENS:\n" +
+              JSON.stringify(payload),
+          });
+          const validIds = new Set<string>();
+          for (const p of payload) for (const o of p.options) validIds.add(o.id);
+          for (const a of object.assignments ?? []) {
+            if (!a.account_id || !validIds.has(a.account_id)) continue;
+            const it = items.find((x) => x.temp_id === a.temp_id);
+            if (!it || it.suggested_account_id) continue;
+            const list = accByCc.get(it.cost_center_id!) ?? [];
+            const acc = list.find((x) => x.id === a.account_id);
+            if (!acc) continue;
+            it.suggested_account_id = acc.id;
+            it.suggested_account_name = acc.name;
+            fromAi++;
+          }
+        } catch (err) {
+          console.error(
+            `[OFIMP] IA batch ${i / BATCH + 1} falhou:`,
+            err instanceof Error ? err.message : err,
+          );
+          // segue para próximo lote — nenhuma falha bloqueia o restante
+        }
+      }
+    }
+
+    // ========================================================================
+    // Fase 6: fallback global (default_account_id se ainda vazio)
+    // ========================================================================
+    if (data.default_account_id) {
+      const fb = (accountsAll ?? []).find((a) => a.id === data.default_account_id);
+      if (fb) {
+        for (const it of items) {
+          if ((it.status === "new" || it.status === "multiple") && !it.suggested_account_id) {
+            it.suggested_account_id = fb.id;
+            it.suggested_account_name = fb.name;
+          }
+        }
+      }
+    }
+
+    const pending = items.filter(
+      (it) => (it.status === "new" || it.status === "multiple") && !it.suggested_account_id,
+    ).length;
+
+    return { items, stats: { from_dictionary: fromDict, from_ai: fromAi, pending } };
   });
+
 
 // ============================================================================
 // confirmOpenFinanceImport

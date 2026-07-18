@@ -144,7 +144,11 @@ export function OpenFinanceImporter({ onImported }: { onImported?: () => void })
         };
       }
       setRows(initialRows);
-      toast.success(`${res.items.length} linhas analisadas. Revise abaixo e confirme.`);
+      const s = res.stats;
+      toast.success(
+        `${res.items.length} linhas analisadas. Categoria: ${s.from_dictionary} via de-para · ${s.from_ai} via IA · ${s.pending} pendentes.`,
+      );
+
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Falha ao analisar extrato");
     } finally {

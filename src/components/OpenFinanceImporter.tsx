@@ -176,6 +176,7 @@ export function OpenFinanceImporter({ onImported }: { onImported?: () => void })
           account_id: null,
           transaction_id: null,
           dedupe_tag: it.dedupe_tag,
+          of_dedupe_key: it.of_dedupe_key,
           pair_temp_id: it.pair_temp_id,
           transfer_source_cc_id: null,
           transfer_source_bank_account_id: null,

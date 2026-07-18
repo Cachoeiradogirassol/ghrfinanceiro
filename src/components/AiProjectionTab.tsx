@@ -42,6 +42,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import pauloAvatar from "@/assets/bot_minipaulo.png";
+
 
 const SELECTABLE_CC = ["turismo", "restaurante", "vinhedo", "ghr_aldeia", "ghr_jk"];
 
@@ -207,13 +209,11 @@ export function AiProjectionTab({ scenarioId }: { scenarioId?: string | null } =
       <Card className="p-5 space-y-3">
         <div className="flex items-start gap-3">
           <img
-            src="/src/assets/bot_minipaulo.png"
+            src={pauloAvatar}
             alt="Paulo — assistente financeiro austríaco"
             className="h-14 w-14 rounded-full object-cover border-2 border-primary/40 shadow"
-            onError={(e) => {
-              (e.target as HTMLImageElement).style.display = "none";
-            }}
           />
+
           <div className="flex-1">
             <div className="flex items-center gap-2">
               <Sparkles className="h-5 w-5 text-primary" />

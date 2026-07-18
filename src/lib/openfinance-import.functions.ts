@@ -666,8 +666,121 @@ export const parseOpenFinanceText = createServerFn({ method: "POST" })
       };
     });
 
-    return { items };
+    // ========================================================================
+    // Fase 4: preencher categoria (suggested_account_id) — de-para determinístico
+    // ========================================================================
+    let fromDict = 0;
+    let fromAi = 0;
+    for (const it of items) {
+      if (it.status !== "new" && it.status !== "multiple") continue;
+      if (!it.cost_center_id || it.suggested_account_id) continue;
+      const list = accByCc.get(it.cost_center_id) ?? [];
+      const kind: "revenue" | "expense" = it.valor >= 0 ? "revenue" : "expense";
+      const hit = matchAccountByDictionary(it.pluggy_category, kind, list);
+      if (hit) {
+        it.suggested_account_id = hit.id;
+        it.suggested_account_name = hit.name;
+        fromDict++;
+      }
+    }
+
+    // ========================================================================
+    // Fase 5: IA em LOTES pequenos (≤40) — só para o que sobrou. Nunca manda o
+    // extrato bruto; só a linha já estruturada + as contas contábeis do CC dela.
+    // ========================================================================
+    const needAi = items.filter(
+      (it) =>
+        (it.status === "new" || it.status === "multiple") &&
+        it.cost_center_id &&
+        !it.suggested_account_id,
+    );
+    const apiKey = process.env.LOVABLE_API_KEY;
+    if (apiKey && needAi.length > 0) {
+      const gateway = createLovableAiGatewayProvider(apiKey);
+      const model = gateway("google/gemini-3.5-flash");
+      const BATCH = 40;
+      for (let i = 0; i < needAi.length; i += BATCH) {
+        const chunk = needAi.slice(i, i + BATCH);
+        // opções por item: só contas do kind certo, no CC certo, limitadas
+        const payload = chunk.map((it) => {
+          const list = accByCc.get(it.cost_center_id!) ?? [];
+          const kind: "revenue" | "expense" = it.valor >= 0 ? "revenue" : "expense";
+          const opts = list
+            .filter((a) => a.kind === kind)
+            .slice(0, 40)
+            .map((a) => ({ id: a.id, name: a.name }));
+          return {
+            temp_id: it.temp_id,
+            descricao: it.descricao.slice(0, 160),
+            pluggy_category: it.pluggy_category.slice(0, 80),
+            kind,
+            cost_center: it.cost_center_name,
+            options: opts,
+          };
+        });
+        try {
+          const { object } = await generateObject({
+            model,
+            schema: z.object({
+              assignments: z.array(
+                z.object({
+                  temp_id: z.string(),
+                  account_id: z.string().nullable(),
+                }),
+              ),
+            }),
+            prompt:
+              "Você é um classificador contábil. Para cada item, escolha o UUID da conta contábil mais apropriada entre 'options'. " +
+              "Respeite o kind (revenue/expense). Se nenhuma opção couber com confiança, retorne account_id=null. " +
+              "Nunca invente UUIDs — copie exatamente de 'options'.\n\n" +
+              "ITENS:\n" +
+              JSON.stringify(payload),
+          });
+          const validIds = new Set<string>();
+          for (const p of payload) for (const o of p.options) validIds.add(o.id);
+          for (const a of object.assignments ?? []) {
+            if (!a.account_id || !validIds.has(a.account_id)) continue;
+            const it = items.find((x) => x.temp_id === a.temp_id);
+            if (!it || it.suggested_account_id) continue;
+            const list = accByCc.get(it.cost_center_id!) ?? [];
+            const acc = list.find((x) => x.id === a.account_id);
+            if (!acc) continue;
+            it.suggested_account_id = acc.id;
+            it.suggested_account_name = acc.name;
+            fromAi++;
+          }
+        } catch (err) {
+          console.error(
+            `[OFIMP] IA batch ${i / BATCH + 1} falhou:`,
+            err instanceof Error ? err.message : err,
+          );
+          // segue para próximo lote — nenhuma falha bloqueia o restante
+        }
+      }
+    }
+
+    // ========================================================================
+    // Fase 6: fallback global (default_account_id se ainda vazio)
+    // ========================================================================
+    if (data.default_account_id) {
+      const fb = (accountsAll ?? []).find((a) => a.id === data.default_account_id);
+      if (fb) {
+        for (const it of items) {
+          if ((it.status === "new" || it.status === "multiple") && !it.suggested_account_id) {
+            it.suggested_account_id = fb.id;
+            it.suggested_account_name = fb.name;
+          }
+        }
+      }
+    }
+
+    const pending = items.filter(
+      (it) => (it.status === "new" || it.status === "multiple") && !it.suggested_account_id,
+    ).length;
+
+    return { items, stats: { from_dictionary: fromDict, from_ai: fromAi, pending } };
   });
+
 
 // ============================================================================
 // confirmOpenFinanceImport

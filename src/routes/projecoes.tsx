@@ -487,7 +487,9 @@ function ProjectionsPage() {
         default_bank_account_id: r.default_bank_account_id,
         notes: null,
         created_by: userId,
+        scenario_id: activeScenarioId,
       }));
+
       console.log("Payload enviado:", payload);
 
       const { data: inserted, error } = await supabase

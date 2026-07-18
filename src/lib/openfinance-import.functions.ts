@@ -667,6 +667,33 @@ export const parseOpenFinanceText = createServerFn({ method: "POST" })
         transfer_target_cc_name: null as string | null,
         transfer_target_bank_account_id: null as string | null,
         incomplete_side: null as "source" | "target" | null,
+        sales_batch_candidates: (() => {
+          // Só faz sentido para ENTRADAS com banco reconhecido.
+          if (t.valor <= 0 || !b.ba || !b.ba.enterprise) return [];
+          const txMs = new Date(t.data).getTime();
+          const windowMs = 31 * 86400000;
+          return openBatches
+            .filter((sb) => {
+              const cc = ccById.get(sb.cost_center_id);
+              if (!cc || cc.enterprise !== b.ba!.enterprise) return false;
+              const dMs = new Date(sb.reference_date).getTime();
+              return Math.abs(dMs - txMs) <= windowMs;
+            })
+            .map((sb) => {
+              const cc = ccById.get(sb.cost_center_id)!;
+              const gross = Number(sb.gross_total ?? 0);
+              const received = Number(sb.received_amount ?? 0);
+              return {
+                id: sb.id,
+                cost_center_id: sb.cost_center_id,
+                cost_center_name: `${cc.code ?? ""} — ${cc.name}`.trim(),
+                reference_date: sb.reference_date,
+                gross_total: gross,
+                remaining: Math.max(0, gross - received),
+              };
+            })
+            .sort((a, z) => (a.reference_date < z.reference_date ? -1 : 1));
+        })(),
       };
 
       // Duplicado (chave nova, legacy ou contagem)

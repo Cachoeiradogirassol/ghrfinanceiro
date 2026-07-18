@@ -57,8 +57,16 @@ import {
   RefreshCw,
   CheckCheck,
   ShoppingBag,
+  Wrench,
+  ClipboardList,
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
 import { useAuth } from "@/lib/auth";
 
 export const Route = createFileRoute("/conciliacao")({
@@ -489,26 +497,48 @@ function Conc() {
           </div>
         </div>
       )}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
         <div>
           <h1 className="text-3xl font-bold">Conciliação Bancária</h1>
-          <p className="text-muted-foreground">Confronte o extrato com os lançamentos do sistema</p>
-        </div>
-        <div className="flex gap-2">
-          <OpenFinanceImporter
-            onImported={() => {
-              qc.invalidateQueries({ queryKey: ["txs"] });
-            }}
-          />
-          <Button variant="outline" onClick={syncPluggy} disabled={pluggyBusy}>
-            <RefreshCw className={`h-4 w-4 mr-2 ${pluggyBusy ? "animate-spin" : ""}`} />
-            Sincronizar Open Finance
-          </Button>
-          <Button onClick={runAutoMatch} disabled={pluggyBusy}>
-            <Sparkles className="h-4 w-4 mr-2" /> Sugerir Matches
-          </Button>
+          <p className="text-muted-foreground">
+            Fluxo recomendado: colar o extrato copiado do Meu Pluggy no Importador → revisar →
+            confirmar. Os lançamentos entram já conciliados.
+          </p>
         </div>
       </div>
+
+      {/* HERO — Importador Open Finance */}
+      <Card className="p-6 border-2 border-primary/40 bg-primary/5">
+        <div className="flex flex-col md:flex-row md:items-center gap-4 justify-between">
+          <div className="flex items-start gap-4">
+            <div className="rounded-full bg-primary/15 p-3">
+              <Sparkles className="h-7 w-7 text-primary" />
+            </div>
+            <div>
+              <h2 className="text-xl font-bold">Importador Open Finance</h2>
+              <p className="text-sm text-muted-foreground max-w-2xl">
+                Cole aqui o extrato copiado do Meu Pluggy — o sistema classifica cada linha,
+                sugere conta contábil e concilia com os lançamentos existentes ou cria novos
+                já baixados. É o caminho recomendado para o dia a dia.
+              </p>
+            </div>
+          </div>
+          <div className="shrink-0">
+            <OpenFinanceImporter
+              onImported={() => {
+                qc.invalidateQueries({ queryKey: ["txs"] });
+                qc.invalidateQueries({ queryKey: ["lines"] });
+              }}
+            />
+          </div>
+        </div>
+        <p className="text-xs text-muted-foreground mt-4 flex items-start gap-2">
+          <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+          O resultado do Importador aparece já conciliado nas listas de lançamentos. Ele NÃO
+          popula a lista de "Extrato Bancário" do modo avançado (isso é reservado para uploads
+          de arquivo / sync Pluggy direto).
+        </p>
+      </Card>
 
       {/* Filtro de período + encerramento */}
       <Card className="p-4 flex flex-wrap items-end gap-3">
@@ -604,325 +634,64 @@ function Conc() {
         </Card>
       )}
 
-      {pluggySuggestions.length > 0 && (
-        <Card className="border-emerald-500/40 bg-emerald-500/5 p-5">
-          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <h2 className="flex items-center gap-2 font-semibold text-emerald-700">
-                <CheckCheck className="h-4 w-4" /> Matches automáticos Open Finance
-              </h2>
-              <p className="text-sm text-muted-foreground">
-                Mesmo valor, mesma natureza e diferença máxima de 3 dias. Revise antes da baixa
-                real.
-              </p>
-            </div>
-            <Button onClick={confirmPluggyBatch} disabled={pluggyBusy}>
-              {pluggyBusy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Confirmar Conciliações da Semana em Lote
-            </Button>
-          </div>
-          <div className="space-y-2">
-            {pluggySuggestions.map((suggestion) => (
-              <div
-                key={suggestion.extractId}
-                className="grid gap-2 rounded-lg border border-emerald-500/30 bg-card/70 p-3 text-sm md:grid-cols-[110px_1fr_1fr_130px] md:items-center"
-              >
-                <span className="font-mono">
-                  {new Date(`${suggestion.date}T00:00:00`).toLocaleDateString("pt-BR")}
-                </span>
-                <span className="truncate">{suggestion.description}</span>
-                <span className="truncate text-muted-foreground">
-                  ↔ {suggestion.transactionDescription || "Lançamento sem descrição"}
-                </span>
-                <span
-                  className={`text-right font-bold tabular-nums ${suggestion.amount > 0 ? "text-emerald-600" : "text-rose-600"}`}
-                >
-                  {fmt(suggestion.amount)}
-                </span>
-              </div>
-            ))}
-          </div>
-        </Card>
-      )}
-
-      <Card className="p-5 space-y-4">
-        <div className="flex flex-wrap items-end gap-3">
-          <div className="flex flex-col gap-1">
-            <label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
-              <Upload className="h-3 w-3" /> Conta bancária de destino
-            </label>
-            <Select value={importBankId} onValueChange={setImportBankId} disabled={isProcessing}>
-              <SelectTrigger className="w-64">
-                <SelectValue placeholder="Selecione a conta…" />
-              </SelectTrigger>
-              <SelectContent>
-                {(banks.data ?? []).map((b) => (
-                  <SelectItem key={b.id} value={b.id}>
-                    {b.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="flex flex-col gap-1">
-            <label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
-              <FileText className="h-3 w-3" /> Padrão de Extrato
-            </label>
-            <Select
-              value={statementFormat}
-              onValueChange={(v) => setStatementFormat(v as StatementFormat)}
-              disabled={isProcessing}
-            >
-              <SelectTrigger className="w-64">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="auto">Detectar Automaticamente (Paulo IA)</SelectItem>
-                <SelectItem value="inter-pdf">Banco Inter (PDF)</SelectItem>
-                <SelectItem value="c6-csv">C6 Bank (CSV)</SelectItem>
-                <SelectItem value="mp-csv">Mercado Pago (CSV)</SelectItem>
-                <SelectItem value="ofx">OFX Padrão</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
-
-        <label
-          htmlFor="statement-file-input"
-          onDragEnter={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            if (!isProcessing) setIsDragging(true);
-          }}
-          onDragOver={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            if (!isProcessing) setIsDragging(true);
-          }}
-          onDragLeave={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            setIsDragging(false);
-          }}
-          onDrop={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            setIsDragging(false);
-            if (isProcessing) return;
-            const f = e.dataTransfer?.files?.[0];
-            if (f) {
-              void handleStatementFile(f);
-            } else {
-              toast.error(
-                "Nenhum arquivo foi detectado no arrasto. Tente clicar na área para selecionar.",
-                PERSISTENT_TOAST,
-              );
-            }
-          }}
-          className={`relative flex flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed px-6 py-10 text-center transition-colors ${
-            isProcessing
-              ? "border-muted bg-muted/30 cursor-wait"
-              : isDragging
-                ? "border-primary bg-primary/10 ring-2 ring-primary/30 cursor-copy"
-                : "border-border bg-muted/20 hover:border-primary/60 hover:bg-primary/5 cursor-pointer"
-          }`}
-        >
-          {isProcessing ? (
-            <>
-              <Loader2 className="h-10 w-10 text-primary animate-spin" />
-              <div className="space-y-1">
-                <p className="text-base font-semibold">Paulo está auditando o extrato… Aguarde.</p>
-                <p className="text-sm text-muted-foreground">
-                  Extraindo dados de fluxo de caixa
-                  {processingFileName ? ` de "${processingFileName}"` : ""}.
-                </p>
-              </div>
-              <div className="w-full max-w-md space-y-2 pt-2">
-                <Skeleton className="h-3 w-full" />
-                <Skeleton className="h-3 w-5/6" />
-                <Skeleton className="h-3 w-4/6" />
-              </div>
-            </>
-          ) : (
-            <>
-              <div className={`rounded-full p-4 ${isDragging ? "bg-primary/20" : "bg-primary/10"}`}>
-                <FileUp
-                  className={`h-10 w-10 ${isDragging ? "text-primary" : "text-primary/80"}`}
-                />
-              </div>
-              <div className="space-y-1">
-                <p className="text-lg font-semibold">
-                  Arraste e solte seu extrato (PDF, CSV ou OFX) aqui
-                </p>
-                <p className="text-sm text-muted-foreground flex items-center justify-center gap-1">
-                  <FileText className="h-3.5 w-3.5" /> Saídas: enviado/pago/tarifa • Entradas:
-                  recebido/crédito/depósito
-                </p>
-              </div>
-              <span className="mt-1 inline-flex items-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow">
-                <Upload className="h-4 w-4 mr-2" /> Ou clique aqui para selecionar o arquivo
-              </span>
-            </>
-          )}
-          <input
-            id="statement-file-input"
-            type="file"
-            disabled={isProcessing}
-            onChange={(e) => {
-              const f = e.target.files?.[0];
-              if (f) {
-                void handleStatementFile(f);
-              }
-              e.target.value = "";
-            }}
-            className="sr-only"
-          />
-        </label>
-
-        {uploadError && (
-          <div className="flex items-start gap-2 rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
-            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-            <div className="space-y-1">
-              <p className="font-semibold">Erro ao processar o extrato</p>
-              <p>{uploadError}</p>
-            </div>
-          </div>
-        )}
-      </Card>
-
+      {/* PENDÊNCIAS — visão principal, somente leitura */}
       {(() => {
-        const pending = filteredLines.filter(
-          (l) =>
-            !l.reconciled &&
-            !(l as { matched_transaction_id?: string | null }).matched_transaction_id,
-        );
-        if (pending.length === 0) return null;
-        const credits = pending.filter((l) => Number(l.amount) > 0);
-        const debits = pending.filter((l) => Number(l.amount) < 0);
-        const creditsSum = credits.reduce((s, l) => s + Number(l.amount), 0);
-        const debitsSum = debits.reduce((s, l) => s + Math.abs(Number(l.amount)), 0);
-        const runBulk = async (fn: () => Promise<void>) => {
-          try {
-            await fn();
-            qc.invalidateQueries({ queryKey: ["lines"] });
-            qc.invalidateQueries({ queryKey: ["txs"] });
-          } catch (e) {
-            toast.error(e instanceof Error ? e.message : "Erro", PERSISTENT_TOAST);
-          }
-        };
+        const pendingTxs = filteredTxs.filter((t) => t.status !== "reconciled");
         return (
-          <Card className="p-4 border-amber-500/40 bg-amber-500/5">
-            <div className="flex items-center justify-between mb-3 gap-2 flex-wrap">
-              <h2 className="font-semibold text-sm flex items-center gap-2">
-                <Sparkles className="h-4 w-4 text-amber-600" />
-                Movimentos do extrato aguardando categorização ({pending.length})
-              </h2>
-              <div className="flex flex-wrap gap-2">
-                <Button
-                  size="sm"
-                  disabled={credits.length === 0}
-                  className="bg-emerald-600 hover:bg-emerald-700 text-white"
-                  onClick={() =>
-                    runBulk(async () => {
-                      const r = await consolidateFn({
-                        data: {
-                          bank_account_id: importBankId || null,
-                          start_date: rangeStart,
-                          end_date: rangeEnd,
-                        },
-                      });
-                      toast.success(
-                        `Consolidação criada: ${r.created} lançamento(s) unificando ${r.lines} linha(s) — ${fmt(r.total)}`,
-                      );
-                    })
-                  }
-                  title={`${credits.length} crédito(s) • ${fmt(creditsSum)}`}
-                >
-                  ▲ Consolidar Entradas em Massa ({credits.length})
-                </Button>
-                <Button
-                  size="sm"
-                  disabled={debits.length === 0}
-                  className="bg-rose-600 hover:bg-rose-700 text-white"
-                  onClick={() =>
-                    runBulk(async () => {
-                      const r = await draftsFn({
-                        data: {
-                          bank_account_id: importBankId || null,
-                          start_date: rangeStart,
-                          end_date: rangeEnd,
-                        },
-                      });
-                      toast.success(
-                        `${r.created} rascunho(s) "Saída Sem Comprovação" criados — ${fmt(debitsSum)} aguardando justificativa.`,
-                      );
-                    })
-                  }
-                  title={`${debits.length} saída(s) sem nota • ${fmt(debitsSum)}`}
-                >
-                  ▼ Gerar Rascunhos de Saídas s/ Comprovação ({debits.length})
-                </Button>
+          <Card className="p-5">
+            <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
+              <div className="flex items-center gap-2">
+                <ClipboardList className="h-5 w-5 text-primary" />
+                <h2 className="font-semibold">
+                  Pendências — lançamentos ainda não conciliados
+                </h2>
               </div>
+              <Badge variant="outline" className="text-sm">
+                {pendingTxs.length} lançamento(s) neste período
+              </Badge>
             </div>
-
-            <div className="grid gap-4 md:grid-cols-2 max-h-[520px] overflow-y-auto pr-1">
-              {pending.map((l) => {
-                const isNew = highlightLineIds.has(l.id as string);
-                const isCredit = Number(l.amount) > 0;
+            <p className="text-xs text-muted-foreground mb-3">
+              Lista de leitura. Para conciliar, use o Importador Open Finance acima. O pareamento
+              manual linha-a-linha continua disponível no modo avançado abaixo.
+            </p>
+            <div className="space-y-2 max-h-[600px] pr-1 overflow-y-auto">
+              {pendingTxs.length === 0 && (
+                <p className="text-muted-foreground text-sm p-4 text-center">
+                  Nada pendente neste período. Bom trabalho.
+                </p>
+              )}
+              {pendingTxs.map((t) => {
+                const competence =
+                  (t as { document_datetime?: string | null }).document_datetime ??
+                  (t.due_date as string);
                 return (
                   <div
-                    key={l.id}
-                    className={`rounded-xl border-2 bg-card p-5 shadow-sm transition hover:shadow-md ${
-                      isNew
-                        ? "ring-2 ring-amber-500/60 border-amber-500/60"
-                        : isCredit
-                          ? "border-emerald-500/30"
-                          : "border-rose-500/30"
-                    }`}
+                    key={t.id}
+                    className="flex items-center gap-3 p-3 rounded-md border text-sm hover:bg-accent/40"
                   >
-                    <div className="flex items-start justify-between gap-3 mb-3">
-                      <Badge
-                        className={
-                          isCredit
-                            ? "bg-emerald-600 hover:bg-emerald-600 text-white border-0"
-                            : "bg-rose-600 hover:bg-rose-600 text-white border-0"
-                        }
-                      >
-                        {isCredit ? "ENTRADA" : "SAÍDA"}
-                      </Badge>
-                      <span className="font-mono text-sm font-medium text-muted-foreground">
-                        {new Date(l.statement_date as string).toLocaleDateString("pt-BR")}
+                    <span className="font-mono text-xs w-24 shrink-0">
+                      {new Date(competence).toLocaleDateString("pt-BR")}
+                    </span>
+                    <span className="flex-1 truncate">
+                      {t.description ?? t.accounts?.name}
+                      {t.is_batch && <Layers className="h-3 w-3 inline ml-1 text-primary" />}
+                    </span>
+                    <Badge variant="outline" className="text-[10px]">
+                      {t.status}
+                    </Badge>
+                    <span
+                      className={`font-mono text-sm tabular-nums w-28 text-right ${
+                        t.type === "receivable" ? "text-emerald-600" : "text-rose-600"
+                      }`}
+                    >
+                      {fmt(Number(t.amount))}
+                    </span>
+                    {isMaster && (
+                      <span className="flex items-center gap-1 text-[10px] text-muted-foreground w-32 justify-end">
+                        <User className="h-3 w-3" />
+                        {userLabel((t as { created_by?: string }).created_by)}
                       </span>
-                    </div>
-                    <p className="text-sm font-medium leading-snug mb-3 line-clamp-2 min-h-[2.5rem]">
-                      {l.description ?? "(sem descrição)"}
-                    </p>
-                    <div className="flex items-center justify-between gap-3">
-                      <span
-                        className={`text-xl font-bold tabular-nums ${
-                          isCredit ? "text-emerald-600" : "text-rose-600"
-                        }`}
-                      >
-                        {isCredit ? "+ " : "- "}
-                        {fmt(Math.abs(Number(l.amount)))}
-                      </span>
-                      <Button
-                        size="sm"
-                        onClick={() =>
-                          setPromoting({
-                            id: l.id as string,
-                            statement_date: l.statement_date as string,
-                            amount: l.amount as number,
-                            description: (l.description ?? null) as string | null,
-                            bank_accounts:
-                              (l as { bank_accounts?: { name?: string | null } | null })
-                                .bank_accounts ?? null,
-                          })
-                        }
-                      >
-                        Categorizar
-                      </Button>
-                    </div>
+                    )}
                   </div>
                 );
               })}
@@ -931,260 +700,635 @@ function Conc() {
         );
       })()}
 
-      {selectedTx && (
-        <Card className="p-4 bg-primary/5 border-primary/30">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium">
-                Conciliando: {selectedTxObj?.description ?? "—"} —{" "}
-                {fmt(Number(selectedTxObj?.amount ?? 0))}
-              </p>
-              <p className="text-xs text-muted-foreground">
-                Selecionado: {fmt(selectedSum)} • {selectedLines.size} linha(s){" "}
-                {sumMatches && <span className="text-primary font-medium">✓ Soma confere</span>}
-              </p>
-            </div>
-            <div className="flex gap-2">
-              <Button size="sm" onClick={doReconcile} disabled={!sumMatches}>
-                <Link2 className="h-4 w-4 mr-1" /> Conciliar
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => {
-                  setSelectedTx(null);
-                  setSelectedLines(new Set());
-                }}
-              >
-                Cancelar
-              </Button>
-            </div>
-          </div>
-        </Card>
-      )}
-
-      {selectedLines.size > 0 && !selectedTx && (
-        <SalesBatchAttachPanel
-          selectedLineIds={Array.from(selectedLines)}
-          lines={filteredLines}
-          banks={banks.data ?? []}
-          openBatches={(salesBatches.data ?? []).filter((b) => b.status === "open")}
-          onAttach={async (batchId) => {
-            try {
-              const res = await attachBatchFn({
-                data: {
-                  sales_batch_id: batchId,
-                  statement_line_ids: Array.from(selectedLines),
-                },
-              });
-              toast.success(`${res.attached} linha(s) vinculada(s) ao lote de venda.`);
-              setSelectedLines(new Set());
-              await Promise.all([
-                qc.invalidateQueries({ queryKey: ["lines"] }),
-                qc.invalidateQueries({ queryKey: ["sales-batches"] }),
-              ]);
-            } catch (e) {
-              toast.error(e instanceof Error ? e.message : "Erro ao vincular ao lote.");
-            }
-          }}
-        />
-      )}
-
-
-      {cashAudit &&
-        (() => {
-          const audited = Math.abs(cashAudit.difference) < 0.01;
-          return (
-            <Card
-              className={`p-5 border-2 ${audited ? "border-emerald-500/60 bg-emerald-500/5" : "border-rose-500/60 bg-rose-500/5"}`}
-            >
-              <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
-                <div>
-                  <h2 className="text-lg font-bold">Auditoria de Batimento de Caixa</h2>
-                  <p className="text-sm text-muted-foreground">
-                    {cashAudit.bankName} • {cashAudit.fileName}
-                  </p>
-                </div>
-                <Badge
-                  className={
-                    audited
-                      ? "bg-emerald-600 hover:bg-emerald-600 text-white border-0 text-sm px-3 py-1"
-                      : "bg-rose-600 hover:bg-rose-600 text-white border-0 text-sm px-3 py-1"
-                  }
-                >
-                  {audited
-                    ? "CONCILIAÇÃO DO SEED AUDITADA (100% CORRETA)"
-                    : `Diferença: ${fmt(Math.abs(cashAudit.difference))}`}
-                </Badge>
+      {/* MODO AVANÇADO — tudo recolhido */}
+      <Accordion type="single" collapsible>
+        <AccordionItem value="advanced" className="border rounded-xl bg-card">
+          <AccordionTrigger className="px-5 py-4 hover:no-underline">
+            <div className="flex items-center gap-2 text-left">
+              <Wrench className="h-4 w-4 text-muted-foreground" />
+              <div>
+                <p className="font-semibold">
+                  Ferramentas avançadas (upload de arquivo / Open Finance direto)
+                </p>
+                <p className="text-xs text-muted-foreground font-normal">
+                  Upload PDF/CSV/OFX, sync Pluggy, sugestões automáticas, pareamento manual
+                  linha-a-linha e auditoria de batimento.
+                </p>
               </div>
+            </div>
+          </AccordionTrigger>
+          <AccordionContent className="px-5 pb-5 space-y-6">
+            {/* Ações Pluggy */}
+            <div className="flex flex-wrap gap-2">
+              <Button variant="outline" onClick={syncPluggy} disabled={pluggyBusy}>
+                <RefreshCw className={`h-4 w-4 mr-2 ${pluggyBusy ? "animate-spin" : ""}`} />
+                Sincronizar Open Finance
+              </Button>
+              <Button onClick={runAutoMatch} disabled={pluggyBusy}>
+                <Sparkles className="h-4 w-4 mr-2" /> Sugerir Matches
+              </Button>
+            </div>
 
-              {audited && (
-                <div className="mb-4 rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-4">
-                  <p className="text-sm font-medium text-emerald-700">
-                    Paulo: A precisão cirúrgica da gestão privada é a salvaguarda do capital real
-                    contra as distorções monetárias — aqui o caixa protege o capital de verdade.
-                  </p>
+            {pluggySuggestions.length > 0 && (
+              <Card className="border-emerald-500/40 bg-emerald-500/5 p-5">
+                <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <h2 className="flex items-center gap-2 font-semibold text-emerald-700">
+                      <CheckCheck className="h-4 w-4" /> Matches automáticos Open Finance
+                    </h2>
+                    <p className="text-sm text-muted-foreground">
+                      Mesmo valor, mesma natureza e diferença máxima de 3 dias. Revise antes da
+                      baixa real.
+                    </p>
+                  </div>
+                  <Button onClick={confirmPluggyBatch} disabled={pluggyBusy}>
+                    {pluggyBusy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    Confirmar Conciliações da Semana em Lote
+                  </Button>
                 </div>
-              )}
-
-              {!audited && (
-                <div className="mb-4 flex items-start gap-2 rounded-lg border border-rose-500/30 bg-rose-500/10 p-4 text-rose-700">
-                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-                  <p className="text-sm font-medium">
-                    O cálculo importado não bateu com o saldo final do PDF. Revise lançamentos
-                    duplicados, ausentes ou com sinal invertido.
-                  </p>
-                </div>
-              )}
-
-              <div className="grid gap-3 md:grid-cols-5">
-                <div className="rounded-lg border bg-card p-3">
-                  <p className="text-xs text-muted-foreground">Saldo atual no sistema</p>
-                  <p className="text-base font-bold tabular-nums">{fmt(cashAudit.systemBalance)}</p>
-                </div>
-                <div className="rounded-lg border bg-card p-3">
-                  <p className="text-xs text-muted-foreground">Entradas importadas</p>
-                  <p className="text-base font-bold tabular-nums text-emerald-600">
-                    + {fmt(cashAudit.importedEntries)}
-                  </p>
-                </div>
-                <div className="rounded-lg border bg-card p-3">
-                  <p className="text-xs text-muted-foreground">Saídas importadas</p>
-                  <p className="text-base font-bold tabular-nums text-rose-600">
-                    − {fmt(cashAudit.importedExits)}
-                  </p>
-                </div>
-                <div className="rounded-lg border bg-card p-3">
-                  <p className="text-xs text-muted-foreground">Resultado calculado</p>
-                  <p className="text-base font-bold tabular-nums">
-                    {fmt(cashAudit.calculatedFinalBalance)}
-                  </p>
-                </div>
-                <div className="rounded-lg border bg-card p-3">
-                  <p className="text-xs text-muted-foreground">Saldo final real do PDF</p>
-                  <p className="text-base font-bold tabular-nums">{fmt(cashAudit.finalBalance)}</p>
-                </div>
-              </div>
-            </Card>
-          );
-        })()}
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <Card className="p-4">
-          <h2 className="font-semibold mb-3">
-            Extrato Bancário{" "}
-            <span className="text-xs text-muted-foreground font-normal">
-              ({filteredLines.length})
-            </span>
-          </h2>
-          <div className="space-y-3 max-h-[600px] pr-1 overflow-y-auto">
-            {filteredLines.map((l) => {
-              const isCredit = Number(l.amount) > 0;
-              return (
-                <label
-                  key={l.id}
-                  className={`flex items-center gap-4 p-4 rounded-lg border-2 cursor-pointer transition ${
-                    l.reconciled
-                      ? "opacity-60 bg-muted/30 border-border"
-                      : selectedLines.has(l.id)
-                        ? "bg-primary/10 border-primary"
-                        : `hover:bg-accent ${isCredit ? "border-emerald-500/30" : "border-rose-500/30"}`
-                  }`}
-                >
-                  <Checkbox
-                    checked={selectedLines.has(l.id)}
-                    disabled={l.reconciled || !selectedTx}
-                    onCheckedChange={() => toggleLine(l.id)}
-                  />
-                  <Badge
-                    className={
-                      isCredit
-                        ? "bg-emerald-600 hover:bg-emerald-600 text-white border-0"
-                        : "bg-rose-600 hover:bg-rose-600 text-white border-0"
-                    }
-                  >
-                    {isCredit ? "+" : "−"}
-                  </Badge>
-                  <span className="font-mono text-sm w-24 font-medium">
-                    {new Date(l.statement_date as string).toLocaleDateString("pt-BR")}
-                  </span>
-                  <span className="flex-1 truncate text-sm">{l.description}</span>
-                  <span
-                    className={`font-mono text-base font-bold tabular-nums ${isCredit ? "text-emerald-600" : "text-rose-600"}`}
-                  >
-                    {fmt(Number(l.amount))}
-                  </span>
-                  {l.reconciled && <Badge variant="outline">conciliado</Badge>}
-                  {isMaster && (l as { matched_by?: string }).matched_by && (
-                    <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
-                      <User className="h-3 w-3" />
-                      {userLabel((l as { matched_by: string }).matched_by)}
-                    </span>
-                  )}
-                </label>
-              );
-            })}
-            {filteredLines.length === 0 && (
-              <p className="text-muted-foreground text-sm p-4 text-center">
-                Nenhuma linha no período.
-              </p>
-            )}
-          </div>
-        </Card>
-
-        <Card className="p-4">
-          <h2 className="font-semibold mb-3">
-            Lançamentos do Sistema{" "}
-            <span className="text-xs text-muted-foreground font-normal">
-              ({filteredTxs.length})
-            </span>
-          </h2>
-          <div className="space-y-3 max-h-[600px] pr-1 overflow-y-auto">
-            {filteredTxs
-              .filter((t) => t.status !== "reconciled")
-              .map((t) => {
-                const competence =
-                  (t as { document_datetime?: string | null }).document_datetime ??
-                  (t.due_date as string);
-                return (
-                  <button
-                    key={t.id}
-                    onClick={() => {
-                      setSelectedTx(t.id);
-                      setSelectedLines(new Set());
-                    }}
-                    className={`w-full text-left flex items-center gap-3 p-2 rounded-md border text-sm transition ${
-                      selectedTx === t.id
-                        ? "bg-primary/10 border-primary"
-                        : "hover:bg-accent border-border"
-                    }`}
-                  >
-                    <span className="font-mono text-xs w-24">
-                      {new Date(competence).toLocaleDateString("pt-BR")}
-                    </span>
-                    <span className="flex-1 truncate text-xs">
-                      {t.description ?? t.accounts?.name}
-                      {t.is_batch && <Layers className="h-3 w-3 inline ml-1 text-primary" />}
-                    </span>
-                    <span
-                      className={`font-mono text-xs ${
-                        t.type === "receivable" ? "text-primary" : "text-destructive"
-                      }`}
+                <div className="space-y-2">
+                  {pluggySuggestions.map((suggestion) => (
+                    <div
+                      key={suggestion.extractId}
+                      className="grid gap-2 rounded-lg border border-emerald-500/30 bg-card/70 p-3 text-sm md:grid-cols-[110px_1fr_1fr_130px] md:items-center"
                     >
-                      {fmt(Number(t.amount))}
-                    </span>
-                    {isMaster && (
-                      <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
-                        <User className="h-3 w-3" />
-                        {userLabel((t as { created_by?: string }).created_by)}
+                      <span className="font-mono">
+                        {new Date(`${suggestion.date}T00:00:00`).toLocaleDateString("pt-BR")}
                       </span>
+                      <span className="truncate">{suggestion.description}</span>
+                      <span className="truncate text-muted-foreground">
+                        ↔ {suggestion.transactionDescription || "Lançamento sem descrição"}
+                      </span>
+                      <span
+                        className={`text-right font-bold tabular-nums ${suggestion.amount > 0 ? "text-emerald-600" : "text-rose-600"}`}
+                      >
+                        {fmt(suggestion.amount)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </Card>
+            )}
+
+            {/* Upload */}
+            <Card className="p-5 space-y-4">
+              <div className="flex flex-wrap items-end gap-3">
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
+                    <Upload className="h-3 w-3" /> Conta bancária de destino
+                  </label>
+                  <Select value={importBankId} onValueChange={setImportBankId} disabled={isProcessing}>
+                    <SelectTrigger className="w-64">
+                      <SelectValue placeholder="Selecione a conta…" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {(banks.data ?? []).map((b) => (
+                        <SelectItem key={b.id} value={b.id}>
+                          {b.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
+                    <FileText className="h-3 w-3" /> Padrão de Extrato
+                  </label>
+                  <Select
+                    value={statementFormat}
+                    onValueChange={(v) => setStatementFormat(v as StatementFormat)}
+                    disabled={isProcessing}
+                  >
+                    <SelectTrigger className="w-64">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="auto">Detectar Automaticamente (Paulo IA)</SelectItem>
+                      <SelectItem value="inter-pdf">Banco Inter (PDF)</SelectItem>
+                      <SelectItem value="c6-csv">C6 Bank (CSV)</SelectItem>
+                      <SelectItem value="mp-csv">Mercado Pago (CSV)</SelectItem>
+                      <SelectItem value="ofx">OFX Padrão</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <label
+                htmlFor="statement-file-input"
+                onDragEnter={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  if (!isProcessing) setIsDragging(true);
+                }}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  if (!isProcessing) setIsDragging(true);
+                }}
+                onDragLeave={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setIsDragging(false);
+                }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setIsDragging(false);
+                  if (isProcessing) return;
+                  const f = e.dataTransfer?.files?.[0];
+                  if (f) {
+                    void handleStatementFile(f);
+                  } else {
+                    toast.error(
+                      "Nenhum arquivo foi detectado no arrasto. Tente clicar na área para selecionar.",
+                      PERSISTENT_TOAST,
+                    );
+                  }
+                }}
+                className={`relative flex flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed px-6 py-10 text-center transition-colors ${
+                  isProcessing
+                    ? "border-muted bg-muted/30 cursor-wait"
+                    : isDragging
+                      ? "border-primary bg-primary/10 ring-2 ring-primary/30 cursor-copy"
+                      : "border-border bg-muted/20 hover:border-primary/60 hover:bg-primary/5 cursor-pointer"
+                }`}
+              >
+                {isProcessing ? (
+                  <>
+                    <Loader2 className="h-10 w-10 text-primary animate-spin" />
+                    <div className="space-y-1">
+                      <p className="text-base font-semibold">Paulo está auditando o extrato… Aguarde.</p>
+                      <p className="text-sm text-muted-foreground">
+                        Extraindo dados de fluxo de caixa
+                        {processingFileName ? ` de "${processingFileName}"` : ""}.
+                      </p>
+                    </div>
+                    <div className="w-full max-w-md space-y-2 pt-2">
+                      <Skeleton className="h-3 w-full" />
+                      <Skeleton className="h-3 w-5/6" />
+                      <Skeleton className="h-3 w-4/6" />
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className={`rounded-full p-4 ${isDragging ? "bg-primary/20" : "bg-primary/10"}`}>
+                      <FileUp
+                        className={`h-10 w-10 ${isDragging ? "text-primary" : "text-primary/80"}`}
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-lg font-semibold">
+                        Arraste e solte seu extrato (PDF, CSV ou OFX) aqui
+                      </p>
+                      <p className="text-sm text-muted-foreground flex items-center justify-center gap-1">
+                        <FileText className="h-3.5 w-3.5" /> Saídas: enviado/pago/tarifa • Entradas:
+                        recebido/crédito/depósito
+                      </p>
+                    </div>
+                    <span className="mt-1 inline-flex items-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow">
+                      <Upload className="h-4 w-4 mr-2" /> Ou clique aqui para selecionar o arquivo
+                    </span>
+                  </>
+                )}
+                <input
+                  id="statement-file-input"
+                  type="file"
+                  disabled={isProcessing}
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) {
+                      void handleStatementFile(f);
+                    }
+                    e.target.value = "";
+                  }}
+                  className="sr-only"
+                />
+              </label>
+
+              {uploadError && (
+                <div className="flex items-start gap-2 rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
+                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                  <div className="space-y-1">
+                    <p className="font-semibold">Erro ao processar o extrato</p>
+                    <p>{uploadError}</p>
+                  </div>
+                </div>
+              )}
+            </Card>
+
+            {/* Movimentos aguardando categorização */}
+            {(() => {
+              const pending = filteredLines.filter(
+                (l) =>
+                  !l.reconciled &&
+                  !(l as { matched_transaction_id?: string | null }).matched_transaction_id,
+              );
+              if (pending.length === 0) return null;
+              const credits = pending.filter((l) => Number(l.amount) > 0);
+              const debits = pending.filter((l) => Number(l.amount) < 0);
+              const creditsSum = credits.reduce((s, l) => s + Number(l.amount), 0);
+              const debitsSum = debits.reduce((s, l) => s + Math.abs(Number(l.amount)), 0);
+              const runBulk = async (fn: () => Promise<void>) => {
+                try {
+                  await fn();
+                  qc.invalidateQueries({ queryKey: ["lines"] });
+                  qc.invalidateQueries({ queryKey: ["txs"] });
+                } catch (e) {
+                  toast.error(e instanceof Error ? e.message : "Erro", PERSISTENT_TOAST);
+                }
+              };
+              return (
+                <Card className="p-4 border-amber-500/40 bg-amber-500/5">
+                  <div className="flex items-center justify-between mb-3 gap-2 flex-wrap">
+                    <h2 className="font-semibold text-sm flex items-center gap-2">
+                      <Sparkles className="h-4 w-4 text-amber-600" />
+                      Movimentos do extrato aguardando categorização ({pending.length})
+                    </h2>
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        size="sm"
+                        disabled={credits.length === 0}
+                        className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                        onClick={() =>
+                          runBulk(async () => {
+                            const r = await consolidateFn({
+                              data: {
+                                bank_account_id: importBankId || null,
+                                start_date: rangeStart,
+                                end_date: rangeEnd,
+                              },
+                            });
+                            toast.success(
+                              `Consolidação criada: ${r.created} lançamento(s) unificando ${r.lines} linha(s) — ${fmt(r.total)}`,
+                            );
+                          })
+                        }
+                        title={`${credits.length} crédito(s) • ${fmt(creditsSum)}`}
+                      >
+                        ▲ Consolidar Entradas em Massa ({credits.length})
+                      </Button>
+                      <Button
+                        size="sm"
+                        disabled={debits.length === 0}
+                        className="bg-rose-600 hover:bg-rose-700 text-white"
+                        onClick={() =>
+                          runBulk(async () => {
+                            const r = await draftsFn({
+                              data: {
+                                bank_account_id: importBankId || null,
+                                start_date: rangeStart,
+                                end_date: rangeEnd,
+                              },
+                            });
+                            toast.success(
+                              `${r.created} rascunho(s) "Saída Sem Comprovação" criados — ${fmt(debitsSum)} aguardando justificativa.`,
+                            );
+                          })
+                        }
+                        title={`${debits.length} saída(s) sem nota • ${fmt(debitsSum)}`}
+                      >
+                        ▼ Gerar Rascunhos de Saídas s/ Comprovação ({debits.length})
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div className="grid gap-4 md:grid-cols-2 max-h-[520px] overflow-y-auto pr-1">
+                    {pending.map((l) => {
+                      const isNew = highlightLineIds.has(l.id as string);
+                      const isCredit = Number(l.amount) > 0;
+                      return (
+                        <div
+                          key={l.id}
+                          className={`rounded-xl border-2 bg-card p-5 shadow-sm transition hover:shadow-md ${
+                            isNew
+                              ? "ring-2 ring-amber-500/60 border-amber-500/60"
+                              : isCredit
+                                ? "border-emerald-500/30"
+                                : "border-rose-500/30"
+                          }`}
+                        >
+                          <div className="flex items-start justify-between gap-3 mb-3">
+                            <Badge
+                              className={
+                                isCredit
+                                  ? "bg-emerald-600 hover:bg-emerald-600 text-white border-0"
+                                  : "bg-rose-600 hover:bg-rose-600 text-white border-0"
+                              }
+                            >
+                              {isCredit ? "ENTRADA" : "SAÍDA"}
+                            </Badge>
+                            <span className="font-mono text-sm font-medium text-muted-foreground">
+                              {new Date(l.statement_date as string).toLocaleDateString("pt-BR")}
+                            </span>
+                          </div>
+                          <p className="text-sm font-medium leading-snug mb-3 line-clamp-2 min-h-[2.5rem]">
+                            {l.description ?? "(sem descrição)"}
+                          </p>
+                          <div className="flex items-center justify-between gap-3">
+                            <span
+                              className={`text-xl font-bold tabular-nums ${
+                                isCredit ? "text-emerald-600" : "text-rose-600"
+                              }`}
+                            >
+                              {isCredit ? "+ " : "- "}
+                              {fmt(Math.abs(Number(l.amount)))}
+                            </span>
+                            <Button
+                              size="sm"
+                              onClick={() =>
+                                setPromoting({
+                                  id: l.id as string,
+                                  statement_date: l.statement_date as string,
+                                  amount: l.amount as number,
+                                  description: (l.description ?? null) as string | null,
+                                  bank_accounts:
+                                    (l as { bank_accounts?: { name?: string | null } | null })
+                                      .bank_accounts ?? null,
+                                })
+                              }
+                            >
+                              Categorizar
+                            </Button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </Card>
+              );
+            })()}
+
+            {/* Confirmação de conciliação manual */}
+            {selectedTx && (
+              <Card className="p-4 bg-primary/5 border-primary/30">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium">
+                      Conciliando: {selectedTxObj?.description ?? "—"} —{" "}
+                      {fmt(Number(selectedTxObj?.amount ?? 0))}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      Selecionado: {fmt(selectedSum)} • {selectedLines.size} linha(s){" "}
+                      {sumMatches && <span className="text-primary font-medium">✓ Soma confere</span>}
+                    </p>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button size="sm" onClick={doReconcile} disabled={!sumMatches}>
+                      <Link2 className="h-4 w-4 mr-1" /> Conciliar
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        setSelectedTx(null);
+                        setSelectedLines(new Set());
+                      }}
+                    >
+                      Cancelar
+                    </Button>
+                  </div>
+                </div>
+              </Card>
+            )}
+
+            {selectedLines.size > 0 && !selectedTx && (
+              <SalesBatchAttachPanel
+                selectedLineIds={Array.from(selectedLines)}
+                lines={filteredLines}
+                banks={banks.data ?? []}
+                openBatches={(salesBatches.data ?? []).filter((b) => b.status === "open")}
+                onAttach={async (batchId) => {
+                  try {
+                    const res = await attachBatchFn({
+                      data: {
+                        sales_batch_id: batchId,
+                        statement_line_ids: Array.from(selectedLines),
+                      },
+                    });
+                    toast.success(`${res.attached} linha(s) vinculada(s) ao lote de venda.`);
+                    setSelectedLines(new Set());
+                    await Promise.all([
+                      qc.invalidateQueries({ queryKey: ["lines"] }),
+                      qc.invalidateQueries({ queryKey: ["sales-batches"] }),
+                    ]);
+                  } catch (e) {
+                    toast.error(e instanceof Error ? e.message : "Erro ao vincular ao lote.");
+                  }
+                }}
+              />
+            )}
+
+            {cashAudit &&
+              (() => {
+                const audited = Math.abs(cashAudit.difference) < 0.01;
+                return (
+                  <Card
+                    className={`p-5 border-2 ${audited ? "border-emerald-500/60 bg-emerald-500/5" : "border-rose-500/60 bg-rose-500/5"}`}
+                  >
+                    <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
+                      <div>
+                        <h2 className="text-lg font-bold">Auditoria de Batimento de Caixa</h2>
+                        <p className="text-sm text-muted-foreground">
+                          {cashAudit.bankName} • {cashAudit.fileName}
+                        </p>
+                      </div>
+                      <Badge
+                        className={
+                          audited
+                            ? "bg-emerald-600 hover:bg-emerald-600 text-white border-0 text-sm px-3 py-1"
+                            : "bg-rose-600 hover:bg-rose-600 text-white border-0 text-sm px-3 py-1"
+                        }
+                      >
+                        {audited
+                          ? "CONCILIAÇÃO DO SEED AUDITADA (100% CORRETA)"
+                          : `Diferença: ${fmt(Math.abs(cashAudit.difference))}`}
+                      </Badge>
+                    </div>
+
+                    {audited && (
+                      <div className="mb-4 rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-4">
+                        <p className="text-sm font-medium text-emerald-700">
+                          Paulo: A precisão cirúrgica da gestão privada é a salvaguarda do capital
+                          real contra as distorções monetárias — aqui o caixa protege o capital de
+                          verdade.
+                        </p>
+                      </div>
                     )}
-                  </button>
+
+                    {!audited && (
+                      <div className="mb-4 flex items-start gap-2 rounded-lg border border-rose-500/30 bg-rose-500/10 p-4 text-rose-700">
+                        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                        <p className="text-sm font-medium">
+                          O cálculo importado não bateu com o saldo final do PDF. Revise lançamentos
+                          duplicados, ausentes ou com sinal invertido.
+                        </p>
+                      </div>
+                    )}
+
+                    <div className="grid gap-3 md:grid-cols-5">
+                      <div className="rounded-lg border bg-card p-3">
+                        <p className="text-xs text-muted-foreground">Saldo atual no sistema</p>
+                        <p className="text-base font-bold tabular-nums">
+                          {fmt(cashAudit.systemBalance)}
+                        </p>
+                      </div>
+                      <div className="rounded-lg border bg-card p-3">
+                        <p className="text-xs text-muted-foreground">Entradas importadas</p>
+                        <p className="text-base font-bold tabular-nums text-emerald-600">
+                          + {fmt(cashAudit.importedEntries)}
+                        </p>
+                      </div>
+                      <div className="rounded-lg border bg-card p-3">
+                        <p className="text-xs text-muted-foreground">Saídas importadas</p>
+                        <p className="text-base font-bold tabular-nums text-rose-600">
+                          − {fmt(cashAudit.importedExits)}
+                        </p>
+                      </div>
+                      <div className="rounded-lg border bg-card p-3">
+                        <p className="text-xs text-muted-foreground">Resultado calculado</p>
+                        <p className="text-base font-bold tabular-nums">
+                          {fmt(cashAudit.calculatedFinalBalance)}
+                        </p>
+                      </div>
+                      <div className="rounded-lg border bg-card p-3">
+                        <p className="text-xs text-muted-foreground">Saldo final real do PDF</p>
+                        <p className="text-base font-bold tabular-nums">
+                          {fmt(cashAudit.finalBalance)}
+                        </p>
+                      </div>
+                    </div>
+                  </Card>
                 );
-              })}
-          </div>
-        </Card>
-      </div>
+              })()}
+
+            {/* Pareamento manual linha-a-linha (modo avançado) */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              <Card className="p-4">
+                <h2 className="font-semibold mb-3">
+                  Extrato Bancário{" "}
+                  <span className="text-xs text-muted-foreground font-normal">
+                    ({filteredLines.length})
+                  </span>
+                </h2>
+                <p className="text-[11px] text-muted-foreground mb-2">
+                  Populado apenas por upload de arquivo ou sync Pluggy direto. O Importador Open
+                  Finance NÃO alimenta esta lista.
+                </p>
+                <div className="space-y-3 max-h-[600px] pr-1 overflow-y-auto">
+                  {filteredLines.map((l) => {
+                    const isCredit = Number(l.amount) > 0;
+                    return (
+                      <label
+                        key={l.id}
+                        className={`flex items-center gap-4 p-4 rounded-lg border-2 cursor-pointer transition ${
+                          l.reconciled
+                            ? "opacity-60 bg-muted/30 border-border"
+                            : selectedLines.has(l.id)
+                              ? "bg-primary/10 border-primary"
+                              : `hover:bg-accent ${isCredit ? "border-emerald-500/30" : "border-rose-500/30"}`
+                        }`}
+                      >
+                        <Checkbox
+                          checked={selectedLines.has(l.id)}
+                          disabled={l.reconciled || !selectedTx}
+                          onCheckedChange={() => toggleLine(l.id)}
+                        />
+                        <Badge
+                          className={
+                            isCredit
+                              ? "bg-emerald-600 hover:bg-emerald-600 text-white border-0"
+                              : "bg-rose-600 hover:bg-rose-600 text-white border-0"
+                          }
+                        >
+                          {isCredit ? "+" : "−"}
+                        </Badge>
+                        <span className="font-mono text-sm w-24 font-medium">
+                          {new Date(l.statement_date as string).toLocaleDateString("pt-BR")}
+                        </span>
+                        <span className="flex-1 truncate text-sm">{l.description}</span>
+                        <span
+                          className={`font-mono text-base font-bold tabular-nums ${isCredit ? "text-emerald-600" : "text-rose-600"}`}
+                        >
+                          {fmt(Number(l.amount))}
+                        </span>
+                        {l.reconciled && <Badge variant="outline">conciliado</Badge>}
+                        {isMaster && (l as { matched_by?: string }).matched_by && (
+                          <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
+                            <User className="h-3 w-3" />
+                            {userLabel((l as { matched_by: string }).matched_by)}
+                          </span>
+                        )}
+                      </label>
+                    );
+                  })}
+                  {filteredLines.length === 0 && (
+                    <p className="text-muted-foreground text-sm p-4 text-center">
+                      Nenhuma linha no período.
+                    </p>
+                  )}
+                </div>
+              </Card>
+
+              <Card className="p-4">
+                <h2 className="font-semibold mb-3">
+                  Lançamentos do Sistema{" "}
+                  <span className="text-xs text-muted-foreground font-normal">
+                    ({filteredTxs.length})
+                  </span>
+                </h2>
+                <p className="text-[11px] text-muted-foreground mb-2">
+                  Selecione um lançamento para depois marcar as linhas do extrato correspondentes.
+                </p>
+                <div className="space-y-3 max-h-[600px] pr-1 overflow-y-auto">
+                  {filteredTxs
+                    .filter((t) => t.status !== "reconciled")
+                    .map((t) => {
+                      const competence =
+                        (t as { document_datetime?: string | null }).document_datetime ??
+                        (t.due_date as string);
+                      return (
+                        <button
+                          key={t.id}
+                          onClick={() => {
+                            setSelectedTx(t.id);
+                            setSelectedLines(new Set());
+                          }}
+                          className={`w-full text-left flex items-center gap-3 p-2 rounded-md border text-sm transition ${
+                            selectedTx === t.id
+                              ? "bg-primary/10 border-primary"
+                              : "hover:bg-accent border-border"
+                          }`}
+                        >
+                          <span className="font-mono text-xs w-24">
+                            {new Date(competence).toLocaleDateString("pt-BR")}
+                          </span>
+                          <span className="flex-1 truncate text-xs">
+                            {t.description ?? t.accounts?.name}
+                            {t.is_batch && <Layers className="h-3 w-3 inline ml-1 text-primary" />}
+                          </span>
+                          <span
+                            className={`font-mono text-xs ${
+                              t.type === "receivable" ? "text-primary" : "text-destructive"
+                            }`}
+                          >
+                            {fmt(Number(t.amount))}
+                          </span>
+                          {isMaster && (
+                            <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
+                              <User className="h-3 w-3" />
+                              {userLabel((t as { created_by?: string }).created_by)}
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })}
+                </div>
+              </Card>
+            </div>
+          </AccordionContent>
+        </AccordionItem>
+      </Accordion>
+
       <PromoteLineDialog
         line={promoting}
         open={!!promoting}

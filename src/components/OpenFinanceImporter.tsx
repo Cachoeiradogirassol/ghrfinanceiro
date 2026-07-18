@@ -42,7 +42,7 @@ import {
 
 type RowState = {
   include: boolean;
-  action: "match" | "create" | "skip" | "aporte";
+  action: "match" | "create" | "skip" | "aporte" | "sales_batch";
   account_id: string | null;
   cost_center_id: string | null;
   bank_account_id: string | null;
@@ -52,6 +52,8 @@ type RowState = {
   transfer_source_bank_account_id: string | null;
   transfer_target_cc_id: string | null;
   transfer_target_bank_account_id: string | null;
+  // Vincular a lote
+  sales_batch_id: string | null;
 };
 
 const brl = (v: number) =>

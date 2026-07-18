@@ -258,6 +258,15 @@ export type ParsedItem = {
   transfer_target_cc_name: string | null;
   transfer_target_bank_account_id: string | null;
   incomplete_side: "source" | "target" | null;
+  // Lotes de venda abertos elegíveis para vinculação (entradas)
+  sales_batch_candidates: Array<{
+    id: string;
+    cost_center_id: string;
+    cost_center_name: string;
+    reference_date: string;
+    gross_total: number;
+    remaining: number;
+  }>;
 };
 
 

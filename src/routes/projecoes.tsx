@@ -15,6 +15,14 @@ import {
   realizeProjectionMonth,
   bulkCreateProjections,
 } from "@/lib/projections.functions";
+import {
+  listScenarios,
+  createScenario,
+  renameScenario,
+  deleteScenario,
+  type ProjectionScenario,
+} from "@/lib/scenarios.functions";
+
 import { QuickGrid, type GridColumnDef } from "@/components/QuickGrid";
 import { AccountCombobox } from "@/components/AccountCombobox";
 import { groupAccounts } from "@/lib/account-options";
@@ -57,7 +65,12 @@ import {
   ArrowDownCircle,
   ArrowUpCircle,
   Grid3x3,
+  Wallet,
+  Layers,
+  Pencil,
+  Plus,
 } from "lucide-react";
+
 import { toast } from "sonner";
 import {
   ResponsiveContainer,

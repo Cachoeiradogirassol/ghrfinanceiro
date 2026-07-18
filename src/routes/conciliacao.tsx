@@ -57,8 +57,16 @@ import {
   RefreshCw,
   CheckCheck,
   ShoppingBag,
+  Wrench,
+  ClipboardList,
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
 import { useAuth } from "@/lib/auth";
 
 export const Route = createFileRoute("/conciliacao")({

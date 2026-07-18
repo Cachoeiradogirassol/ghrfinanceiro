@@ -128,6 +128,7 @@ export function OpenFinanceImporter({ onImported }: { onImported?: () => void })
       setItems(res.items);
       const initialRows: Record<string, RowState> = {};
       for (const it of res.items) {
+        const hasBatch = (it.sales_batch_candidates ?? []).length > 0;
         const defaultAction: RowState["action"] =
           it.status === "match"
             ? "match"
@@ -135,7 +136,9 @@ export function OpenFinanceImporter({ onImported }: { onImported?: () => void })
               ? "aporte"
               : it.status === "duplicate" || it.status === "internal"
                 ? "skip"
-                : "create";
+                : hasBatch && it.valor > 0
+                  ? "sales_batch"
+                  : "create";
         initialRows[it.temp_id] = {
           include: it.status !== "duplicate" && it.status !== "internal",
           action: defaultAction,
@@ -147,6 +150,7 @@ export function OpenFinanceImporter({ onImported }: { onImported?: () => void })
           transfer_source_bank_account_id: it.transfer_source_bank_account_id,
           transfer_target_cc_id: it.transfer_target_cc_id,
           transfer_target_bank_account_id: it.transfer_target_bank_account_id,
+          sales_batch_id: hasBatch ? it.sales_batch_candidates[0].id : null,
         };
       }
       setRows(initialRows);

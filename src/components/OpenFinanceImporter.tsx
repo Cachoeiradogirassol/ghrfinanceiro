@@ -208,14 +208,16 @@ export function OpenFinanceImporter({ onImported }: { onImported?: () => void })
         transfer_source_bank_account_id: row.transfer_source_bank_account_id,
         transfer_target_cc_id: row.transfer_target_cc_id,
         transfer_target_bank_account_id: row.transfer_target_bank_account_id,
+        sales_batch_id: row.action === "sales_batch" ? row.sales_batch_id : null,
       };
     });
 
     setLoading(true);
     try {
       const res = await confirmFn({ data: { decisions } });
+      const attached = (res as { attached_to_batch?: number }).attached_to_batch ?? 0;
       toast.success(
-        `Concluído: ${res.reconciled} conciliados, ${res.created} criados, ${res.aportes} aportes, ${res.skipped} ignorados${res.errors.length ? `, ${res.errors.length} erros` : ""}.`,
+        `Concluído: ${res.reconciled} conciliados, ${res.created} criados, ${attached} vinculados a lote, ${res.aportes} aportes, ${res.skipped} ignorados${res.errors.length ? `, ${res.errors.length} erros` : ""}.`,
       );
       if (res.errors.length > 0) {
         console.warn("Erros de importação Open Finance:", res.errors);

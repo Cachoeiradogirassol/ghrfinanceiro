@@ -59,6 +59,8 @@ const brl = (v: number) =>
 
 const PAGE_SIZE = 100;
 
+type WizardStep = 1 | 2 | 3;
+
 export function OpenFinanceImporter({ onImported }: { onImported?: () => void }) {
   const [open, setOpen] = useState(false);
   const [text, setText] = useState("");
@@ -68,6 +70,7 @@ export function OpenFinanceImporter({ onImported }: { onImported?: () => void })
   const [items, setItems] = useState<ParsedItem[]>([]);
   const [rows, setRows] = useState<Record<string, RowState>>({});
   const [page, setPage] = useState(0);
+  const [step, setStep] = useState<WizardStep>(1);
   const [filter, setFilter] = useState<
     "all" | "match" | "new" | "aporte" | "aporte_incomplete" | "internal" | "duplicate" | "no_cost_center"
   >("all");
@@ -103,6 +106,7 @@ export function OpenFinanceImporter({ onImported }: { onImported?: () => void })
     setRows({});
     setPage(0);
     setFilter("all");
+    setStep(1);
   };
 
   const doParse = async () => {
@@ -172,6 +176,7 @@ export function OpenFinanceImporter({ onImported }: { onImported?: () => void })
           account_id: null,
           transaction_id: null,
           dedupe_tag: it.dedupe_tag,
+          of_dedupe_key: it.of_dedupe_key,
           pair_temp_id: it.pair_temp_id,
           transfer_source_cc_id: null,
           transfer_source_bank_account_id: null,
@@ -191,6 +196,7 @@ export function OpenFinanceImporter({ onImported }: { onImported?: () => void })
         account_id: row.action === "create" ? row.account_id : row.action === "aporte" ? row.account_id : null,
         transaction_id: row.action === "match" ? row.transaction_id : null,
         dedupe_tag: it.dedupe_tag,
+        of_dedupe_key: it.of_dedupe_key,
         pair_temp_id: it.pair_temp_id,
         transfer_source_cc_id: row.transfer_source_cc_id,
         transfer_source_bank_account_id: row.transfer_source_bank_account_id,
@@ -295,10 +301,40 @@ export function OpenFinanceImporter({ onImported }: { onImported?: () => void })
         <DialogHeader>
           <DialogTitle>📥 Importador Open Finance</DialogTitle>
           <DialogDescription>
-            Cole o extrato completo do Meu Pluggy. O parser lê linha a linha (sem IA), concilia com
-            lançamentos pendentes e identifica aportes entre centros de custo.
+            Assistente em 3 etapas: <b>1) Extrair &amp; checar duplicatas</b> · <b>2) Categorizar por
+            bloco</b> · <b>3) Conciliar &amp; finalizar</b>. Você não avança sem resolver o passo
+            anterior.
           </DialogDescription>
         </DialogHeader>
+
+        {items.length > 0 && (
+          <div className="flex items-center gap-2 border rounded-md p-2 bg-muted/30 text-xs">
+            {[
+              { n: 1 as const, label: "Extrair" },
+              { n: 2 as const, label: "Categorizar" },
+              { n: 3 as const, label: "Conciliar" },
+            ].map((s, i, arr) => (
+              <div key={s.n} className="flex items-center gap-2 flex-1">
+                <div
+                  className={`h-6 w-6 rounded-full flex items-center justify-center font-semibold ${
+                    step === s.n
+                      ? "bg-primary text-primary-foreground"
+                      : step > s.n
+                        ? "bg-emerald-600 text-white"
+                        : "bg-muted text-muted-foreground"
+                  }`}
+                >
+                  {step > s.n ? "✓" : s.n}
+                </div>
+                <span className={step === s.n ? "font-semibold" : "text-muted-foreground"}>
+                  {s.label}
+                </span>
+                {i < arr.length - 1 && <div className="flex-1 h-px bg-border" />}
+              </div>
+            ))}
+          </div>
+        )}
+
 
         {items.length === 0 ? (
           <>
@@ -362,6 +398,59 @@ export function OpenFinanceImporter({ onImported }: { onImported?: () => void })
           </>
         ) : (
           <>
+            {/* Banner de contexto do passo atual */}
+            {step === 1 && (
+              <div className="rounded-lg border bg-blue-50 dark:bg-blue-950/30 p-3 text-sm">
+                <b>Passo 1 — Extração &amp; duplicatas.</b> Foram identificados{" "}
+                <b>{items.length}</b> lançamentos:{" "}
+                <b className="text-emerald-600">{items.length - summary.dup} novos</b> ·{" "}
+                <b className="text-muted-foreground">{summary.dup} duplicatas</b> (serão ignoradas
+                automaticamente). Confira o resumo abaixo e avance.
+              </div>
+            )}
+            {step === 2 && (
+              <div className="rounded-lg border bg-amber-50 dark:bg-amber-950/30 p-3 text-sm space-y-2">
+                <div>
+                  <b>Passo 2 — Categorização.</b> Revise as categorias sugeridas. Bloqueado enquanto
+                  houver linhas sem categoria.
+                </div>
+                {(() => {
+                  const byCat = new Map<string, number>();
+                  for (const it of items) {
+                    if (it.status === "duplicate" || it.status === "internal") continue;
+                    const k = it.pluggy_category || "(sem categoria Pluggy)";
+                    byCat.set(k, (byCat.get(k) ?? 0) + 1);
+                  }
+                  const sorted = Array.from(byCat.entries()).sort((a, b) => b[1] - a[1]);
+                  return (
+                    <div className="flex flex-wrap gap-1 text-xs">
+                      {sorted.map(([k, n]) => (
+                        <span key={k} className="px-2 py-0.5 rounded bg-background border">
+                          {k} <b>{n}</b>
+                        </span>
+                      ))}
+                    </div>
+                  );
+                })()}
+              </div>
+            )}
+            {step === 3 && (
+              <div className="rounded-lg border bg-emerald-50 dark:bg-emerald-950/30 p-3 text-sm">
+                <b>Passo 3 — Conciliação &amp; finalização.</b>{" "}
+                <b className="text-emerald-600">{summary.match} auto-match</b> ·{" "}
+                <b>{summary.create + summary.multi} novos</b> ·{" "}
+                <b className="text-primary">{summary.aporte} aportes</b>
+                {summary.aporteInc > 0 && (
+                  <>
+                    {" · "}
+                    <b className="text-destructive">{summary.aporteInc} aportes ½</b> (defina CC)
+                  </>
+                )}
+                . Para casos N-para-M, use{" "}
+                <b>Conciliação manual em lote</b> na página de Conciliação antes de finalizar.
+              </div>
+            )}
+
             <div className="flex flex-wrap gap-2 text-sm items-center">
               <button onClick={() => { setFilter("all"); setPage(0); }}>
                 <Badge variant={filter === "all" ? "default" : "outline"}>{items.length} total</Badge>
@@ -706,24 +795,91 @@ export function OpenFinanceImporter({ onImported }: { onImported?: () => void })
               </Table>
             </div>
 
-            <div className="flex justify-between gap-2">
-              <Button variant="ghost" onClick={reset} disabled={loading}>
-                Voltar / colar outro
-              </Button>
-              <div className="flex gap-2">
-                <Button variant="ghost" onClick={() => setOpen(false)} disabled={loading}>
-                  Cancelar
-                </Button>
-                <Button onClick={doConfirm} disabled={loading}>
-                  {loading ? (
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  ) : (
-                    <CheckCircle2 className="h-4 w-4 mr-2" />
-                  )}
-                  Confirmar importação
-                </Button>
-              </div>
-            </div>
+            {(() => {
+              const uncategorized = items.filter((it) => {
+                const r = rows[it.temp_id];
+                if (!r || !r.include) return false;
+                if (r.action !== "create") return false;
+                return !r.account_id || !r.cost_center_id;
+              });
+              const pendingAporte = items.filter((it) => {
+                const r = rows[it.temp_id];
+                if (!r || !r.include || r.action !== "aporte") return false;
+                return !r.transfer_source_cc_id || !r.transfer_target_cc_id;
+              });
+              const canStep2 = step >= 2 || items.length > 0;
+              const canStep3 = uncategorized.length === 0;
+              const canFinalize = canStep3 && pendingAporte.length === 0;
+
+              return (
+                <div className="flex justify-between gap-2 border-t pt-3">
+                  <div className="flex gap-2">
+                    <Button variant="ghost" onClick={reset} disabled={loading}>
+                      Voltar / colar outro
+                    </Button>
+                    {step > 1 && (
+                      <Button
+                        variant="outline"
+                        onClick={() => setStep((s) => (s === 3 ? 2 : 1))}
+                        disabled={loading}
+                      >
+                        ← Passo anterior
+                      </Button>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {step === 2 && uncategorized.length > 0 && (
+                      <span className="text-xs text-amber-600 font-medium">
+                        {uncategorized.length} linha(s) sem categoria. Resolva ou marque como Ignorar.
+                      </span>
+                    )}
+                    {step === 3 && pendingAporte.length > 0 && (
+                      <span className="text-xs text-amber-600 font-medium">
+                        {pendingAporte.length} aporte(s) sem CC definido.
+                      </span>
+                    )}
+                    <Button variant="ghost" onClick={() => setOpen(false)} disabled={loading}>
+                      Cancelar
+                    </Button>
+                    {step === 1 && (
+                      <Button
+                        onClick={() => {
+                          setStep(2);
+                          setFilter("new");
+                          setPage(0);
+                        }}
+                        disabled={!canStep2 || loading}
+                      >
+                        Continuar → Categorizar
+                      </Button>
+                    )}
+                    {step === 2 && (
+                      <Button
+                        onClick={() => {
+                          setStep(3);
+                          setFilter("all");
+                          setPage(0);
+                        }}
+                        disabled={!canStep3 || loading}
+                      >
+                        Continuar → Conciliar
+                      </Button>
+                    )}
+                    {step === 3 && (
+                      <Button onClick={doConfirm} disabled={!canFinalize || loading}>
+                        {loading ? (
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        ) : (
+                          <CheckCircle2 className="h-4 w-4 mr-2" />
+                        )}
+                        Finalizar importação
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              );
+            })()}
+
           </>
         )}
       </DialogContent>

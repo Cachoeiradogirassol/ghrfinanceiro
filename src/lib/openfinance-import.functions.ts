@@ -202,7 +202,14 @@ export function parseStatementText(text: string): RawTx[] {
 // Server-side: parseOpenFinanceText + confirmOpenFinanceImport
 // ============================================================================
 
-const keyOf = (t: { data: string; valor: number; descricao: string }) =>
+// Chave robusta: data + valor_abs + bank_account_id + occurrence_idx (dentro do extrato).
+// Preserva duplicatas legítimas (ex: duas diárias de R$ 100 no mesmo dia = idx 0 e 1 = duas txs distintas),
+// mas re-importar o mesmo extrato reconhece as mesmas ocorrências e não duplica.
+const buildDedupeKey = (data: string, valorAbs: number, bankAccountId: string | null, idx: number) =>
+  `${data}|${valorAbs.toFixed(2)}|${bankAccountId ?? "nobank"}|${idx}`;
+
+// Chave legada para fallback contra transações já importadas antes da coluna of_dedupe_key.
+const legacyKeyOf = (t: { data: string; valor: number; descricao: string }) =>
   `${t.data}_${t.valor.toFixed(2)}_${t.descricao.trim().slice(0, 80).toLowerCase()}`;
 
 type Candidate = {
@@ -228,7 +235,9 @@ export type ParsedItem = {
   pluggy_category: string;
   suggested_account_id: string | null;
   suggested_account_name: string | null;
-  dedupe_tag: string;
+  dedupe_tag: string;        // "[OFIMP <legacy>]" — mantido p/ descrição
+  of_dedupe_key: string;     // chave nova robusta gravada em transactions.of_dedupe_key
+  occurrence_idx: number;
   status:
     | "match"
     | "multiple"
@@ -248,9 +257,9 @@ export type ParsedItem = {
   transfer_target_cc_id: string | null;
   transfer_target_cc_name: string | null;
   transfer_target_bank_account_id: string | null;
-  // Se aporte_incompleto: lado conhecido é "source" (perna que saiu) ou "target" (perna que entrou)
   incomplete_side: "source" | "target" | null;
 };
+
 
 const isSamePersonTransfer = (cat: string) =>
   /same\s*person\s*transfer|transfer[^a-z]*same|transfer[^a-z]*person|transferência\s+entre|entre\s+contas\s+próprias/i.test(
@@ -403,23 +412,83 @@ export const parseOpenFinanceText = createServerFn({ method: "POST" })
       return bankAccounts.find((ba) => (ba.name ?? "").trim().toLowerCase() === norm) ?? null;
     };
 
-    // 6) Deduplicação [OFIMP]
-    const tags = rawTxs.map((t) => `[OFIMP ${keyOf(t)}]`);
-    const { data: existingByTag } = await context.supabase
-      .from("transactions")
-      .select("description")
-      .in("description", tags);
-    const dupSet = new Set((existingByTag ?? []).map((r) => r.description as string));
-    const existingDescs = (existingByTag ?? []).map((r) => r.description as string);
+    // 6) Match banco + occurrence_idx dentro do extrato (para dedupe robusta)
+    type WithBank = { raw: RawTx; ba: (typeof bankAccounts)[number] | null; idx: number };
+    const withBank: WithBank[] = rawTxs.map((t) => ({ raw: t, ba: findBankAccount(t.banco_canonical), idx: 0 }));
+    // Ordena por data para determinismo antes de contar ocorrências
+    const orderedIdx = withBank
+      .map((_, i) => i)
+      .sort((a, b) => {
+        const wa = withBank[a], wb = withBank[b];
+        if (wa.raw.data !== wb.raw.data) return wa.raw.data < wb.raw.data ? -1 : 1;
+        return a - b;
+      });
+    const occCounter = new Map<string, number>();
+    for (const i of orderedIdx) {
+      const w = withBank[i];
+      const tripleKey = `${w.raw.data}|${Math.abs(w.raw.valor).toFixed(2)}|${w.ba?.id ?? "nobank"}`;
+      const n = occCounter.get(tripleKey) ?? 0;
+      w.idx = n;
+      occCounter.set(tripleKey, n + 1);
+    }
 
-    // 7) Pendentes para matching
+    // Contar quantas transações JÁ EXISTENTES no banco compartilham cada triple (data, valor_abs, bank_account_id)
+    // dentro do range do extrato — as N primeiras ocorrências do extrato viram duplicatas.
     const dates = rawTxs.map((t) => t.data).sort();
-    const minDate = new Date(dates[0]);
-    minDate.setDate(minDate.getDate() - 3);
-    const maxDate = new Date(dates[dates.length - 1]);
-    maxDate.setDate(maxDate.getDate() + 3);
-    const rangeStart = minDate.toISOString().slice(0, 10);
-    const rangeEnd = maxDate.toISOString().slice(0, 10);
+    const rangeStart = dates[0];
+    const rangeEnd = dates[dates.length - 1];
+    const bankIds = Array.from(new Set(withBank.map((w) => w.ba?.id).filter(Boolean))) as string[];
+
+    // Chaves novas geradas neste extrato — usadas p/ verificar match direto via of_dedupe_key
+    const newKeys = withBank.map((w) =>
+      buildDedupeKey(w.raw.data, Math.abs(w.raw.valor), w.ba?.id ?? null, w.idx),
+    );
+
+    // (a) Match direto por of_dedupe_key
+    const { data: existingByKey } = await context.supabase
+      .from("transactions")
+      .select("of_dedupe_key")
+      .in("of_dedupe_key", newKeys);
+    const dupKeySet = new Set(
+      (existingByKey ?? []).map((r) => (r as { of_dedupe_key: string }).of_dedupe_key),
+    );
+
+    // (b) Contagem por triple (legacy + novos) para desempatar duplicatas em quem não tem of_dedupe_key
+    const tripleExistingCount = new Map<string, number>();
+    if (bankIds.length > 0) {
+      const { data: rowsInRange } = await context.supabase
+        .from("transactions")
+        .select("due_date, amount, bank_account_id, of_dedupe_key, description")
+        .in("bank_account_id", bankIds)
+        .gte("due_date", rangeStart)
+        .lte("due_date", rangeEnd);
+      for (const r of (rowsInRange ?? []) as Array<{
+        due_date: string; amount: number; bank_account_id: string;
+      }>) {
+        const k = `${r.due_date}|${Math.abs(Number(r.amount)).toFixed(2)}|${r.bank_account_id}`;
+        tripleExistingCount.set(k, (tripleExistingCount.get(k) ?? 0) + 1);
+      }
+    }
+
+    // Fallback legacy [OFIMP <legacyKey>] — cobre transações antigas sem of_dedupe_key
+    const legacyTags = rawTxs.map((t) => `[OFIMP ${legacyKeyOf(t)}]`);
+    const legacyDupSet = new Set<string>();
+    if (legacyTags.length > 0) {
+      const { data: legacy } = await context.supabase
+        .from("transactions")
+        .select("description")
+        .or(legacyTags.map((tag) => `description.ilike.%${tag}%`).join(","))
+        .limit(500);
+      for (const r of (legacy ?? []) as Array<{ description: string }>) {
+        for (const tag of legacyTags) if (r.description?.includes(tag)) legacyDupSet.add(tag);
+      }
+    }
+
+    // 7) Pendentes para matching (range ±3d)
+    const minDate = new Date(rangeStart); minDate.setDate(minDate.getDate() - 3);
+    const maxDate = new Date(rangeEnd); maxDate.setDate(maxDate.getDate() + 3);
+    const pendRangeStart = minDate.toISOString().slice(0, 10);
+    const pendRangeEnd = maxDate.toISOString().slice(0, 10);
 
     const { data: pendingTx } = await context.supabase
       .from("transactions")
@@ -427,8 +496,8 @@ export const parseOpenFinanceText = createServerFn({ method: "POST" })
         "id, type, amount, due_date, cost_center_id, account_id, description, status, accounts(name)",
       )
       .neq("status", "reconciled")
-      .gte("due_date", rangeStart)
-      .lte("due_date", rangeEnd);
+      .gte("due_date", pendRangeStart)
+      .lte("due_date", pendRangeEnd);
 
     type PendingRow = {
       id: string;
@@ -444,32 +513,54 @@ export const parseOpenFinanceText = createServerFn({ method: "POST" })
     const pendings = (pendingTx ?? []) as unknown as PendingRow[];
 
     // ========================================================================
-    // Fase 1: montar items base com bank_account/cc resolvidos
+    // Fase 1: montar items base com bank_account/cc resolvidos + chaves
     // ========================================================================
     type Base = {
       temp_id: string;
       raw: RawTx;
-      tag: string;
+      legacyTag: string;
+      dedupeKey: string;
+      occurrenceIdx: number;
+      isDup: boolean;
       ba: (typeof bankAccounts)[number] | null;
       cc: { id: string; name: string } | null;
       isTransfer: boolean;
       isInvestment: boolean;
     };
-    const bases: Base[] = rawTxs.map((t, i) => {
-      const ba = findBankAccount(t.banco_canonical);
+    // Contador auxiliar para "consumir" duplicatas restantes por triple no extrato
+    const tripleSeen = new Map<string, number>();
+    const bases: Base[] = withBank.map((w, i) => {
+      const t = w.raw;
+      const ba = w.ba;
       const ccRaw = ba ? defaultCcForBank(ba) : null;
       const ccId = ccRaw?.id ?? data.default_cost_center_id ?? null;
       const ccName = ccId ? ccById.get(ccId)?.name ?? null : null;
+      const dedupeKey = buildDedupeKey(t.data, Math.abs(t.valor), ba?.id ?? null, w.idx);
+      const legacyTag = `[OFIMP ${legacyKeyOf(t)}]`;
+      const tripleKey = `${t.data}|${Math.abs(t.valor).toFixed(2)}|${ba?.id ?? "nobank"}`;
+      const seenSoFar = tripleSeen.get(tripleKey) ?? 0;
+      tripleSeen.set(tripleKey, seenSoFar + 1);
+      // dup direto? (match por chave nova) OU legacy? OU (temos ba e a contagem existente cobre esta ocorrência)
+      const dupByKey = dupKeySet.has(dedupeKey);
+      const dupByLegacy = legacyDupSet.has(legacyTag);
+      const existingForTriple = ba ? tripleExistingCount.get(tripleKey) ?? 0 : 0;
+      const dupByCount = ba ? seenSoFar < existingForTriple : false;
+      const isDup = dupByKey || dupByLegacy || dupByCount;
+
       return {
         temp_id: `t${i}`,
         raw: t,
-        tag: `[OFIMP ${keyOf(t)}]`,
+        legacyTag,
+        dedupeKey,
+        occurrenceIdx: w.idx,
+        isDup,
         ba,
         cc: ccId && ccName ? { id: ccId, name: ccName } : null,
         isTransfer: isSamePersonTransfer(t.pluggy_category),
         isInvestment: isInvestmentNoise(t.pluggy_category, t.descricao),
       };
     });
+
 
     // ========================================================================
     // Fase 2: parear same-person transfers
@@ -532,7 +623,9 @@ export const parseOpenFinanceText = createServerFn({ method: "POST" })
         pluggy_category: t.pluggy_category,
         suggested_account_id: suggestedId,
         suggested_account_name: suggestedName,
-        dedupe_tag: b.tag,
+        dedupe_tag: b.legacyTag,
+        of_dedupe_key: b.dedupeKey,
+        occurrence_idx: b.occurrenceIdx,
         pair_temp_id: null as string | null,
         transfer_source_cc_id: null as string | null,
         transfer_source_cc_name: null as string | null,
@@ -543,8 +636,8 @@ export const parseOpenFinanceText = createServerFn({ method: "POST" })
         incomplete_side: null as "source" | "target" | null,
       };
 
-      // Duplicado
-      if (dupSet.has(b.tag) || existingDescs.some((d) => d.includes(b.tag))) {
+      // Duplicado (chave nova, legacy ou contagem)
+      if (b.isDup) {
         return {
           ...base,
           status: "duplicate" as const,
@@ -552,6 +645,7 @@ export const parseOpenFinanceText = createServerFn({ method: "POST" })
           candidates: [],
         };
       }
+
 
       // Investment noise
       if (b.isInvestment) {
@@ -813,6 +907,7 @@ const DecisionSchema = z.object({
   account_id: z.string().uuid().nullable(),
   transaction_id: z.string().uuid().nullable(),
   dedupe_tag: z.string(),
+  of_dedupe_key: z.string().optional(),
   // Aporte
   pair_temp_id: z.string().nullable().optional(),
   transfer_source_cc_id: z.string().uuid().nullable().optional(),
@@ -917,17 +1012,19 @@ export const confirmOpenFinanceImport = createServerFn({ method: "POST" })
         }
 
 
-        // Dedupe pela tag [OFIMP ...]
+        // Dedupe: por of_dedupe_key (chave nova) OU pela tag legacy
         const tag = dec.dedupe_tag;
-        const { data: dup } = await context.supabase
-          .from("transactions")
-          .select("id")
-          .ilike("description", `%${tag}%`)
-          .limit(1);
+        const dupQuery = context.supabase.from("transactions").select("id").limit(1);
+        const { data: dup } = dec.of_dedupe_key
+          ? await dupQuery.or(
+              `of_dedupe_key.eq.${dec.of_dedupe_key},description.ilike.%${tag}%`,
+            )
+          : await dupQuery.ilike("description", `%${tag}%`);
         if (dup && dup.length > 0) {
           skipped++;
           continue;
         }
+
 
         const paidAt = new Date(`${dec.data}T12:00:00Z`).toISOString();
         const description = `${tag} [APORTE] ${dec.instituicao} — ${dec.descricao}`.slice(0, 500);
@@ -947,11 +1044,13 @@ export const confirmOpenFinanceImport = createServerFn({ method: "POST" })
             status: "reconciled",
             paid_at: paidAt,
             created_by: context.userId,
+            of_dedupe_key: dec.of_dedupe_key ?? null,
           });
           if (error) {
             errors.push(`${dec.descricao}: ${error.message}`);
             continue;
           }
+
         } else {
           // Caso (c): apenas perna de ENTRADA visível. Trigger não cobre origem desconhecida.
           // Criamos receivable no banco de entrada e inserimos intercompany_transfers manualmente
@@ -970,6 +1069,7 @@ export const confirmOpenFinanceImport = createServerFn({ method: "POST" })
               status: "reconciled",
               paid_at: paidAt,
               created_by: context.userId,
+              of_dedupe_key: dec.of_dedupe_key ?? null,
             })
             .select("id")
             .single();
@@ -977,6 +1077,7 @@ export const confirmOpenFinanceImport = createServerFn({ method: "POST" })
             errors.push(`${dec.descricao}: ${error?.message ?? "falha ao criar receivable"}`);
             continue;
           }
+
           const { error: ictErr } = await context.supabase.from("intercompany_transfers").insert({
             transaction_id: newTx.id,
             source_cost_center_id: srcCc,
@@ -1034,11 +1135,10 @@ export const confirmOpenFinanceImport = createServerFn({ method: "POST" })
         continue;
       }
       const description = `${dec.dedupe_tag} ${dec.instituicao} — ${dec.descricao}`.slice(0, 500);
-      const { data: dup } = await context.supabase
-        .from("transactions")
-        .select("id")
-        .ilike("description", `%${dec.dedupe_tag}%`)
-        .limit(1);
+      const dupQ = context.supabase.from("transactions").select("id").limit(1);
+      const { data: dup } = dec.of_dedupe_key
+        ? await dupQ.or(`of_dedupe_key.eq.${dec.of_dedupe_key},description.ilike.%${dec.dedupe_tag}%`)
+        : await dupQ.ilike("description", `%${dec.dedupe_tag}%`);
       if (dup && dup.length > 0) {
         skipped++;
         continue;
@@ -1056,6 +1156,7 @@ export const confirmOpenFinanceImport = createServerFn({ method: "POST" })
         status: "reconciled",
         paid_at: paidAt,
         created_by: context.userId,
+        of_dedupe_key: dec.of_dedupe_key ?? null,
       });
       if (error) {
         errors.push(`${dec.descricao}: ${error.message}`);

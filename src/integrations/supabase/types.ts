@@ -694,6 +694,7 @@ export type Database = {
           installment_total: number | null
           is_batch: boolean
           is_recurring: boolean
+          of_dedupe_key: string | null
           paid_at: string | null
           parent_transaction_id: string | null
           payment_method: string | null
@@ -719,6 +720,7 @@ export type Database = {
           installment_total?: number | null
           is_batch?: boolean
           is_recurring?: boolean
+          of_dedupe_key?: string | null
           paid_at?: string | null
           parent_transaction_id?: string | null
           payment_method?: string | null
@@ -744,6 +746,7 @@ export type Database = {
           installment_total?: number | null
           is_batch?: boolean
           is_recurring?: boolean
+          of_dedupe_key?: string | null
           paid_at?: string | null
           parent_transaction_id?: string | null
           payment_method?: string | null

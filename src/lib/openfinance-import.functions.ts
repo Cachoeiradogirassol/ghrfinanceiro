@@ -907,6 +907,7 @@ const DecisionSchema = z.object({
   account_id: z.string().uuid().nullable(),
   transaction_id: z.string().uuid().nullable(),
   dedupe_tag: z.string(),
+  of_dedupe_key: z.string().optional(),
   // Aporte
   pair_temp_id: z.string().nullable().optional(),
   transfer_source_cc_id: z.string().uuid().nullable().optional(),

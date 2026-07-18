@@ -868,20 +868,33 @@ export const confirmOpenFinanceImport = createServerFn({ method: "POST" })
         const srcBank = dec.transfer_source_bank_account_id;
         const tgtBank = dec.transfer_target_bank_account_id;
         if (!srcCc || !tgtCc) {
-          errors.push(`${dec.descricao}: aporte incompleto (falta CC origem/destino).`);
+          errors.push(`${dec.descricao}: linha marcada como aporte sem par válido — revise (falta CC origem/destino).`);
           continue;
         }
         if (srcCc === tgtCc) {
-          errors.push(`${dec.descricao}: aporte com mesmo CC origem/destino.`);
+          errors.push(`${dec.descricao}: linha marcada como aporte sem par válido — revise (mesmo CC origem/destino).`);
           continue;
         }
         if (!srcBank && !tgtBank) {
-          errors.push(`${dec.descricao}: aporte sem nenhum banco identificado.`);
+          errors.push(`${dec.descricao}: linha marcada como aporte sem par válido — revise (nenhum banco identificado).`);
           continue;
         }
 
-        // account_id: se não veio, prefere "Aportes Concedidos" do CC destino (não-operacional
-        // — não polui DRE, coerente com v_dre_consolidada).
+        // Guarda: aporte legítimo exige CCs de enterprises DIFERENTES.
+        const { data: ccPair } = await context.supabase
+          .from("cost_centers")
+          .select("id, enterprise")
+          .in("id", [srcCc, tgtCc]);
+        const srcEnt = (ccPair ?? []).find((c) => c.id === srcCc)?.enterprise ?? null;
+        const tgtEnt = (ccPair ?? []).find((c) => c.id === tgtCc)?.enterprise ?? null;
+        if (!srcEnt || !tgtEnt || srcEnt === tgtEnt) {
+          errors.push(
+            `${dec.descricao}: linha marcada como aporte sem par válido — revise (CCs precisam ser de empreendimentos diferentes).`,
+          );
+          continue;
+        }
+
+        // Só agora — com aporte legítimo confirmado — é seguro cair na conta "Aportes Concedidos".
         let accountId = dec.account_id;
         if (!accountId) {
           const { data: acc } = await context.supabase
@@ -896,13 +909,13 @@ export const confirmOpenFinanceImport = createServerFn({ method: "POST" })
           accountId =
             list.find((a) => /^aportes\s+concedidos\b/i.test(a.name))?.id ??
             list.find((a) => /aporte/i.test(a.name))?.id ??
-            list[0]?.id ??
             null;
         }
         if (!accountId) {
-          errors.push(`${dec.descricao}: sem conta contábil disponível no CC destino.`);
+          errors.push(`${dec.descricao}: sem conta contábil de aporte disponível no CC destino.`);
           continue;
         }
+
 
         // Dedupe pela tag [OFIMP ...]
         const tag = dec.dedupe_tag;

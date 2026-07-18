@@ -453,14 +453,23 @@ export const parseOpenFinanceText = createServerFn({ method: "POST" })
       buildDedupeKey(w.raw.data, Math.abs(w.raw.valor), w.ba?.id ?? null, w.idx),
     );
 
-    // (a) Match direto por of_dedupe_key
+    // (a) Match direto por of_dedupe_key — checar em transactions E em bank_statement_lines
+    //     (linhas de extrato vinculadas a lote de venda também consomem a chave).
     const { data: existingByKey } = await context.supabase
       .from("transactions")
       .select("of_dedupe_key")
       .in("of_dedupe_key", newKeys);
-    const dupKeySet = new Set(
-      (existingByKey ?? []).map((r) => (r as { of_dedupe_key: string }).of_dedupe_key),
-    );
+    const { data: existingBslByKey } = await context.supabase
+      .from("bank_statement_lines")
+      .select("of_dedupe_key")
+      .in("of_dedupe_key", newKeys);
+    const dupKeySet = new Set<string>();
+    for (const r of (existingByKey ?? []) as Array<{ of_dedupe_key: string }>) {
+      if (r.of_dedupe_key) dupKeySet.add(r.of_dedupe_key);
+    }
+    for (const r of (existingBslByKey ?? []) as Array<{ of_dedupe_key: string | null }>) {
+      if (r.of_dedupe_key) dupKeySet.add(r.of_dedupe_key);
+    }
 
     // (b) Contagem por triple (legacy + novos) para desempatar duplicatas em quem não tem of_dedupe_key
     const tripleExistingCount = new Map<string, number>();

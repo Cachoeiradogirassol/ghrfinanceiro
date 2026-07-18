@@ -554,6 +554,176 @@ export const reconcile = createServerFn({ method: "POST" })
     return { ok: true, sum: sumLines };
   });
 
+// ---------- BATCH MANUAL RECONCILE (N-para-M por soma) ----------
+// Casa múltiplos lançamentos com múltiplas linhas de extrato (ou apenas um banco),
+// desde que os totais absolutos sejam iguais. Detecta aporte automaticamente
+// comparando enterprise do banco com enterprise(s) dos CCs dos lançamentos.
+const BatchReconcileInput = z.object({
+  transaction_ids: z.array(z.string().uuid()).min(1).max(100),
+  statement_line_ids: z.array(z.string().uuid()).max(100).optional().default([]),
+  bank_account_id: z.string().uuid().nullable().optional(),
+  confirm_mixed: z.boolean().optional().default(false),
+  target_cost_center_id: z.string().uuid().nullable().optional(),
+});
+
+export const batchManualReconcile = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => BatchReconcileInput.parse(d))
+  .handler(async ({ context, data }) => {
+    const { data: txs, error: txErr } = await context.supabase
+      .from("transactions")
+      .select("id, amount, status, cost_center_id, bank_account_id, type, description")
+      .in("id", data.transaction_ids);
+    if (txErr) throw new Error(txErr.message);
+    if (!txs || txs.length !== data.transaction_ids.length) {
+      throw new Error("Um ou mais lançamentos não foram encontrados.");
+    }
+    if (txs.some((t) => t.status === "reconciled")) {
+      throw new Error("Um ou mais lançamentos já estão conciliados.");
+    }
+    const sumTxs = txs.reduce((s, t) => s + Math.abs(Number(t.amount)), 0);
+
+    let bankId: string | null = data.bank_account_id ?? null;
+    let sumLines = 0;
+    let lineIds: string[] = [];
+    if (data.statement_line_ids && data.statement_line_ids.length > 0) {
+      const { data: lines, error: lErr } = await context.supabase
+        .from("bank_statement_lines")
+        .select("id, amount, bank_account_id, reconciled")
+        .in("id", data.statement_line_ids);
+      if (lErr) throw new Error(lErr.message);
+      if (!lines || lines.length !== data.statement_line_ids.length) {
+        throw new Error("Uma ou mais linhas do extrato não foram encontradas.");
+      }
+      if (lines.some((l) => l.reconciled)) {
+        throw new Error("Uma ou mais linhas já estão conciliadas.");
+      }
+      const bankSet = new Set(lines.map((l) => l.bank_account_id));
+      if (bankSet.size !== 1) throw new Error("Selecione linhas de um único banco.");
+      bankId = lines[0].bank_account_id as string;
+      sumLines = lines.reduce((s, l) => s + Math.abs(Number(l.amount)), 0);
+      lineIds = lines.map((l) => l.id as string);
+      if (Math.abs(sumLines - sumTxs) > 0.01) {
+        throw new Error(
+          `Soma não confere: lançamentos R$ ${sumTxs.toFixed(2)} ≠ extrato R$ ${sumLines.toFixed(2)}.`,
+        );
+      }
+    }
+    if (!bankId) throw new Error("Informe a conta bancária de referência.");
+
+    const { data: bankRow } = await context.supabase
+      .from("bank_accounts")
+      .select("id, enterprise, name")
+      .eq("id", bankId)
+      .single();
+    if (!bankRow) throw new Error("Conta bancária não encontrada.");
+    const bankEnt = bankRow.enterprise as string | null;
+
+    const ccIds = Array.from(new Set(txs.map((t) => t.cost_center_id).filter(Boolean))) as string[];
+    const { data: ccRows } = await context.supabase
+      .from("cost_centers")
+      .select("id, enterprise, name, code")
+      .in("id", ccIds);
+    const ccMap = new Map((ccRows ?? []).map((c) => [c.id as string, c]));
+    const distinctEnts = new Set(
+      txs.map((t) => ccMap.get(t.cost_center_id as string)?.enterprise ?? null),
+    );
+
+    if (distinctEnts.size > 1 && !data.confirm_mixed) {
+      return {
+        requires_confirmation: true as const,
+        reason: "mixed_enterprises",
+        cost_centers: (ccRows ?? []).map((c) => ({
+          id: c.id,
+          name: c.name,
+          enterprise: c.enterprise,
+        })),
+      };
+    }
+
+    const targetEnt =
+      data.confirm_mixed && data.target_cost_center_id
+        ? (ccMap.get(data.target_cost_center_id)?.enterprise ?? null)
+        : (Array.from(distinctEnts)[0] ?? null);
+    const targetCcId =
+      data.target_cost_center_id ??
+      (txs.find((t) => ccMap.get(t.cost_center_id as string)?.enterprise === targetEnt)
+        ?.cost_center_id as string | undefined) ??
+      (txs[0].cost_center_id as string);
+
+    const nowIso = new Date().toISOString();
+    const isAporte = Boolean(bankEnt && targetEnt && bankEnt !== targetEnt);
+
+    let aporteTxId: string | null = null;
+    if (isAporte) {
+      const { data: accs } = await context.supabase
+        .from("accounts")
+        .select("id, name")
+        .eq("cost_center_id", targetCcId)
+        .eq("kind", "expense")
+        .eq("is_active", true);
+      const list = (accs ?? []) as Array<{ id: string; name: string }>;
+      const accountId =
+        list.find((a) => /^aportes\s+concedidos\b/i.test(a.name))?.id ??
+        list.find((a) => /aporte/i.test(a.name))?.id ??
+        null;
+      if (!accountId) {
+        throw new Error(
+          `Sem conta "Aportes Concedidos" no CC destino (${ccMap.get(targetCcId)?.name ?? targetCcId}).`,
+        );
+      }
+      const description =
+        `[APORTE-LOTE] ${bankRow.name} → ${ccMap.get(targetCcId)?.name ?? "CC"} — ${txs.length} lanç.`.slice(0, 500);
+      const { data: newTx, error: aErr } = await context.supabase
+        .from("transactions")
+        .insert({
+          cost_center_id: targetCcId,
+          account_id: accountId,
+          bank_account_id: bankId,
+          type: "payable",
+          amount: Number(sumTxs.toFixed(2)),
+          description,
+          due_date: nowIso.slice(0, 10),
+          document_datetime: nowIso,
+          status: "reconciled",
+          paid_at: nowIso,
+          created_by: context.userId,
+        })
+        .select("id")
+        .single();
+      if (aErr || !newTx) throw new Error("Falha ao criar aporte: " + (aErr?.message ?? ""));
+      aporteTxId = newTx.id as string;
+    }
+
+    const { error: uErr } = await context.supabase
+      .from("transactions")
+      .update({ status: "reconciled", paid_at: nowIso })
+      .in("id", data.transaction_ids);
+    if (uErr) throw new Error("Falha ao conciliar lançamentos: " + uErr.message);
+
+    if (lineIds.length > 0) {
+      const anchorTxId = aporteTxId ?? (data.transaction_ids[0] as string);
+      const { error: lUpdErr } = await context.supabase
+        .from("bank_statement_lines")
+        .update({
+          reconciled: true,
+          matched_transaction_id: anchorTxId,
+          matched_by: context.userId,
+          matched_at: nowIso,
+        })
+        .in("id", lineIds);
+      if (lUpdErr) throw new Error("Falha ao marcar linhas: " + lUpdErr.message);
+    }
+
+    return {
+      requires_confirmation: false as const,
+      reconciled_transactions: txs.length,
+      reconciled_lines: lineIds.length,
+      aporte_created: isAporte,
+      aporte_amount: isAporte ? Number(sumTxs.toFixed(2)) : 0,
+    };
+  });
+
 // ---------- SMART IMPORT (dedupe + auto-create skeleton) ----------
 const SmartImportInput = z.object({
   bank_account_id: z.string().uuid(),

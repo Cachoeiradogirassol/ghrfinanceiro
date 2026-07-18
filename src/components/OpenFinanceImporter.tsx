@@ -750,6 +750,27 @@ export function OpenFinanceImporter({ onImported }: { onImported?: () => void })
                                 </div>
                               )}
                             </div>
+                          ) : row.action === "sales_batch" ? (
+                            <Select
+                              value={row.sales_batch_id ?? ""}
+                              onValueChange={(v) =>
+                                setRows((r) => ({
+                                  ...r,
+                                  [it.temp_id]: { ...row, sales_batch_id: v },
+                                }))
+                              }
+                            >
+                              <SelectTrigger className="h-8 text-xs w-[320px]">
+                                <SelectValue placeholder="Escolher lote aberto" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {(it.sales_batch_candidates ?? []).map((sb) => (
+                                  <SelectItem key={sb.id} value={sb.id}>
+                                    {sb.reference_date} · {sb.cost_center_name} · restante {brl(sb.remaining)}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
                           ) : row.action === "match" ? (
                             <Select
                               value={row.transaction_id ?? ""}

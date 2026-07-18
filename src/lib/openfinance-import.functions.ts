@@ -1044,11 +1044,13 @@ export const confirmOpenFinanceImport = createServerFn({ method: "POST" })
             status: "reconciled",
             paid_at: paidAt,
             created_by: context.userId,
+            of_dedupe_key: dec.of_dedupe_key ?? null,
           });
           if (error) {
             errors.push(`${dec.descricao}: ${error.message}`);
             continue;
           }
+
         } else {
           // Caso (c): apenas perna de ENTRADA visível. Trigger não cobre origem desconhecida.
           // Criamos receivable no banco de entrada e inserimos intercompany_transfers manualmente

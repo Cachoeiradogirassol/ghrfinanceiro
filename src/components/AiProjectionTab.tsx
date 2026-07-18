@@ -51,7 +51,7 @@ function fmtBRL(n: number) {
   return n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
 
-export function AiProjectionTab() {
+export function AiProjectionTab({ scenarioId }: { scenarioId?: string | null } = {}) {
   const qc = useQueryClient();
   const interpretFn = useServerFn(interpretProjectionText);
   const bulkFn = useServerFn(bulkCreateProjections);
@@ -126,8 +126,10 @@ export function AiProjectionTab() {
           monthly_growth_rate: r.monthly_growth_rate ?? 0,
           start_date: r.start_date,
           horizon_months: r.horizon_months,
+          scenario_id: scenarioId ?? null,
         };
       });
+
       return bulkFn({ data: { rows: payload } });
     },
     onSuccess: (res) => {
@@ -203,17 +205,33 @@ export function AiProjectionTab() {
   return (
     <div className="space-y-4">
       <Card className="p-5 space-y-3">
-        <div className="flex items-center gap-2">
-          <Sparkles className="h-5 w-5 text-primary" />
-          <h2 className="font-semibold">Projeção por IA — Linguagem Natural</h2>
+        <div className="flex items-start gap-3">
+          <img
+            src="/src/assets/bot_minipaulo.png"
+            alt="Paulo — assistente financeiro austríaco"
+            className="h-14 w-14 rounded-full object-cover border-2 border-primary/40 shadow"
+            onError={(e) => {
+              (e.target as HTMLImageElement).style.display = "none";
+            }}
+          />
+          <div className="flex-1">
+            <div className="flex items-center gap-2">
+              <Sparkles className="h-5 w-5 text-primary" />
+              <h2 className="font-semibold">Paulo — Projeção por IA</h2>
+            </div>
+            <p className="text-xs italic text-muted-foreground mt-1">
+              *"Toda projeção honesta parte da propriedade privada, não de fantasias estatais."*
+              &nbsp;— Paulo
+            </p>
+          </div>
         </div>
         <p className="text-sm text-muted-foreground">
-          Descreva o que quer projetar, uma ideia por linha. Ex.: "Pneu do carro, despesa de 5 mil
-          mês que vem"; "Entrada do loteamento JK vai entrar 30 mil"; "Projeto entrada de 32 mil e
-          saída de 22 mil por mês de folha salarial pelos próximos 12 meses". A IA usa seu plano de
-          contas e centros de custo reais para sugerir a classificação — nada é gravado até você
-          confirmar.
+          Descreva o que quer projetar, uma ideia por linha (ou fale pelo microfone). Ex.: "Pneu do
+          carro, despesa de 5 mil mês que vem"; "Entrada do loteamento JK 30 mil por 12 meses";
+          "Folha salarial 22 mil/mês pelos próximos 12 meses". Paulo usa seu plano de contas real
+          para classificar — nada é gravado até você confirmar.
         </p>
+
         <Textarea
           value={text + (speech.interim ? (text && !/\s$/.test(text) ? " " : "") + speech.interim : "")}
           onChange={(e) => setText(e.target.value)}

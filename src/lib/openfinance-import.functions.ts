@@ -693,11 +693,11 @@ export const parseOpenFinanceText = createServerFn({ method: "POST" })
     const apiKey = process.env.LOVABLE_API_KEY;
     if (apiKey && needAi.length > 0) {
       const gateway = createLovableAiGatewayProvider(apiKey);
-      const model = gateway("google/gemini-3.5-flash");
+      const model = gateway("google/gemini-3-flash-preview");
       const BATCH = 40;
-      for (let i = 0; i < needAi.length; i += BATCH) {
-        const chunk = needAi.slice(i, i + BATCH);
-        // opções por item: só contas do kind certo, no CC certo, limitadas
+      const CONCURRENCY = 8;
+
+      function buildBatch(chunk: typeof needAi, batchIndex: number) {
         const payload = chunk.map((it) => {
           const list = accByCc.get(it.cost_center_id!) ?? [];
           const kind: "revenue" | "expense" = it.valor >= 0 ? "revenue" : "expense";
@@ -714,44 +714,59 @@ export const parseOpenFinanceText = createServerFn({ method: "POST" })
             options: opts,
           };
         });
-        try {
-          const { object } = await generateObject({
-            model,
-            schema: z.object({
-              assignments: z.array(
-                z.object({
-                  temp_id: z.string(),
-                  account_id: z.string().nullable(),
-                }),
-              ),
-            }),
-            prompt:
-              "Você é um classificador contábil. Para cada item, escolha o UUID da conta contábil mais apropriada entre 'options'. " +
-              "Respeite o kind (revenue/expense). Se nenhuma opção couber com confiança, retorne account_id=null. " +
-              "Nunca invente UUIDs — copie exatamente de 'options'.\n\n" +
-              "ITENS:\n" +
-              JSON.stringify(payload),
-          });
-          const validIds = new Set<string>();
-          for (const p of payload) for (const o of p.options) validIds.add(o.id);
-          for (const a of object.assignments ?? []) {
-            if (!a.account_id || !validIds.has(a.account_id)) continue;
-            const it = items.find((x) => x.temp_id === a.temp_id);
-            if (!it || it.suggested_account_id) continue;
-            const list = accByCc.get(it.cost_center_id!) ?? [];
-            const acc = list.find((x) => x.id === a.account_id);
-            if (!acc) continue;
-            it.suggested_account_id = acc.id;
-            it.suggested_account_name = acc.name;
-            fromAi++;
-          }
-        } catch (err) {
-          console.error(
-            `[OFIMP] IA batch ${i / BATCH + 1} falhou:`,
-            err instanceof Error ? err.message : err,
-          );
-          // segue para próximo lote — nenhuma falha bloqueia o restante
+        return { batchIndex, payload };
+      }
+
+      const batches: Array<ReturnType<typeof buildBatch>> = [];
+      for (let i = 0; i < needAi.length; i += BATCH) {
+        batches.push(buildBatch(needAi.slice(i, i + BATCH), i / BATCH + 1));
+      }
+
+      const runBatch = async (b: ReturnType<typeof buildBatch>) => {
+        const { object } = await generateObject({
+          model,
+          schema: z.object({
+            assignments: z.array(
+              z.object({
+                temp_id: z.string(),
+                account_id: z.string().nullable(),
+              }),
+            ),
+          }),
+          prompt:
+            "Você é um classificador contábil. Para cada item, escolha o UUID da conta contábil mais apropriada entre 'options'. " +
+            "Respeite o kind (revenue/expense). Se nenhuma opção couber com confiança, retorne account_id=null. " +
+            "Nunca invente UUIDs — copie exatamente de 'options'.\n\n" +
+            "ITENS:\n" +
+            JSON.stringify(b.payload),
+        });
+        const validIds = new Set<string>();
+        for (const p of b.payload) for (const o of p.options) validIds.add(o.id);
+        for (const a of object.assignments ?? []) {
+          if (!a.account_id || !validIds.has(a.account_id)) continue;
+          const it = items.find((x) => x.temp_id === a.temp_id);
+          if (!it || it.suggested_account_id) continue;
+          const list = accByCc.get(it.cost_center_id!) ?? [];
+          const acc = list.find((x) => x.id === a.account_id);
+          if (!acc) continue;
+          it.suggested_account_id = acc.id;
+          it.suggested_account_name = acc.name;
+          fromAi++;
         }
+      };
+
+      // Ondas de até CONCURRENCY lotes simultâneos; falha por lote não derruba os demais.
+      for (let w = 0; w < batches.length; w += CONCURRENCY) {
+        const wave = batches.slice(w, w + CONCURRENCY);
+        const results = await Promise.allSettled(wave.map(runBatch));
+        results.forEach((r, idx) => {
+          if (r.status === "rejected") {
+            console.error(
+              `[OFIMP] IA batch ${wave[idx].batchIndex} falhou:`,
+              r.reason instanceof Error ? r.reason.message : r.reason,
+            );
+          }
+        });
       }
     }
 

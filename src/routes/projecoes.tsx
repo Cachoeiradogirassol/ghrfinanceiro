@@ -174,6 +174,65 @@ function ProjectionsPage() {
   const listFn = useServerFn(listProjections);
   const createFn = useServerFn(createProjection);
   const deleteFn = useServerFn(deleteProjection);
+  const scListFn = useServerFn(listScenarios);
+  const scCreateFn = useServerFn(createScenario);
+  const scRenameFn = useServerFn(renameScenario);
+  const scDeleteFn = useServerFn(deleteScenario);
+
+  // ---- Cenários ----
+  const scenarios = useQuery<ProjectionScenario[]>({
+    queryKey: ["projection-scenarios"],
+    queryFn: () => scListFn() as never,
+  });
+  const [activeScenarioId, setActiveScenarioId] = useState<string | null>(() => {
+    if (typeof window === "undefined") return null;
+    return window.localStorage.getItem("controle_ghr.active_scenario") || null;
+  });
+  const setActive = (id: string | null) => {
+    setActiveScenarioId(id);
+    if (typeof window !== "undefined") {
+      if (id) window.localStorage.setItem("controle_ghr.active_scenario", id);
+      else window.localStorage.removeItem("controle_ghr.active_scenario");
+    }
+  };
+  const activeScenario = useMemo(
+    () => (scenarios.data ?? []).find((s) => s.id === activeScenarioId) ?? null,
+    [scenarios.data, activeScenarioId],
+  );
+
+  const [modeChoice, setModeChoice] = useState<null | "real_based" | "blank">(null);
+  const [scenarioName, setScenarioName] = useState("");
+  const scenarioCreateMut = useMutation({
+    mutationFn: async (input: { name: string; mode: "real_based" | "blank" }) =>
+      scCreateFn({ data: input }),
+    onSuccess: (sc) => {
+      toast.success(`Cenário "${sc.name}" criado.`);
+      qc.invalidateQueries({ queryKey: ["projection-scenarios"] });
+      setActive(sc.id);
+      setScenarioName("");
+      setModeChoice(null);
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+  const scenarioRenameMut = useMutation({
+    mutationFn: async (input: { id: string; name: string }) => scRenameFn({ data: input }),
+    onSuccess: () => {
+      toast.success("Cenário renomeado.");
+      qc.invalidateQueries({ queryKey: ["projection-scenarios"] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+  const scenarioDeleteMut = useMutation({
+    mutationFn: async (id: string) => scDeleteFn({ data: { id } }),
+    onSuccess: () => {
+      toast.success("Cenário e projeções vinculadas removidos.");
+      qc.invalidateQueries({ queryKey: ["projection-scenarios"] });
+      qc.invalidateQueries({ queryKey: ["projections"] });
+      setActive(null);
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
 
   const ccs = useQuery({ queryKey: ["ccs"], queryFn: () => ccFn() });
   const accs = useQuery({ queryKey: ["accs"], queryFn: () => accFn() });

@@ -635,6 +635,8 @@ function Conc() {
         </Card>
       )}
 
+      <BatchManualReconcilePanel rangeStart={rangeStart} rangeEnd={rangeEnd} />
+
       {/* PENDÊNCIAS — visão principal, somente leitura */}
       {(() => {
         const pendingTxs = filteredTxs.filter((t) => t.status !== "reconciled");

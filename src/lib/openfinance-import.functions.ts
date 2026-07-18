@@ -261,9 +261,72 @@ const isInvestmentNoise = (cat: string, desc: string) =>
   /investment/i.test(cat) ||
   /libera[çc][ãa]o\s+de\s+dinheiro|resgate|aplica[çc][ãa]o/i.test(desc);
 
+// ============================================================================
+// DE-PARA determinístico: Pluggy category -> padrões de conta contábil
+// ============================================================================
+type MapKind = "revenue" | "expense" | "both";
+const CATEGORY_MAP: Array<{ match: RegExp; kind: MapKind; accountPatterns: RegExp[] }> = [
+  { match: /groceries|food\s*and\s*drinks|supermercado|mercado|alimento/i, kind: "expense",
+    accountPatterns: [/alimento/i, /insumo/i, /mercado/i, /suprimento/i, /alimenta/i] },
+  { match: /restaurant|refei[çc]/i, kind: "expense",
+    accountPatterns: [/alimenta/i, /restaurante/i, /refei[çc]/i] },
+  { match: /^taxes?\b|imposto|tributo|iss\b|icms|pis|cofins|irrf|inss/i, kind: "expense",
+    accountPatterns: [/imposto/i, /tributo/i, /^taxa/i, /iss\b|icms|pis|cofins|irrf|inss/i] },
+  { match: /non[- ]?recurring\s*income|recurring\s*income|receita|venda|faturamento/i, kind: "revenue",
+    accountPatterns: [/faturamento/i, /venda/i, /receita/i] },
+  { match: /gas\s*stations?|combust|posto/i, kind: "expense",
+    accountPatterns: [/combust/i, /gasolina/i, /diesel/i, /posto/i] },
+  { match: /health\s*insurance|plano\s*de\s*sa[uú]de/i, kind: "expense",
+    accountPatterns: [/sa[uú]de/i, /plano/i, /benef[ií]cio/i] },
+  { match: /pharmacy|farm[aá]cia|drogaria/i, kind: "expense",
+    accountPatterns: [/farm[aá]cia/i, /medicamento/i, /sa[uú]de/i] },
+  { match: /digital\s*services|software|streaming|subscription|assinatura/i, kind: "expense",
+    accountPatterns: [/digital/i, /software/i, /assinatura/i, /internet/i, /tecnologia/i] },
+  { match: /marketing|ads?\b|an[uú]ncio/i, kind: "expense",
+    accountPatterns: [/marketing/i, /publicidade/i, /an[uú]ncio/i, /propaganda/i] },
+  { match: /^services\b|servi[çc]os?/i, kind: "expense",
+    accountPatterns: [/servi[çc]os?\s+de\s+terceiros?/i, /servi[çc]o/i, /prestador/i] },
+  { match: /shopping|materia(l|is)|escrit[oó]rio|papelaria/i, kind: "expense",
+    accountPatterns: [/material/i, /escrit[oó]rio/i, /despesas?\s+gerais/i, /papelaria/i] },
+  { match: /salary|sal[aá]rio|folha|payroll/i, kind: "expense",
+    accountPatterns: [/sal[aá]rio/i, /folha/i, /pessoal/i, /pr[oó]-labore/i] },
+  { match: /utilit|energia|luz|el[eé]trica|[aá]gua|water|electricity/i, kind: "expense",
+    accountPatterns: [/energia|luz|el[eé]trica/i, /[aá]gua/i, /utilidade/i, /concession/i] },
+  { match: /transport|uber|99\s*pop|taxi|t[aá]xi/i, kind: "expense",
+    accountPatterns: [/transporte/i, /viagem/i, /combust/i] },
+  { match: /bank\s*fees?|tarifa|taxa\s*banc/i, kind: "expense",
+    accountPatterns: [/tarifa/i, /banc[aá]ria/i, /taxa\s*banc/i, /despesa\s*banc/i] },
+  { match: /loan|empr[eé]stimo|financ/i, kind: "expense",
+    accountPatterns: [/empr[eé]stimo/i, /financ/i, /juros/i] },
+  { match: /rent|aluguel/i, kind: "expense",
+    accountPatterns: [/aluguel/i, /loca[çc][ãa]o/i] },
+  { match: /telecom|celular|telefon|internet/i, kind: "expense",
+    accountPatterns: [/telefon/i, /celular/i, /internet/i, /telecom/i] },
+];
+
+function matchAccountByDictionary(
+  pluggyCategory: string,
+  kind: "revenue" | "expense",
+  list: Array<{ id: string; name: string; kind: string }>,
+): { id: string; name: string } | null {
+  if (!pluggyCategory) return null;
+  const candidates = list.filter((a) => a.kind === kind);
+  if (candidates.length === 0) return null;
+  for (const row of CATEGORY_MAP) {
+    if (row.kind !== "both" && row.kind !== kind) continue;
+    if (!row.match.test(pluggyCategory)) continue;
+    for (const pat of row.accountPatterns) {
+      const hit = candidates.find((a) => pat.test(a.name));
+      if (hit) return { id: hit.id, name: hit.name };
+    }
+  }
+  return null;
+}
+
 export const parseOpenFinanceText = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator(
+
     (d: { text: string; default_cost_center_id?: string; default_account_id?: string }) =>
       z
         .object({

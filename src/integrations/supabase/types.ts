@@ -162,6 +162,7 @@ export type Database = {
           matched_at: string | null
           matched_by: string | null
           matched_transaction_id: string | null
+          of_dedupe_key: string | null
           reconciled: boolean
           sales_batch_id: string | null
           statement_date: string
@@ -177,6 +178,7 @@ export type Database = {
           matched_at?: string | null
           matched_by?: string | null
           matched_transaction_id?: string | null
+          of_dedupe_key?: string | null
           reconciled?: boolean
           sales_batch_id?: string | null
           statement_date: string
@@ -192,6 +194,7 @@ export type Database = {
           matched_at?: string | null
           matched_by?: string | null
           matched_transaction_id?: string | null
+          of_dedupe_key?: string | null
           reconciled?: boolean
           sales_batch_id?: string | null
           statement_date?: string

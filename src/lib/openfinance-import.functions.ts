@@ -1012,17 +1012,19 @@ export const confirmOpenFinanceImport = createServerFn({ method: "POST" })
         }
 
 
-        // Dedupe pela tag [OFIMP ...]
+        // Dedupe: por of_dedupe_key (chave nova) OU pela tag legacy
         const tag = dec.dedupe_tag;
-        const { data: dup } = await context.supabase
-          .from("transactions")
-          .select("id")
-          .ilike("description", `%${tag}%`)
-          .limit(1);
+        const dupQuery = context.supabase.from("transactions").select("id").limit(1);
+        const { data: dup } = dec.of_dedupe_key
+          ? await dupQuery.or(
+              `of_dedupe_key.eq.${dec.of_dedupe_key},description.ilike.%${tag}%`,
+            )
+          : await dupQuery.ilike("description", `%${tag}%`);
         if (dup && dup.length > 0) {
           skipped++;
           continue;
         }
+
 
         const paidAt = new Date(`${dec.data}T12:00:00Z`).toISOString();
         const description = `${tag} [APORTE] ${dec.instituicao} — ${dec.descricao}`.slice(0, 500);

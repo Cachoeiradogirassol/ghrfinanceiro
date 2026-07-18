@@ -301,10 +301,40 @@ export function OpenFinanceImporter({ onImported }: { onImported?: () => void })
         <DialogHeader>
           <DialogTitle>📥 Importador Open Finance</DialogTitle>
           <DialogDescription>
-            Cole o extrato completo do Meu Pluggy. O parser lê linha a linha (sem IA), concilia com
-            lançamentos pendentes e identifica aportes entre centros de custo.
+            Assistente em 3 etapas: <b>1) Extrair &amp; checar duplicatas</b> · <b>2) Categorizar por
+            bloco</b> · <b>3) Conciliar &amp; finalizar</b>. Você não avança sem resolver o passo
+            anterior.
           </DialogDescription>
         </DialogHeader>
+
+        {items.length > 0 && (
+          <div className="flex items-center gap-2 border rounded-md p-2 bg-muted/30 text-xs">
+            {[
+              { n: 1 as const, label: "Extrair" },
+              { n: 2 as const, label: "Categorizar" },
+              { n: 3 as const, label: "Conciliar" },
+            ].map((s, i, arr) => (
+              <div key={s.n} className="flex items-center gap-2 flex-1">
+                <div
+                  className={`h-6 w-6 rounded-full flex items-center justify-center font-semibold ${
+                    step === s.n
+                      ? "bg-primary text-primary-foreground"
+                      : step > s.n
+                        ? "bg-emerald-600 text-white"
+                        : "bg-muted text-muted-foreground"
+                  }`}
+                >
+                  {step > s.n ? "✓" : s.n}
+                </div>
+                <span className={step === s.n ? "font-semibold" : "text-muted-foreground"}>
+                  {s.label}
+                </span>
+                {i < arr.length - 1 && <div className="flex-1 h-px bg-border" />}
+              </div>
+            ))}
+          </div>
+        )}
+
 
         {items.length === 0 ? (
           <>

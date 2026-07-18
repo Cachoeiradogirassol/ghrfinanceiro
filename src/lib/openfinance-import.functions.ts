@@ -202,7 +202,14 @@ export function parseStatementText(text: string): RawTx[] {
 // Server-side: parseOpenFinanceText + confirmOpenFinanceImport
 // ============================================================================
 
-const keyOf = (t: { data: string; valor: number; descricao: string }) =>
+// Chave robusta: data + valor_abs + bank_account_id + occurrence_idx (dentro do extrato).
+// Preserva duplicatas legítimas (ex: duas diárias de R$ 100 no mesmo dia = idx 0 e 1 = duas txs distintas),
+// mas re-importar o mesmo extrato reconhece as mesmas ocorrências e não duplica.
+const buildDedupeKey = (data: string, valorAbs: number, bankAccountId: string | null, idx: number) =>
+  `${data}|${valorAbs.toFixed(2)}|${bankAccountId ?? "nobank"}|${idx}`;
+
+// Chave legada para fallback contra transações já importadas antes da coluna of_dedupe_key.
+const legacyKeyOf = (t: { data: string; valor: number; descricao: string }) =>
   `${t.data}_${t.valor.toFixed(2)}_${t.descricao.trim().slice(0, 80).toLowerCase()}`;
 
 type Candidate = {
@@ -228,7 +235,9 @@ export type ParsedItem = {
   pluggy_category: string;
   suggested_account_id: string | null;
   suggested_account_name: string | null;
-  dedupe_tag: string;
+  dedupe_tag: string;        // "[OFIMP <legacy>]" — mantido p/ descrição
+  of_dedupe_key: string;     // chave nova robusta gravada em transactions.of_dedupe_key
+  occurrence_idx: number;
   status:
     | "match"
     | "multiple"
@@ -248,9 +257,9 @@ export type ParsedItem = {
   transfer_target_cc_id: string | null;
   transfer_target_cc_name: string | null;
   transfer_target_bank_account_id: string | null;
-  // Se aporte_incompleto: lado conhecido é "source" (perna que saiu) ou "target" (perna que entrou)
   incomplete_side: "source" | "target" | null;
 };
+
 
 const isSamePersonTransfer = (cat: string) =>
   /same\s*person\s*transfer|transfer[^a-z]*same|transfer[^a-z]*person|transferência\s+entre|entre\s+contas\s+próprias/i.test(

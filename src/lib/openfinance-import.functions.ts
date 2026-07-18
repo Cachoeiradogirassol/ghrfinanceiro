@@ -1069,6 +1069,7 @@ export const confirmOpenFinanceImport = createServerFn({ method: "POST" })
               status: "reconciled",
               paid_at: paidAt,
               created_by: context.userId,
+              of_dedupe_key: dec.of_dedupe_key ?? null,
             })
             .select("id")
             .single();
@@ -1076,6 +1077,7 @@ export const confirmOpenFinanceImport = createServerFn({ method: "POST" })
             errors.push(`${dec.descricao}: ${error?.message ?? "falha ao criar receivable"}`);
             continue;
           }
+
           const { error: ictErr } = await context.supabase.from("intercompany_transfers").insert({
             transaction_id: newTx.id,
             source_cost_center_id: srcCc,

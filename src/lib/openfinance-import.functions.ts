@@ -1279,5 +1279,5 @@ export const confirmOpenFinanceImport = createServerFn({ method: "POST" })
       created++;
     }
 
-    return { reconciled, created, aportes, skipped, errors };
+    return { reconciled, created, aportes, attached_to_batch, skipped, errors };
   });

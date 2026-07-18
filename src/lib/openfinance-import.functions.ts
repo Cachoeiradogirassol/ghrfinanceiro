@@ -390,7 +390,9 @@ export const parseOpenFinanceText = createServerFn({ method: "POST" })
     // 4) Parser determinístico
     const rawTxs = parseStatementText(data.text);
 
-    if (rawTxs.length === 0) return { items: [] };
+    if (rawTxs.length === 0)
+      return { items: [], stats: { from_dictionary: 0, from_ai: 0, pending: 0 } };
+
 
     // 5) Match banco canonical -> bank_account. Sicoob prefere ghr_jk (default), mas mantém.
     const findBankAccount = (canonical: string) => {

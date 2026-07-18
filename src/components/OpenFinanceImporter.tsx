@@ -59,6 +59,8 @@ const brl = (v: number) =>
 
 const PAGE_SIZE = 100;
 
+type WizardStep = 1 | 2 | 3;
+
 export function OpenFinanceImporter({ onImported }: { onImported?: () => void }) {
   const [open, setOpen] = useState(false);
   const [text, setText] = useState("");
@@ -68,6 +70,7 @@ export function OpenFinanceImporter({ onImported }: { onImported?: () => void })
   const [items, setItems] = useState<ParsedItem[]>([]);
   const [rows, setRows] = useState<Record<string, RowState>>({});
   const [page, setPage] = useState(0);
+  const [step, setStep] = useState<WizardStep>(1);
   const [filter, setFilter] = useState<
     "all" | "match" | "new" | "aporte" | "aporte_incomplete" | "internal" | "duplicate" | "no_cost_center"
   >("all");

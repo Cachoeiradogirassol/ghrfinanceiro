@@ -106,6 +106,7 @@ export function OpenFinanceImporter({ onImported }: { onImported?: () => void })
     setRows({});
     setPage(0);
     setFilter("all");
+    setStep(1);
   };
 
   const doParse = async () => {

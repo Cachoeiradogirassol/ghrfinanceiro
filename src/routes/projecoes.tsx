@@ -293,6 +293,7 @@ function ProjectionsPage() {
       const h = parseInt(horizon, 10);
       if (!Number.isFinite(h) || h < 1 || h > 120)
         throw new Error("Horizonte deve estar entre 1 e 120 meses.");
+      if (!activeScenarioId) throw new Error("Selecione ou crie um cenário antes de criar projeções.");
       return createFn({
         data: {
           name: name.trim(),
@@ -306,9 +307,11 @@ function ProjectionsPage() {
           start_date: startDate,
           horizon_months: h,
           notes: notes.trim() || null,
+          scenario_id: activeScenarioId,
         },
       });
     },
+
     onSuccess: () => {
       toast.success("Projeção criada com sucesso.");
       setName("");

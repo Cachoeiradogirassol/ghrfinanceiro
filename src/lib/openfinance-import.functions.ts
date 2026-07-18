@@ -515,13 +515,9 @@ export const parseOpenFinanceText = createServerFn({ method: "POST" })
           suggestedName = sameKind[0].name;
         }
       }
-      if (!suggestedId && data.default_account_id) {
-        const fb = (accountsAll ?? []).find((a) => a.id === data.default_account_id);
-        if (fb) {
-          suggestedId = fb.id;
-          suggestedName = fb.name;
-        }
-      }
+      // fallback global (default_account_id) fica para a Fase 6, depois do dicionário + IA
+
+
 
       const base = {
         temp_id: b.temp_id,

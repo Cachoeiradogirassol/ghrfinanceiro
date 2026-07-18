@@ -88,14 +88,21 @@ const scenarioMeta: Record<Scenario, { label: string; desc: string; icon: typeof
   },
 };
 
-export function CashFlowProjectionPanel() {
+export function CashFlowProjectionPanel({
+  mode = "real_based",
+  scenarioId = null,
+}: {
+  mode?: "real_based" | "blank";
+  scenarioId?: string | null;
+} = {}) {
   const buildFn = useServerFn(buildCashFlowProjection);
   const balanceFn = useServerFn(buildProjection);
   const ccFn = useServerFn(listCostCenters);
 
   const [enterprise, setEnterprise] = useState<string>("__all__");
   const [ccId, setCcId] = useState<string>("__all__");
-  const [scenario, setScenario] = useState<Scenario>("real");
+  // Modo "blank" força visualização apenas simulada.
+  const [scenario, setScenario] = useState<Scenario>(mode === "blank" ? "sim" : "real");
   const [expanded, setExpanded] = useState<string | null>(null);
 
   const ccs = useQuery({ queryKey: ["ccs"], queryFn: () => ccFn() });
@@ -108,16 +115,18 @@ export function CashFlowProjectionPanel() {
   );
 
   const q = useQuery({
-    queryKey: ["cash-flow-projection", enterprise, ccId],
+    queryKey: ["cash-flow-projection", enterprise, ccId, scenarioId, mode],
     queryFn: () =>
       buildFn({
         data: {
           enterprise: enterprise === "__all__" ? undefined : enterprise,
           cost_center_id: ccId === "__all__" ? undefined : ccId,
           horizon_months: 6,
+          scenario_id: scenarioId ?? undefined,
         },
       }),
   });
+
 
   // Saldo consolidado atual — ancora do "Caixa Real Projetado".
   // buildProjection só aceita enterprise; quando um centro de custo específico
@@ -128,7 +137,9 @@ export function CashFlowProjectionPanel() {
     queryKey: ["cash-flow-current-balance", balanceEnterprise],
     queryFn: () => balanceFn({ data: { enterprise: balanceEnterprise as never } }),
   });
-  const currentBalance = ccId === "__all__" ? balanceQ.data?.currentBalance ?? 0 : 0;
+  const currentBalance =
+    mode === "blank" ? 0 : ccId === "__all__" ? balanceQ.data?.currentBalance ?? 0 : 0;
+
 
   type ChartPoint = {
     month: string;
@@ -238,7 +249,7 @@ export function CashFlowProjectionPanel() {
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
-            {(Object.keys(scenarioMeta) as Scenario[]).map((s) => {
+            {(mode === "blank" ? (["sim"] as Scenario[]) : (Object.keys(scenarioMeta) as Scenario[])).map((s) => {
               const Icon = scenarioMeta[s].icon;
               const active = scenario === s;
               return (
@@ -255,6 +266,7 @@ export function CashFlowProjectionPanel() {
               );
             })}
           </div>
+
         </div>
         {(scenario === "real" || scenario === "mixed") && (
           <div className="mt-3 text-xs text-muted-foreground flex items-center gap-2">
@@ -270,22 +282,27 @@ export function CashFlowProjectionPanel() {
       </Card>
 
       {scenarioAlerts.length > 0 && (
-        <Card className="p-4 border-red-500/50 bg-red-500/5">
+        <Card className="p-3 border-amber-500/40 bg-amber-500/5">
           <div className="flex items-start gap-2">
-            <AlertTriangle className="h-5 w-5 text-red-500 mt-0.5" />
-            <div className="space-y-1">
-              <div className="font-semibold text-red-500">
-                Atenção — saldo negativo projetado
+            <AlertTriangle className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
+            <div className="space-y-0.5 text-xs">
+              <div className="font-medium text-amber-700 dark:text-amber-400">
+                Meses com saldo acumulado negativo neste cenário
               </div>
-              <ul className="text-sm space-y-0.5">
+              <ul className="text-muted-foreground">
                 {scenarioAlerts.map((a, i) => (
                   <li key={i}>• {a}</li>
                 ))}
               </ul>
+              <div className="pt-1 text-[11px] text-muted-foreground italic">
+                Retrato parcial — não considera compromissos ainda não lançados nem receitas
+                variáveis fora do horizonte.
+              </div>
             </div>
           </div>
         </Card>
       )}
+
 
       <div className="flex flex-wrap gap-3 items-end">
         <div className="space-y-1">

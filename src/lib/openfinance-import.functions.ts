@@ -563,8 +563,9 @@ export const parseOpenFinanceText = createServerFn({ method: "POST" })
         };
       }
 
-      // Same person transfer
-      if (b.isTransfer) {
+      // Same person transfer — SOMENTE se a categoria Pluggy for de transferência entre contas próprias.
+      // Qualquer outra categoria (Taxes, Services, etc.) NUNCA pode entrar no ramo de aporte.
+      if (b.isTransfer && isSamePersonTransfer(t.pluggy_category)) {
         const pairId = pairedWith.get(b.temp_id) ?? null;
         if (pairId) {
           const partner = bases.find((x) => x.temp_id === pairId)!;
@@ -614,6 +615,7 @@ export const parseOpenFinanceText = createServerFn({ method: "POST" })
           incomplete_side: isNeg ? "source" : "target",
         };
       }
+
 
       if (!b.cc) {
         return {

@@ -623,7 +623,9 @@ export const parseOpenFinanceText = createServerFn({ method: "POST" })
         pluggy_category: t.pluggy_category,
         suggested_account_id: suggestedId,
         suggested_account_name: suggestedName,
-        dedupe_tag: b.tag,
+        dedupe_tag: b.legacyTag,
+        of_dedupe_key: b.dedupeKey,
+        occurrence_idx: b.occurrenceIdx,
         pair_temp_id: null as string | null,
         transfer_source_cc_id: null as string | null,
         transfer_source_cc_name: null as string | null,
@@ -634,8 +636,8 @@ export const parseOpenFinanceText = createServerFn({ method: "POST" })
         incomplete_side: null as "source" | "target" | null,
       };
 
-      // Duplicado
-      if (dupSet.has(b.tag) || existingDescs.some((d) => d.includes(b.tag))) {
+      // Duplicado (chave nova, legacy ou contagem)
+      if (b.isDup) {
         return {
           ...base,
           status: "duplicate" as const,
@@ -643,6 +645,7 @@ export const parseOpenFinanceText = createServerFn({ method: "POST" })
           candidates: [],
         };
       }
+
 
       // Investment noise
       if (b.isInvestment) {

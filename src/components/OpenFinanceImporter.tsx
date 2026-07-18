@@ -639,7 +639,7 @@ export function OpenFinanceImporter({ onImported }: { onImported?: () => void })
                           ) : (
                             <Select
                               value={row.action}
-                              onValueChange={(v: "match" | "create" | "skip" | "aporte") =>
+                              onValueChange={(v: "match" | "create" | "skip" | "aporte" | "sales_batch") =>
                                 setRows((r) => ({
                                   ...r,
                                   [it.temp_id]: {
@@ -649,11 +649,15 @@ export function OpenFinanceImporter({ onImported }: { onImported?: () => void })
                                       v === "match"
                                         ? row.transaction_id ?? it.candidates[0]?.id ?? null
                                         : null,
+                                    sales_batch_id:
+                                      v === "sales_batch"
+                                        ? row.sales_batch_id ?? it.sales_batch_candidates?.[0]?.id ?? null
+                                        : row.sales_batch_id,
                                   },
                                 }))
                               }
                             >
-                              <SelectTrigger className="h-8 text-xs w-[140px]">
+                              <SelectTrigger className="h-8 text-xs w-[160px]">
                                 <SelectValue />
                               </SelectTrigger>
                               <SelectContent>
@@ -661,6 +665,9 @@ export function OpenFinanceImporter({ onImported }: { onImported?: () => void })
                                   <SelectItem value="match">Conciliar</SelectItem>
                                 )}
                                 <SelectItem value="create">Criar novo</SelectItem>
+                                {(it.sales_batch_candidates?.length ?? 0) > 0 && it.valor > 0 && (
+                                  <SelectItem value="sales_batch">Vincular a lote</SelectItem>
+                                )}
                                 {(it.status === "aporte" || it.status === "aporte_incomplete") && (
                                   <SelectItem value="aporte">Registrar aporte</SelectItem>
                                 )}

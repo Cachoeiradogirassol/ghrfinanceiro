@@ -673,49 +673,220 @@ function ProjectionsPage() {
     XLSX.writeFile(wb, `Projecoes_GHR_${new Date().toISOString().slice(0, 10)}.xlsx`);
   }
 
+  // ---- Bifurcação: escolha guiada de modo quando ainda não há cenário ativo ----
+  const showGuided = !activeScenarioId;
+
+  if (showGuided) {
+    return (
+      <div className="p-6 max-w-5xl mx-auto space-y-6">
+        <div>
+          <h1 className="text-3xl font-bold flex items-center gap-2">
+            <Sparkles className="h-7 w-7 text-primary" />
+            Projeções e Simulador
+          </h1>
+          <p className="text-muted-foreground mt-1">
+            Antes de começar, escolha como quer projetar. Cada trabalho é uma projeção nomeada —
+            você pode manter várias em paralelo (ex.: "Base 2026", "Cenário conservador").
+          </p>
+        </div>
+
+        {/* Cenários existentes */}
+        {(scenarios.data ?? []).length > 0 && (
+          <Card className="p-5 space-y-3">
+            <h2 className="font-semibold">Retomar projeção existente</h2>
+            <div className="grid gap-2 sm:grid-cols-2">
+              {(scenarios.data ?? []).map((s) => (
+                <Button
+                  key={s.id}
+                  variant="outline"
+                  className="justify-between h-auto py-3"
+                  onClick={() => setActive(s.id)}
+                >
+                  <div className="text-left">
+                    <div className="font-medium">{s.name}</div>
+                    <div className="text-xs text-muted-foreground">
+                      {s.mode === "real_based" ? "Baseada no caixa real" : "Simulação em branco"}
+                    </div>
+                  </div>
+                  <ArrowUpCircle className="h-4 w-4 opacity-40" />
+                </Button>
+              ))}
+            </div>
+          </Card>
+        )}
+
+        {/* Dois caminhos */}
+        <div className="grid gap-4 md:grid-cols-2">
+          <Card
+            className={`p-6 cursor-pointer transition border-2 ${modeChoice === "real_based" ? "border-primary bg-primary/5" : "border-border hover:border-primary/50"}`}
+            onClick={() => setModeChoice("real_based")}
+          >
+            <div className="flex items-start gap-3 mb-3">
+              <div className="rounded-lg bg-primary/10 p-2">
+                <Wallet className="h-6 w-6 text-primary" />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold">Projetar considerando meu caixa real</h3>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Parte do saldo consolidado atual, soma as contas já lançadas e a estimativa
+                  histórica. Suas simulações entram POR CIMA.
+                </p>
+              </div>
+            </div>
+            <ul className="text-xs text-muted-foreground space-y-1 pl-2">
+              <li>• Ideal para planejamento executivo do próximo trimestre.</li>
+              <li>• Alterna entre Real, Simulação e Real+Simulação (Misto).</li>
+            </ul>
+          </Card>
+
+          <Card
+            className={`p-6 cursor-pointer transition border-2 ${modeChoice === "blank" ? "border-primary bg-primary/5" : "border-border hover:border-primary/50"}`}
+            onClick={() => setModeChoice("blank")}
+          >
+            <div className="flex items-start gap-3 mb-3">
+              <div className="rounded-lg bg-primary/10 p-2">
+                <Layers className="h-6 w-6 text-primary" />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold">Projetar do zero (simulação livre)</h3>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Ignora o caixa real. Só valem as hipóteses que você (ou o Paulo) criar aqui —
+                  útil para explorar cenários hipotéticos.
+                </p>
+              </div>
+            </div>
+            <ul className="text-xs text-muted-foreground space-y-1 pl-2">
+              <li>• Ideal para "e se…" e projeções de viabilidade isoladas.</li>
+              <li>• Não conta com saldo atual nem histórico realizado.</li>
+            </ul>
+          </Card>
+        </div>
+
+        {modeChoice && (
+          <Card className="p-5 space-y-3">
+            <h2 className="font-semibold">Dê um nome para esta projeção</h2>
+            <div className="flex flex-wrap gap-2">
+              <Input
+                value={scenarioName}
+                onChange={(e) => setScenarioName(e.target.value)}
+                placeholder={
+                  modeChoice === "real_based" ? "Ex: Plano operacional 2026" : "Ex: Simulação expansão vinhedo"
+                }
+                className="flex-1 min-w-[240px]"
+              />
+              <Button
+                disabled={scenarioName.trim().length < 2 || scenarioCreateMut.isPending}
+                onClick={() =>
+                  scenarioCreateMut.mutate({ name: scenarioName.trim(), mode: modeChoice })
+                }
+              >
+                <Plus className="h-4 w-4 mr-1" />
+                {scenarioCreateMut.isPending ? "Criando…" : "Criar e abrir"}
+              </Button>
+              <Button variant="ghost" onClick={() => setModeChoice(null)}>
+                Cancelar
+              </Button>
+            </div>
+          </Card>
+        )}
+
+        <div className="flex justify-end">
+          <Button variant="outline" onClick={() => nav({ to: "/" })}>
+            ← Dashboard
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  const activeMode = activeScenario?.mode ?? "real_based";
+
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6">
+      {/* Cabeçalho + barra de cenário */}
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-3xl font-bold flex items-center gap-2">
             <Sparkles className="h-7 w-7 text-primary" />
-            Projeções e Simulador Preditivo
+            Projeções e Simulador
           </h1>
           <p className="text-muted-foreground">
-            Projeção ancorada no caixa real, com camada opcional de simulação (IA / manual) por
-            cima. Alterne entre Real, Simulação e Misto no seletor de cenário.
+            {activeMode === "real_based"
+              ? "Modo baseado no caixa real — as simulações somam POR CIMA do saldo consolidado."
+              : "Modo simulação em branco — apenas as hipóteses deste cenário são consideradas."}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Button variant="outline" onClick={handleExportPDF}>
-            <FileDown className="h-4 w-4 mr-1" /> Exportar Cenário (PDF)
-          </Button>
-          <Button variant="outline" onClick={handleExportXLSX}>
-            <FileSpreadsheet className="h-4 w-4 mr-1" /> Exportar Planilha (Excel)
-          </Button>
           <Button variant="outline" onClick={() => nav({ to: "/" })}>
             ← Dashboard
           </Button>
         </div>
       </div>
 
-      {/* HERO — Projeção por IA como caminho principal */}
-      <Card className="p-6 border-2 border-primary/60 bg-gradient-to-br from-primary/5 via-background to-background shadow-md">
-        <div className="flex items-start gap-3 mb-4">
-          <div className="rounded-lg bg-primary/10 p-2">
-            <Sparkles className="h-6 w-6 text-primary" />
-          </div>
-          <div>
-            <h2 className="text-xl font-bold">Criar projeção com IA (camada de simulação)</h2>
-            <p className="text-sm text-muted-foreground">
-              Descreva em texto o que você espera de entradas e saídas — a IA monta a projeção pra
-              você. O resultado entra como <strong>simulação sobre o caixa real</strong> e aparece
-              no gráfico ao alternar para os modos “Simulação” ou “Real + Simulação”. Nada é salvo
-              antes da sua confirmação.
-            </p>
-          </div>
+      <Card className="p-4 flex flex-wrap items-center gap-3">
+        <div className="flex items-center gap-2 min-w-[260px]">
+          <Layers className="h-4 w-4 text-primary" />
+          <span className="text-xs uppercase tracking-wide text-muted-foreground">
+            Projeção ativa
+          </span>
+          <Select value={activeScenarioId ?? ""} onValueChange={(v) => setActive(v || null)}>
+            <SelectTrigger className="w-[260px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {(scenarios.data ?? []).map((s) => (
+                <SelectItem key={s.id} value={s.id}>
+                  {s.name} · {s.mode === "real_based" ? "real" : "em branco"}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
-        <AiProjectionTab />
+        <Button
+          size="sm"
+          variant="ghost"
+          onClick={() => {
+            const n = window.prompt("Novo nome da projeção:", activeScenario?.name ?? "");
+            if (n && n.trim().length >= 2 && activeScenarioId) {
+              scenarioRenameMut.mutate({ id: activeScenarioId, name: n.trim() });
+            }
+          }}
+        >
+          <Pencil className="h-3.5 w-3.5 mr-1" /> Renomear
+        </Button>
+        <Button
+          size="sm"
+          variant="ghost"
+          className="text-destructive"
+          onClick={() => {
+            if (!activeScenarioId) return;
+            if (
+              confirm(
+                `Excluir "${activeScenario?.name}" e TODAS as projeções vinculadas? Esta ação é permanente.`,
+              )
+            ) {
+              scenarioDeleteMut.mutate(activeScenarioId);
+            }
+          }}
+        >
+          <Trash2 className="h-3.5 w-3.5 mr-1" /> Excluir
+        </Button>
+        <div className="ml-auto flex gap-2">
+          <Button size="sm" variant="outline" onClick={() => setActive(null)}>
+            <Plus className="h-3.5 w-3.5 mr-1" /> Nova projeção
+          </Button>
+          <Button size="sm" variant="outline" onClick={handleExportPDF}>
+            <FileDown className="h-3.5 w-3.5 mr-1" /> PDF
+          </Button>
+          <Button size="sm" variant="outline" onClick={handleExportXLSX}>
+            <FileSpreadsheet className="h-3.5 w-3.5 mr-1" /> Excel
+          </Button>
+        </div>
+      </Card>
+
+      {/* HERO — Paulo IA */}
+      <Card className="p-6 border-2 border-primary/60 bg-gradient-to-br from-primary/5 via-background to-background shadow-md">
+        <AiProjectionTab scenarioId={activeScenarioId} />
       </Card>
 
       {/* Modo Grade Rápida (avançado) — recolhido */}
@@ -730,7 +901,8 @@ function ProjectionsPage() {
           <AccordionContent className="px-4 pb-4 space-y-3">
             <p className="text-xs text-muted-foreground">
               Alternativa manual para cadastrar várias projeções em planilha. Use apenas se
-              precisar de controle absoluto sobre cada campo — o método recomendado é a IA acima.
+              precisar de controle absoluto sobre cada campo — o método recomendado é o Paulo
+              acima.
             </p>
             <Card className="p-4">
               <QuickGrid
@@ -751,13 +923,18 @@ function ProjectionsPage() {
 
       <Tabs defaultValue="fluxo" className="w-full">
         <TabsList>
-          <TabsTrigger value="fluxo">Fluxo Projetado (Real / Simulação / Misto)</TabsTrigger>
-          <TabsTrigger value="gerenciar">Projeções Ativas</TabsTrigger>
-          <TabsTrigger value="grafico">Curva de Simulação (isolada)</TabsTrigger>
+          <TabsTrigger value="fluxo">
+            {activeMode === "real_based"
+              ? "Fluxo Projetado (Real / Simulação / Misto)"
+              : "Curva de Simulação"}
+          </TabsTrigger>
+          <TabsTrigger value="gerenciar">Projeções desta camada</TabsTrigger>
+          <TabsTrigger value="grafico">Curva isolada</TabsTrigger>
         </TabsList>
 
         <TabsContent value="fluxo" className="mt-4">
-          <CashFlowProjectionPanel />
+          <CashFlowProjectionPanel mode={activeMode} scenarioId={activeScenarioId} />
+
         </TabsContent>
 
         <TabsContent value="gerenciar" className="space-y-6 mt-4">

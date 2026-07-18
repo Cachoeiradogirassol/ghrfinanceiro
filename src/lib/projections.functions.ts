@@ -35,7 +35,9 @@ const ProjectionInput = z.object({
   start_date: z.string(),
   horizon_months: z.number().int().min(1).max(120).default(24),
   notes: z.string().max(500).nullable().optional(),
+  scenario_id: z.string().uuid().nullable().optional(),
 });
+
 
 export const createProjection = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -55,8 +57,10 @@ export const createProjection = createServerFn({ method: "POST" })
         start_date: data.start_date,
         horizon_months: data.horizon_months,
         notes: data.notes ?? null,
+        scenario_id: data.scenario_id ?? null,
         created_by: context.userId,
       } as never)
+
       .select("id")
       .single();
     if (error) throw new Error(error.message);
@@ -75,11 +79,13 @@ const BulkProjRow = z
     start_date: z.string(),
     monthly_growth_rate: z.number().min(-100).max(100).default(0),
     horizon_months: z.number().int().min(1).max(120).default(12),
+    scenario_id: z.string().uuid().nullable().optional(),
   })
   .refine((r) => r.direction === "outflow" || !!r.cost_center_id, {
     message: "Centro de Custo é obrigatório para linhas de Entrada.",
     path: ["cost_center_id"],
   });
+
 
 export const bulkCreateProjections = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -97,8 +103,10 @@ export const bulkCreateProjections = createServerFn({ method: "POST" })
       start_date: r.start_date,
       horizon_months: r.horizon_months,
       notes: null,
+      scenario_id: r.scenario_id ?? null,
       created_by: context.userId,
     }));
+
     const { data: inserted, error } = await context.supabase
       .from("cash_projections")
       .insert(rows as never)

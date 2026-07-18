@@ -5,16 +5,22 @@ import { z } from "zod";
 // ---------- LIST ----------
 export const listProjections = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
-  .handler(async ({ context }) => {
-    const { data, error } = await context.supabase
+  .inputValidator((d: unknown) =>
+    z.object({ scenario_id: z.string().uuid().nullable().optional() }).parse(d ?? {}),
+  )
+  .handler(async ({ context, data }) => {
+    let q = context.supabase
       .from("cash_projections")
       .select(
         "*, cost_centers(code, name, enterprise), accounts(name, kind), contacts(name), bank_accounts:default_bank_account_id(name, bank), realizations:cash_projection_realizations(id, month_index, transaction_id, realized_amount, realized_at)",
       )
       .order("created_at", { ascending: false });
+    if (data?.scenario_id) q = q.eq("scenario_id" as never, data.scenario_id);
+    const { data: rows, error } = await q;
     if (error) throw new Error(error.message);
-    return data ?? [];
+    return rows ?? [];
   });
+
 
 // ---------- CREATE ----------
 const ProjectionInput = z.object({

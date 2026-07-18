@@ -398,6 +398,59 @@ export function OpenFinanceImporter({ onImported }: { onImported?: () => void })
           </>
         ) : (
           <>
+            {/* Banner de contexto do passo atual */}
+            {step === 1 && (
+              <div className="rounded-lg border bg-blue-50 dark:bg-blue-950/30 p-3 text-sm">
+                <b>Passo 1 — Extração &amp; duplicatas.</b> Foram identificados{" "}
+                <b>{items.length}</b> lançamentos:{" "}
+                <b className="text-emerald-600">{items.length - summary.dup} novos</b> ·{" "}
+                <b className="text-muted-foreground">{summary.dup} duplicatas</b> (serão ignoradas
+                automaticamente). Confira o resumo abaixo e avance.
+              </div>
+            )}
+            {step === 2 && (
+              <div className="rounded-lg border bg-amber-50 dark:bg-amber-950/30 p-3 text-sm space-y-2">
+                <div>
+                  <b>Passo 2 — Categorização.</b> Revise as categorias sugeridas. Bloqueado enquanto
+                  houver linhas sem categoria.
+                </div>
+                {(() => {
+                  const byCat = new Map<string, number>();
+                  for (const it of items) {
+                    if (it.status === "duplicate" || it.status === "internal") continue;
+                    const k = it.pluggy_category || "(sem categoria Pluggy)";
+                    byCat.set(k, (byCat.get(k) ?? 0) + 1);
+                  }
+                  const sorted = Array.from(byCat.entries()).sort((a, b) => b[1] - a[1]);
+                  return (
+                    <div className="flex flex-wrap gap-1 text-xs">
+                      {sorted.map(([k, n]) => (
+                        <span key={k} className="px-2 py-0.5 rounded bg-background border">
+                          {k} <b>{n}</b>
+                        </span>
+                      ))}
+                    </div>
+                  );
+                })()}
+              </div>
+            )}
+            {step === 3 && (
+              <div className="rounded-lg border bg-emerald-50 dark:bg-emerald-950/30 p-3 text-sm">
+                <b>Passo 3 — Conciliação &amp; finalização.</b>{" "}
+                <b className="text-emerald-600">{summary.match} auto-match</b> ·{" "}
+                <b>{summary.create + summary.multi} novos</b> ·{" "}
+                <b className="text-primary">{summary.aporte} aportes</b>
+                {summary.aporteInc > 0 && (
+                  <>
+                    {" · "}
+                    <b className="text-destructive">{summary.aporteInc} aportes ½</b> (defina CC)
+                  </>
+                )}
+                . Para casos N-para-M, use{" "}
+                <b>Conciliação manual em lote</b> na página de Conciliação antes de finalizar.
+              </div>
+            )}
+
             <div className="flex flex-wrap gap-2 text-sm items-center">
               <button onClick={() => { setFilter("all"); setPage(0); }}>
                 <Badge variant={filter === "all" ? "default" : "outline"}>{items.length} total</Badge>

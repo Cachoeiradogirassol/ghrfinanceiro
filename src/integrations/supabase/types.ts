@@ -281,6 +281,7 @@ export type Database = {
           monthly_growth_rate: number
           name: string
           notes: string | null
+          scenario_id: string | null
           start_date: string
           updated_at: string
         }
@@ -298,6 +299,7 @@ export type Database = {
           monthly_growth_rate?: number
           name: string
           notes?: string | null
+          scenario_id?: string | null
           start_date?: string
           updated_at?: string
         }
@@ -315,6 +317,7 @@ export type Database = {
           monthly_growth_rate?: number
           name?: string
           notes?: string | null
+          scenario_id?: string | null
           start_date?: string
           updated_at?: string
         }
@@ -345,6 +348,13 @@ export type Database = {
             columns: ["default_bank_account_id"]
             isOneToOne: false
             referencedRelation: "bank_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cash_projections_scenario_id_fkey"
+            columns: ["scenario_id"]
+            isOneToOne: false
+            referencedRelation: "projection_scenarios"
             referencedColumns: ["id"]
           },
         ]
@@ -476,6 +486,36 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      projection_scenarios: {
+        Row: {
+          created_at: string
+          created_by: string
+          id: string
+          mode: string
+          name: string
+          notes: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string
+          id?: string
+          mode?: string
+          name: string
+          notes?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          id?: string
+          mode?: string
+          name?: string
+          notes?: string | null
+          updated_at?: string
+        }
+        Relationships: []
       }
       reconciliation_periods: {
         Row: {

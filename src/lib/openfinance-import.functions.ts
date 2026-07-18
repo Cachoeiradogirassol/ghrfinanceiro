@@ -777,7 +777,8 @@ export const parseOpenFinanceText = createServerFn({ method: "POST" })
     // ========================================================================
     if (data.default_account_id) {
       const fb = (accountsAll ?? []).find((a) => a.id === data.default_account_id);
-      if (fb) {
+      // Contas de "Aporte*" pertencem exclusivamente ao fluxo de aporte — nunca usar como fallback de categoria comum.
+      if (fb && !/aporte/i.test(fb.name)) {
         for (const it of items) {
           if ((it.status === "new" || it.status === "multiple") && !it.suggested_account_id) {
             it.suggested_account_id = fb.id;
@@ -786,6 +787,7 @@ export const parseOpenFinanceText = createServerFn({ method: "POST" })
         }
       }
     }
+
 
     const pending = items.filter(
       (it) => (it.status === "new" || it.status === "multiple") && !it.suggested_account_id,

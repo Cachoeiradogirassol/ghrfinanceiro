@@ -59,7 +59,10 @@ const InputSchema = z.object({
   enterprise: z.string().optional(),
   cost_center_id: z.string().uuid().optional(),
   horizon_months: z.number().int().min(1).max(12).default(6),
+  scenario_id: z.string().uuid().nullable().optional(),
+  include_manual: z.boolean().optional().default(true),
 });
+
 
 export const buildCashFlowProjection = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -102,14 +105,16 @@ export const buildCashFlowProjection = createServerFn({ method: "POST" })
       rows = rows.filter((r) => r.cost_centers?.enterprise === data.enterprise);
     }
 
-    // Manual: cash_projections (avaliar por mês)
+    // Manual: cash_projections (avaliar por mês) — filtrado por cenário quando informado.
     let qp = context.supabase
       .from("cash_projections")
       .select(
         "id, name, direction, cost_center_id, account_id, initial_amount, monthly_growth_rate, start_date, horizon_months, accounts(name), cost_centers(name, enterprise)",
       );
     if (data.cost_center_id) qp = qp.eq("cost_center_id", data.cost_center_id);
-    const { data: projRows } = await qp;
+    if (data.scenario_id) qp = qp.eq("scenario_id" as never, data.scenario_id);
+    const { data: projRows } = data.include_manual === false ? { data: [] } : await qp;
+
     type Proj = {
       id: string;
       name: string;

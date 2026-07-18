@@ -742,24 +742,91 @@ export function OpenFinanceImporter({ onImported }: { onImported?: () => void })
               </Table>
             </div>
 
-            <div className="flex justify-between gap-2">
-              <Button variant="ghost" onClick={reset} disabled={loading}>
-                Voltar / colar outro
-              </Button>
-              <div className="flex gap-2">
-                <Button variant="ghost" onClick={() => setOpen(false)} disabled={loading}>
-                  Cancelar
-                </Button>
-                <Button onClick={doConfirm} disabled={loading}>
-                  {loading ? (
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  ) : (
-                    <CheckCircle2 className="h-4 w-4 mr-2" />
-                  )}
-                  Confirmar importação
-                </Button>
-              </div>
-            </div>
+            {(() => {
+              const uncategorized = items.filter((it) => {
+                const r = rows[it.temp_id];
+                if (!r || !r.include) return false;
+                if (r.action !== "create") return false;
+                return !r.account_id || !r.cost_center_id;
+              });
+              const pendingAporte = items.filter((it) => {
+                const r = rows[it.temp_id];
+                if (!r || !r.include || r.action !== "aporte") return false;
+                return !r.transfer_source_cc_id || !r.transfer_target_cc_id;
+              });
+              const canStep2 = step >= 2 || items.length > 0;
+              const canStep3 = uncategorized.length === 0;
+              const canFinalize = canStep3 && pendingAporte.length === 0;
+
+              return (
+                <div className="flex justify-between gap-2 border-t pt-3">
+                  <div className="flex gap-2">
+                    <Button variant="ghost" onClick={reset} disabled={loading}>
+                      Voltar / colar outro
+                    </Button>
+                    {step > 1 && (
+                      <Button
+                        variant="outline"
+                        onClick={() => setStep((s) => (s === 3 ? 2 : 1))}
+                        disabled={loading}
+                      >
+                        ← Passo anterior
+                      </Button>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {step === 2 && uncategorized.length > 0 && (
+                      <span className="text-xs text-amber-600 font-medium">
+                        {uncategorized.length} linha(s) sem categoria. Resolva ou marque como Ignorar.
+                      </span>
+                    )}
+                    {step === 3 && pendingAporte.length > 0 && (
+                      <span className="text-xs text-amber-600 font-medium">
+                        {pendingAporte.length} aporte(s) sem CC definido.
+                      </span>
+                    )}
+                    <Button variant="ghost" onClick={() => setOpen(false)} disabled={loading}>
+                      Cancelar
+                    </Button>
+                    {step === 1 && (
+                      <Button
+                        onClick={() => {
+                          setStep(2);
+                          setFilter("new");
+                          setPage(0);
+                        }}
+                        disabled={!canStep2 || loading}
+                      >
+                        Continuar → Categorizar
+                      </Button>
+                    )}
+                    {step === 2 && (
+                      <Button
+                        onClick={() => {
+                          setStep(3);
+                          setFilter("all");
+                          setPage(0);
+                        }}
+                        disabled={!canStep3 || loading}
+                      >
+                        Continuar → Conciliar
+                      </Button>
+                    )}
+                    {step === 3 && (
+                      <Button onClick={doConfirm} disabled={!canFinalize || loading}>
+                        {loading ? (
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        ) : (
+                          <CheckCircle2 className="h-4 w-4 mr-2" />
+                        )}
+                        Finalizar importação
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              );
+            })()}
+
           </>
         )}
       </DialogContent>

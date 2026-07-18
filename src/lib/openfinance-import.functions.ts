@@ -336,7 +336,11 @@ export const parseOpenFinanceText = createServerFn({ method: "POST" })
         })
         .parse(d),
   )
-  .handler(async ({ data, context }): Promise<{ items: ParsedItem[] }> => {
+  .handler(async ({ data, context }): Promise<{
+    items: ParsedItem[];
+    stats: { from_dictionary: number; from_ai: number; pending: number };
+  }> => {
+
     // 1) Contas bancárias
     const { data: bankAccountsRaw, error: baErr } = await context.supabase
       .from("bank_accounts")

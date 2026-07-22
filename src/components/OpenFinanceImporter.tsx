@@ -642,7 +642,7 @@ export function OpenFinanceImporter({ onImported }: { onImported?: () => void })
                           ) : (
                             <Select
                               value={row.action}
-                              onValueChange={(v: "match" | "create" | "skip" | "aporte" | "sales_batch") =>
+                              onValueChange={(v: "match" | "create" | "skip" | "aporte" | "sales_batch" | "transfer") =>
                                 setRows((r) => ({
                                   ...r,
                                   [it.temp_id]: {
@@ -660,7 +660,7 @@ export function OpenFinanceImporter({ onImported }: { onImported?: () => void })
                                 }))
                               }
                             >
-                              <SelectTrigger className="h-8 text-xs w-[160px]">
+                              <SelectTrigger className="h-8 text-xs w-[180px]">
                                 <SelectValue />
                               </SelectTrigger>
                               <SelectContent>
@@ -670,6 +670,9 @@ export function OpenFinanceImporter({ onImported }: { onImported?: () => void })
                                 <SelectItem value="create">Criar novo</SelectItem>
                                 {(it.sales_batch_candidates?.length ?? 0) > 0 && it.valor > 0 && (
                                   <SelectItem value="sales_batch">Vincular a lote</SelectItem>
+                                )}
+                                {it.status === "transfer" && (
+                                  <SelectItem value="transfer">Registrar transferência interna</SelectItem>
                                 )}
                                 {(it.status === "aporte" || it.status === "aporte_incomplete") && (
                                   <SelectItem value="aporte">Registrar aporte</SelectItem>

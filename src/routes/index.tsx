@@ -134,6 +134,7 @@ function Dashboard() {
     queryFn: () => balancesFn({ data: { enterprise } }),
   });
   const [showPredictive, setShowPredictive] = useState(false);
+  const [caixaSheet, setCaixaSheet] = useState(false);
 
   const today = new Date().toISOString().slice(0, 10);
   const visibleEnterprises = ENTERPRISES.filter((e) => isMaster || !e.masterOnly);

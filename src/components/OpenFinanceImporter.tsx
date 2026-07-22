@@ -827,14 +827,14 @@ export function OpenFinanceImporter({ onImported }: { onImported?: () => void })
                                 <SelectValue placeholder="Categoria" />
                               </SelectTrigger>
                               <SelectContent>
-                                {accountList.length === 0 ? (
+                                {filteredAccountList.length === 0 ? (
                                   <SelectItem value="__none" disabled>
-                                    Sem contas no centro de custo
+                                    Sem contas de {it.valor < 0 ? "despesa" : "receita"} neste centro de custo
                                   </SelectItem>
                                 ) : (
-                                  accountList.map((a) => (
+                                  filteredAccountList.map((a) => (
                                     <SelectItem key={a.id} value={a.id}>
-                                      {a.name} ({a.kind})
+                                      {a.name}
                                     </SelectItem>
                                   ))
                                 )}

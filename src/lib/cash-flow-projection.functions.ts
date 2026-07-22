@@ -79,8 +79,9 @@ export const buildCashFlowProjection = createServerFn({ method: "POST" })
     let q = context.supabase
       .from("transactions")
       .select(
-        "id, type, amount, due_date, document_datetime, paid_at, status, cost_center_id, account_id, accounts(name, kind), cost_centers(name, enterprise)",
+        "id, type, amount, due_date, document_datetime, paid_at, status, cost_center_id, account_id, is_transfer, accounts(name, kind), cost_centers(name, enterprise)",
       )
+      .eq("is_transfer", false)
       .gte("due_date", rangeStart)
       .lte("due_date", rangeEnd);
     if (data.cost_center_id) q = q.eq("cost_center_id", data.cost_center_id);

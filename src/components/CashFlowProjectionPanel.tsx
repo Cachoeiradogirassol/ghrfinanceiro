@@ -638,6 +638,8 @@ export function CashFlowProjectionPanel({
           </Table>
         </div>
       </Card>
+      </>
+      )}
     </div>
   );
 }

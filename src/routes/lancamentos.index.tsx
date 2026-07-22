@@ -375,6 +375,16 @@ function List() {
     return res;
   };
 
+  const sheetRows = useMemo<SpreadsheetRow[]>(() => {
+    return ((data ?? []) as unknown as Tx[]).map((t) => ({
+      date: (t.paid_at ?? t.due_date).slice(0, 10),
+      description: [t.description, t.contacts?.name].filter(Boolean).join(" · ") || "—",
+      type: t.type === "receivable" ? "in" : "out",
+      category: [t.accounts?.name, t.cost_centers?.name].filter(Boolean).join(" / ") || "—",
+      amount: Number(t.amount),
+    }));
+  }, [data]);
+
   return (
     <div className="p-8 space-y-6">
       <div className="flex items-center justify-between">

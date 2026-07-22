@@ -415,6 +415,7 @@ export function CashFlowProjectionPanel({
           />
         </Card>
       ) : (
+      <>
       <Card className="p-4">
         {q.isLoading ? (
           <div className="h-[320px] flex items-center justify-center text-muted-foreground">

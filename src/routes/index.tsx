@@ -47,7 +47,10 @@ import {
   FileDown,
   CheckCircle2,
   XCircle,
+  Table as TableIcon,
+  Rows3,
 } from "lucide-react";
+import { SpreadsheetView, type SpreadsheetRow } from "@/components/SpreadsheetView";
 import {
   ENTERPRISES,
   ENTERPRISE_GROUPS,
@@ -131,6 +134,7 @@ function Dashboard() {
     queryFn: () => balancesFn({ data: { enterprise } }),
   });
   const [showPredictive, setShowPredictive] = useState(false);
+  const [caixaSheet, setCaixaSheet] = useState(false);
 
   const today = new Date().toISOString().slice(0, 10);
   const visibleEnterprises = ENTERPRISES.filter((e) => isMaster || !e.masterOnly);
@@ -458,6 +462,62 @@ function Dashboard() {
               </>
             );
           })()}
+        </Card>
+
+        {/* Caixa Real — planilha corrida das transações realizadas */}
+        <Card className="p-5">
+          <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+            <div>
+              <h2 className="font-semibold">Caixa Real — linha a linha</h2>
+              <p className="text-xs text-muted-foreground">
+                Transações pagas/conciliadas em ordem cronológica. A última linha bate com o
+                saldo consolidado atual.
+              </p>
+            </div>
+            <Button
+              size="sm"
+              variant={caixaSheet ? "default" : "outline"}
+              onClick={() => setCaixaSheet((v) => !v)}
+            >
+              {caixaSheet ? <Rows3 className="h-4 w-4 mr-1" /> : <TableIcon className="h-4 w-4 mr-1" />}
+              {caixaSheet ? "Ver normal" : "Ver como planilha"}
+            </Button>
+          </div>
+          {caixaSheet ? (
+            (() => {
+              const realized = allTxs.filter(
+                (t) => t.status === "paid" || t.status === "reconciled",
+              );
+              const rows: SpreadsheetRow[] = realized.map((t) => ({
+                date: ((t.paid_at ?? t.due_date) as string).slice(0, 10),
+                description:
+                  [t.description, t.contacts?.name].filter(Boolean).join(" · ") || "—",
+                type: t.type === "receivable" ? "in" : "out",
+                category:
+                  [t.accounts?.name, t.cost_centers?.name].filter(Boolean).join(" / ") || "—",
+                amount: Number(t.amount),
+              }));
+              const currentBalance = proj.data?.currentBalance ?? 0;
+              const net = rows.reduce(
+                (s, r) => s + (r.type === "in" ? r.amount : -r.amount),
+                0,
+              );
+              const startBalance = currentBalance - net;
+              return (
+                <SpreadsheetView
+                  rows={rows}
+                  startingBalance={startBalance}
+                  fileName="caixa_real"
+                  maxHeight="60vh"
+                />
+              );
+            })()
+          ) : (
+            <p className="text-xs text-muted-foreground">
+              Clique em “Ver como planilha” para abrir a visão linha a linha estilo planilha de
+              contador.
+            </p>
+          )}
         </Card>
 
       </div>

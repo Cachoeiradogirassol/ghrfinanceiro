@@ -13,7 +13,8 @@ import {
   Legend,
   ReferenceLine,
 } from "recharts";
-import { AlertTriangle, ChevronDown, ChevronRight, Wallet, Sparkles, Layers } from "lucide-react";
+import { AlertTriangle, ChevronDown, ChevronRight, Wallet, Sparkles, Layers, Table as TableIcon, Rows3 } from "lucide-react";
+import { SpreadsheetView, type SpreadsheetRow } from "@/components/SpreadsheetView";
 
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -104,6 +105,7 @@ export function CashFlowProjectionPanel({
   // Modo "blank" força visualização apenas simulada.
   const [scenario, setScenario] = useState<Scenario>(mode === "blank" ? "sim" : "real");
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [view, setView] = useState<"normal" | "sheet">("normal");
 
   const ccs = useQuery({ queryKey: ["ccs"], queryFn: () => ccFn() });
   const filteredCcs = useMemo(
@@ -233,6 +235,40 @@ export function CashFlowProjectionPanel({
     "Real + Simulação": "hsl(160 84% 39%)",
   };
 
+  // Planilha corrida: achata o breakdown por mês em linhas transação-a-transação,
+  // respeitando o cenário ativo (mesma regra de filtro por source do gráfico).
+  const sheetRows = useMemo<SpreadsheetRow[]>(() => {
+    const breakdown = q.data?.breakdown ?? {};
+    const monthOrder = (q.data?.months ?? []).map((m) => m.month);
+    const rows: SpreadsheetRow[] = [];
+    const sourceMap: Record<CashFlowSource, string> = {
+      realized: "Realizado",
+      committed: "Compromisso",
+      estimated: "Estimativa",
+      manual: "Simulação",
+    };
+    for (const mkey of monthOrder) {
+      const items = breakdown[mkey] ?? [];
+      // dia estimado = primeiro dia do mês de competência (sem dia exato disponível)
+      const date = `${mkey}-01`;
+      for (const it of items) {
+        if (scenario === "real" && it.source === "manual") continue;
+        if (scenario === "sim" && it.source !== "manual") continue;
+        rows.push({
+          date,
+          description: `${it.account_name} — ${it.cost_center_name}`,
+          type: it.flow,
+          category: it.account_name,
+          amount: it.amount,
+          isEstimate: it.source === "estimated" || it.source === "manual",
+          sourceLabel: sourceMap[it.source],
+        });
+      }
+    }
+    return rows;
+  }, [q.data, scenario]);
+  const sheetStartBalance = scenario === "sim" ? 0 : currentBalance;
+
   return (
     <div className="space-y-4">
       {/* Seletor de cenário */}
@@ -346,8 +382,40 @@ export function CashFlowProjectionPanel({
           Horizonte: mês atual + 6 meses · Estimativa = média dos últimos 3 meses realizados por
           categoria · Simulação = projeções manuais/IA
         </div>
+        <div className="flex items-center gap-2">
+          <Button
+            size="sm"
+            variant={view === "sheet" ? "default" : "outline"}
+            onClick={() => setView((v) => (v === "sheet" ? "normal" : "sheet"))}
+          >
+            {view === "sheet" ? (
+              <><Rows3 className="h-4 w-4 mr-1" /> Ver normal</>
+            ) : (
+              <><TableIcon className="h-4 w-4 mr-1" /> Ver como planilha</>
+            )}
+          </Button>
+        </div>
       </div>
 
+      {view === "sheet" ? (
+        <Card className="p-4">
+          <div className="mb-3 text-xs text-muted-foreground">
+            Visão planilha — cenário{" "}
+            <span className="font-medium text-foreground">
+              {scenarioMeta[scenario].label}
+            </span>
+            . Itens sem dia exato (estimativa / mensal) aparecem no dia 1º do mês de competência,
+            marcados com <span className="italic">~</span>.
+          </div>
+          <SpreadsheetView
+            rows={sheetRows}
+            startingBalance={sheetStartBalance}
+            fileName={`projecao_${scenario}`}
+            maxHeight="65vh"
+          />
+        </Card>
+      ) : (
+      <>
       <Card className="p-4">
         {q.isLoading ? (
           <div className="h-[320px] flex items-center justify-center text-muted-foreground">
@@ -570,6 +638,8 @@ export function CashFlowProjectionPanel({
           </Table>
         </div>
       </Card>
+      </>
+      )}
     </div>
   );
 }

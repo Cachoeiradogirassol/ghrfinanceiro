@@ -21,7 +21,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Trash2, Layers, User, Download, Pencil, Grid3x3, Zap } from "lucide-react";
+import { Plus, Trash2, Layers, User, Download, Pencil, Grid3x3, Zap, Table as TableIcon, Rows3 } from "lucide-react";
+import { SpreadsheetView, type SpreadsheetRow } from "@/components/SpreadsheetView";
 import { toast } from "sonner";
 import { useAuth } from "@/lib/auth";
 import { useMemo, useState } from "react";
@@ -250,6 +251,7 @@ function List() {
   const [editing, setEditing] = useState<null | Record<string, unknown>>(null);
   const [gridMode, setGridMode] = useState(false);
   const [quickMode, setQuickMode] = useState(true);
+  const [sheetView, setSheetView] = useState(false);
   const [recDialog, setRecDialog] = useState<{
     tx_id: string;
     group_id: string;
@@ -373,6 +375,16 @@ function List() {
     return res;
   };
 
+  const sheetRows = useMemo<SpreadsheetRow[]>(() => {
+    return ((data ?? []) as unknown as Tx[]).map((t) => ({
+      date: (t.paid_at ?? t.due_date).slice(0, 10),
+      description: [t.description, t.contacts?.name].filter(Boolean).join(" · ") || "—",
+      type: t.type === "receivable" ? "in" : "out",
+      category: [t.accounts?.name, t.cost_centers?.name].filter(Boolean).join(" / ") || "—",
+      amount: Number(t.amount),
+    }));
+  }, [data]);
+
   return (
     <div className="p-8 space-y-6">
       <div className="flex items-center justify-between">
@@ -391,6 +403,13 @@ function List() {
           <Button variant={gridMode ? "default" : "outline"} onClick={() => setGridMode((v) => !v)}>
             <Grid3x3 className="h-4 w-4 mr-2" />
             {gridMode ? "Sair da Grade" : "Modo Grade Rápida"}
+          </Button>
+          <Button
+            variant={sheetView ? "default" : "outline"}
+            onClick={() => setSheetView((v) => !v)}
+          >
+            {sheetView ? <Rows3 className="h-4 w-4 mr-2" /> : <TableIcon className="h-4 w-4 mr-2" />}
+            {sheetView ? "Ver normal" : "Ver como planilha"}
           </Button>
           <Button
             variant="outline"
@@ -425,7 +444,23 @@ function List() {
         />
       )}
 
-      {!gridMode && (
+      {!gridMode && sheetView && (
+        <div className="space-y-2">
+          <p className="text-xs text-muted-foreground">
+            Modo planilha · saldo acumulado a partir de{" "}
+            <span className="font-mono text-foreground">R$ 0,00</span> (base zero) — reflete apenas
+            o impacto das transações listadas, incluindo pendentes.
+          </p>
+          <SpreadsheetView
+            rows={sheetRows}
+            startingBalance={0}
+            fileName="lancamentos_planilha"
+            maxHeight="70vh"
+          />
+        </div>
+      )}
+
+      {!gridMode && !sheetView && (
         <div className="rounded-md border">
           <Table>
             <TableHeader>

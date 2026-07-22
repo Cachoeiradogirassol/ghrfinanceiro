@@ -251,6 +251,7 @@ function List() {
   const [editing, setEditing] = useState<null | Record<string, unknown>>(null);
   const [gridMode, setGridMode] = useState(false);
   const [quickMode, setQuickMode] = useState(true);
+  const [sheetView, setSheetView] = useState(false);
   const [recDialog, setRecDialog] = useState<{
     tx_id: string;
     group_id: string;

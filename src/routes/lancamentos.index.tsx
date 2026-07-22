@@ -405,6 +405,13 @@ function List() {
             {gridMode ? "Sair da Grade" : "Modo Grade Rápida"}
           </Button>
           <Button
+            variant={sheetView ? "default" : "outline"}
+            onClick={() => setSheetView((v) => !v)}
+          >
+            {sheetView ? <Rows3 className="h-4 w-4 mr-2" /> : <TableIcon className="h-4 w-4 mr-2" />}
+            {sheetView ? "Ver normal" : "Ver como planilha"}
+          </Button>
+          <Button
             variant="outline"
             onClick={() => exportPagar((data ?? []) as unknown as Tx[])}
             disabled={isLoading}

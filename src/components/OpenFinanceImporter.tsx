@@ -132,13 +132,15 @@ export function OpenFinanceImporter({ onImported }: { onImported?: () => void })
         const defaultAction: RowState["action"] =
           it.status === "match"
             ? "match"
-            : it.status === "aporte" || it.status === "aporte_incomplete"
-              ? "aporte"
-              : it.status === "duplicate" || it.status === "internal"
-                ? "skip"
-                : hasBatch && it.valor > 0
-                  ? "sales_batch"
-                  : "create";
+            : it.status === "transfer"
+              ? "transfer"
+              : it.status === "aporte" || it.status === "aporte_incomplete"
+                ? "aporte"
+                : it.status === "duplicate" || it.status === "internal"
+                  ? "skip"
+                  : hasBatch && it.valor > 0
+                    ? "sales_batch"
+                    : "create";
         initialRows[it.temp_id] = {
           include: it.status !== "duplicate" && it.status !== "internal",
           action: defaultAction,

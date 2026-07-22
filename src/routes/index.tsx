@@ -47,7 +47,10 @@ import {
   FileDown,
   CheckCircle2,
   XCircle,
+  Table as TableIcon,
+  Rows3,
 } from "lucide-react";
+import { SpreadsheetView, type SpreadsheetRow } from "@/components/SpreadsheetView";
 import {
   ENTERPRISES,
   ENTERPRISE_GROUPS,

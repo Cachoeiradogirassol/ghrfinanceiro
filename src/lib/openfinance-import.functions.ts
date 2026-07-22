@@ -965,7 +965,7 @@ export const parseOpenFinanceText = createServerFn({ method: "POST" })
 
 const DecisionSchema = z.object({
   temp_id: z.string(),
-  action: z.enum(["match", "create", "skip", "aporte", "sales_batch"]),
+  action: z.enum(["match", "create", "skip", "aporte", "sales_batch", "transfer"]),
   data: z.string(),
   descricao: z.string(),
   valor: z.number(),
@@ -976,7 +976,7 @@ const DecisionSchema = z.object({
   transaction_id: z.string().uuid().nullable(),
   dedupe_tag: z.string(),
   of_dedupe_key: z.string().optional(),
-  // Aporte
+  // Aporte / Transferência interna
   pair_temp_id: z.string().nullable().optional(),
   transfer_source_cc_id: z.string().uuid().nullable().optional(),
   transfer_source_bank_account_id: z.string().uuid().nullable().optional(),

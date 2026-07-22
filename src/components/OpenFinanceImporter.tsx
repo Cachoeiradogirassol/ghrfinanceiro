@@ -582,6 +582,7 @@ export function OpenFinanceImporter({ onImported }: { onImported?: () => void })
                     const disabled = it.status === "duplicate";
                     const cc = row.cost_center_id;
                     const accountList = cc ? accountsByCc.get(cc) ?? [] : [];
+                    const filteredAccountList = filterAccountsByDirection(accountList, it.valor);
                     const isAporte = row.action === "aporte";
                     const isIncomplete = it.status === "aporte_incomplete";
 

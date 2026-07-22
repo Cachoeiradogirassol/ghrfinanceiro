@@ -42,7 +42,7 @@ import {
 
 type RowState = {
   include: boolean;
-  action: "match" | "create" | "skip" | "aporte" | "sales_batch";
+  action: "match" | "create" | "skip" | "aporte" | "sales_batch" | "transfer";
   account_id: string | null;
   cost_center_id: string | null;
   bank_account_id: string | null;

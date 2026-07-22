@@ -731,12 +731,19 @@ export const parseOpenFinanceText = createServerFn({ method: "POST" })
           const sameCc =
             sourceCc && targetCc && sourceCc.id === targetCc.id;
           if (sameCc) {
+            // Transferência interna real (mesmo CC) — vira par de is_transfer.
             return {
               ...base,
-              status: "internal" as const,
+              status: "transfer" as const,
               match_transaction_id: null,
               candidates: [],
               pair_temp_id: pairId,
+              transfer_source_cc_id: sourceCc?.id ?? null,
+              transfer_source_cc_name: sourceCc?.name ?? null,
+              transfer_source_bank_account_id: negLeg.ba?.id ?? null,
+              transfer_target_cc_id: targetCc?.id ?? null,
+              transfer_target_cc_name: targetCc?.name ?? null,
+              transfer_target_bank_account_id: posLeg.ba?.id ?? null,
             };
           }
           // Aporte

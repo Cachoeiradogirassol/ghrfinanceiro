@@ -382,8 +382,39 @@ export function CashFlowProjectionPanel({
           Horizonte: mês atual + 6 meses · Estimativa = média dos últimos 3 meses realizados por
           categoria · Simulação = projeções manuais/IA
         </div>
+        <div className="flex items-center gap-2">
+          <Button
+            size="sm"
+            variant={view === "sheet" ? "default" : "outline"}
+            onClick={() => setView((v) => (v === "sheet" ? "normal" : "sheet"))}
+          >
+            {view === "sheet" ? (
+              <><Rows3 className="h-4 w-4 mr-1" /> Ver normal</>
+            ) : (
+              <><TableIcon className="h-4 w-4 mr-1" /> Ver como planilha</>
+            )}
+          </Button>
+        </div>
       </div>
 
+      {view === "sheet" ? (
+        <Card className="p-4">
+          <div className="mb-3 text-xs text-muted-foreground">
+            Visão planilha — cenário{" "}
+            <span className="font-medium text-foreground">
+              {scenarioMeta[scenario].label}
+            </span>
+            . Itens sem dia exato (estimativa / mensal) aparecem no dia 1º do mês de competência,
+            marcados com <span className="italic">~</span>.
+          </div>
+          <SpreadsheetView
+            rows={sheetRows}
+            startingBalance={sheetStartBalance}
+            fileName={`projecao_${scenario}`}
+            maxHeight="65vh"
+          />
+        </Card>
+      ) : (
       <Card className="p-4">
         {q.isLoading ? (
           <div className="h-[320px] flex items-center justify-center text-muted-foreground">

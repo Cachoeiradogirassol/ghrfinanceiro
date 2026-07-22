@@ -940,11 +940,16 @@ export const parseOpenFinanceText = createServerFn({ method: "POST" })
     if (data.default_account_id) {
       const fb = (accountsAll ?? []).find((a) => a.id === data.default_account_id);
       // Contas de "Aporte*" pertencem exclusivamente ao fluxo de aporte — nunca usar como fallback de categoria comum.
+      // Também só aplicamos o fallback onde o kind da conta for compatível com o sinal do valor.
       if (fb && !/aporte/i.test(fb.name)) {
+        const fbKind = fb.kind;
         for (const it of items) {
           if ((it.status === "new" || it.status === "multiple") && !it.suggested_account_id) {
-            it.suggested_account_id = fb.id;
-            it.suggested_account_name = fb.name;
+            const lineKind: "revenue" | "expense" = it.valor >= 0 ? "revenue" : "expense";
+            if (fbKind === lineKind) {
+              it.suggested_account_id = fb.id;
+              it.suggested_account_name = fb.name;
+            }
           }
         }
       }

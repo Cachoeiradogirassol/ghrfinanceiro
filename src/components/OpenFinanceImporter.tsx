@@ -56,6 +56,18 @@ type RowState = {
   sales_batch_id: string | null;
 };
 
+type AccountOption = { id: string; name: string; kind: string };
+
+const filterAccountsByDirection = (
+  accounts: AccountOption[],
+  value: number,
+): AccountOption[] =>
+  accounts.filter((a) => {
+    if (/aporte/i.test(a.name)) return false;
+    if (value < 0) return a.kind === "expense";
+    return a.kind === "revenue";
+  });
+
 const brl = (v: number) =>
   v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
@@ -376,12 +388,14 @@ export function OpenFinanceImporter({ onImported }: { onImported?: () => void })
                   <SelectTrigger>
                     <SelectValue placeholder="Só se não houver sugestão" />
                   </SelectTrigger>
-                  <SelectContent>
-                    {(accs.data ?? []).map((a) => (
-                      <SelectItem key={a.id} value={a.id}>
-                        {a.name} ({a.kind})
-                      </SelectItem>
-                    ))}
+                    <SelectContent>
+                    {(accs.data ?? [])
+                      .filter((a) => a.is_active && !/aporte/i.test(a.name))
+                      .map((a) => (
+                        <SelectItem key={a.id} value={a.id}>
+                          {a.name} ({a.kind})
+                        </SelectItem>
+                      ))}
                   </SelectContent>
                 </Select>
               </div>
@@ -570,6 +584,7 @@ export function OpenFinanceImporter({ onImported }: { onImported?: () => void })
                     const disabled = it.status === "duplicate";
                     const cc = row.cost_center_id;
                     const accountList = cc ? accountsByCc.get(cc) ?? [] : [];
+                    const filteredAccountList = filterAccountsByDirection(accountList, it.valor);
                     const isAporte = row.action === "aporte";
                     const isIncomplete = it.status === "aporte_incomplete";
 
@@ -814,14 +829,14 @@ export function OpenFinanceImporter({ onImported }: { onImported?: () => void })
                                 <SelectValue placeholder="Categoria" />
                               </SelectTrigger>
                               <SelectContent>
-                                {accountList.length === 0 ? (
+                                {filteredAccountList.length === 0 ? (
                                   <SelectItem value="__none" disabled>
-                                    Sem contas no centro de custo
+                                    Sem contas de {it.valor < 0 ? "despesa" : "receita"} neste centro de custo
                                   </SelectItem>
                                 ) : (
-                                  accountList.map((a) => (
+                                  filteredAccountList.map((a) => (
                                     <SelectItem key={a.id} value={a.id}>
-                                      {a.name} ({a.kind})
+                                      {a.name}
                                     </SelectItem>
                                   ))
                                 )}

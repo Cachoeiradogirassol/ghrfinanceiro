@@ -42,7 +42,7 @@ import {
 
 type RowState = {
   include: boolean;
-  action: "match" | "create" | "skip" | "aporte" | "sales_batch";
+  action: "match" | "create" | "skip" | "aporte" | "sales_batch" | "transfer";
   account_id: string | null;
   cost_center_id: string | null;
   bank_account_id: string | null;
@@ -132,13 +132,15 @@ export function OpenFinanceImporter({ onImported }: { onImported?: () => void })
         const defaultAction: RowState["action"] =
           it.status === "match"
             ? "match"
-            : it.status === "aporte" || it.status === "aporte_incomplete"
-              ? "aporte"
-              : it.status === "duplicate" || it.status === "internal"
-                ? "skip"
-                : hasBatch && it.valor > 0
-                  ? "sales_batch"
-                  : "create";
+            : it.status === "transfer"
+              ? "transfer"
+              : it.status === "aporte" || it.status === "aporte_incomplete"
+                ? "aporte"
+                : it.status === "duplicate" || it.status === "internal"
+                  ? "skip"
+                  : hasBatch && it.valor > 0
+                    ? "sales_batch"
+                    : "create";
         initialRows[it.temp_id] = {
           include: it.status !== "duplicate" && it.status !== "internal",
           action: defaultAction,
@@ -216,8 +218,9 @@ export function OpenFinanceImporter({ onImported }: { onImported?: () => void })
     try {
       const res = await confirmFn({ data: { decisions } });
       const attached = (res as { attached_to_batch?: number }).attached_to_batch ?? 0;
+      const transfersDone = (res as { transfers?: number }).transfers ?? 0;
       toast.success(
-        `Concluído: ${res.reconciled} conciliados, ${res.created} criados, ${attached} vinculados a lote, ${res.aportes} aportes, ${res.skipped} ignorados${res.errors.length ? `, ${res.errors.length} erros` : ""}.`,
+        `Concluído: ${res.reconciled} conciliados, ${res.created} criados, ${attached} vinculados a lote, ${res.aportes} aportes, ${transfersDone} transferências internas, ${res.skipped} ignorados${res.errors.length ? `, ${res.errors.length} erros` : ""}.`,
       );
       if (res.errors.length > 0) {
         console.warn("Erros de importação Open Finance:", res.errors);
@@ -284,6 +287,7 @@ export function OpenFinanceImporter({ onImported }: { onImported?: () => void })
       duplicate: { label: "duplicado", variant: "outline" },
       no_cost_center: { label: "sem CC", variant: "destructive" },
       internal: { label: "interna", variant: "outline" },
+      transfer: { label: "TRANSF INTERNA", variant: "secondary" },
       aporte: { label: "APORTE", variant: "default" },
       aporte_incomplete: { label: "aporte ½", variant: "destructive" },
     };
@@ -639,7 +643,7 @@ export function OpenFinanceImporter({ onImported }: { onImported?: () => void })
                           ) : (
                             <Select
                               value={row.action}
-                              onValueChange={(v: "match" | "create" | "skip" | "aporte" | "sales_batch") =>
+                              onValueChange={(v: "match" | "create" | "skip" | "aporte" | "sales_batch" | "transfer") =>
                                 setRows((r) => ({
                                   ...r,
                                   [it.temp_id]: {
@@ -657,7 +661,7 @@ export function OpenFinanceImporter({ onImported }: { onImported?: () => void })
                                 }))
                               }
                             >
-                              <SelectTrigger className="h-8 text-xs w-[160px]">
+                              <SelectTrigger className="h-8 text-xs w-[180px]">
                                 <SelectValue />
                               </SelectTrigger>
                               <SelectContent>
@@ -667,6 +671,9 @@ export function OpenFinanceImporter({ onImported }: { onImported?: () => void })
                                 <SelectItem value="create">Criar novo</SelectItem>
                                 {(it.sales_batch_candidates?.length ?? 0) > 0 && it.valor > 0 && (
                                   <SelectItem value="sales_batch">Vincular a lote</SelectItem>
+                                )}
+                                {it.status === "transfer" && (
+                                  <SelectItem value="transfer">Registrar transferência interna</SelectItem>
                                 )}
                                 {(it.status === "aporte" || it.status === "aporte_incomplete") && (
                                   <SelectItem value="aporte">Registrar aporte</SelectItem>

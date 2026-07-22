@@ -1,0 +1,2 @@
+ALTER TABLE public.transactions ADD COLUMN IF NOT EXISTS is_transfer boolean DEFAULT false;
+CREATE INDEX IF NOT EXISTS idx_transactions_is_transfer ON public.transactions(is_transfer) WHERE is_transfer = true;

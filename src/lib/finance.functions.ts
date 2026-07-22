@@ -1178,7 +1178,7 @@ async function loadFinanceData(supabase: {
     supabase
       .from("transactions")
       .select(
-        "id, type, amount, due_date, document_datetime, status, account_id, cost_center_id, bank_account_id, accounts(name)",
+        "id, type, amount, due_date, document_datetime, status, account_id, cost_center_id, bank_account_id, is_transfer, accounts(name)",
       ),
     supabase.from("transaction_allocations").select("transaction_id, cost_center_id, amount"),
     supabase.from("accounts").select("id, kind, is_administrative"),
@@ -1207,6 +1207,7 @@ async function loadFinanceData(supabase: {
         cost_center_id: string;
 
         bank_account_id: string | null;
+        is_transfer: boolean | null;
         accounts: { name?: string } | null;
       }>;
     },
@@ -1310,6 +1311,7 @@ export const buildDRE = createServerFn({ method: "POST" })
 
     for (const tx of txs) {
       if (tx.status === "pending") continue; // DRE = realizado
+      if (tx.is_transfer) continue; // transferências internas não entram no DRE
       // Data de competência: prioriza document_datetime (data do fato/nota)
       const competenceIso =
         (tx as { document_datetime?: string | null }).document_datetime ?? tx.due_date;

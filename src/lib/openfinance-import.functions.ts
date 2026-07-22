@@ -245,6 +245,7 @@ export type ParsedItem = {
     | "duplicate"
     | "no_cost_center"
     | "internal"
+    | "transfer"
     | "aporte"
     | "aporte_incomplete";
   match_transaction_id: string | null;
@@ -730,12 +731,19 @@ export const parseOpenFinanceText = createServerFn({ method: "POST" })
           const sameCc =
             sourceCc && targetCc && sourceCc.id === targetCc.id;
           if (sameCc) {
+            // Transferência interna real (mesmo CC) — vira par de is_transfer.
             return {
               ...base,
-              status: "internal" as const,
+              status: "transfer" as const,
               match_transaction_id: null,
               candidates: [],
               pair_temp_id: pairId,
+              transfer_source_cc_id: sourceCc?.id ?? null,
+              transfer_source_cc_name: sourceCc?.name ?? null,
+              transfer_source_bank_account_id: negLeg.ba?.id ?? null,
+              transfer_target_cc_id: targetCc?.id ?? null,
+              transfer_target_cc_name: targetCc?.name ?? null,
+              transfer_target_bank_account_id: posLeg.ba?.id ?? null,
             };
           }
           // Aporte
@@ -957,7 +965,7 @@ export const parseOpenFinanceText = createServerFn({ method: "POST" })
 
 const DecisionSchema = z.object({
   temp_id: z.string(),
-  action: z.enum(["match", "create", "skip", "aporte", "sales_batch"]),
+  action: z.enum(["match", "create", "skip", "aporte", "sales_batch", "transfer"]),
   data: z.string(),
   descricao: z.string(),
   valor: z.number(),
@@ -968,7 +976,7 @@ const DecisionSchema = z.object({
   transaction_id: z.string().uuid().nullable(),
   dedupe_tag: z.string(),
   of_dedupe_key: z.string().optional(),
-  // Aporte
+  // Aporte / Transferência interna
   pair_temp_id: z.string().nullable().optional(),
   transfer_source_cc_id: z.string().uuid().nullable().optional(),
   transfer_source_bank_account_id: z.string().uuid().nullable().optional(),
@@ -988,10 +996,11 @@ export const confirmOpenFinanceImport = createServerFn({ method: "POST" })
     let created = 0;
     let skipped = 0;
     let aportes = 0;
+    let transfers = 0;
     let attached_to_batch = 0;
     const errors: string[] = [];
 
-    // Para aportes pareados: só processar uma perna por par
+    // Para aportes/transferências pareados: só processar uma perna por par
     const processedPair = new Set<string>();
 
     for (const dec of data.decisions) {
@@ -999,6 +1008,124 @@ export const confirmOpenFinanceImport = createServerFn({ method: "POST" })
         skipped++;
         continue;
       }
+
+      // -------------------- TRANSFERÊNCIA INTERNA (mesmo dono/CC) --------------------
+      // Cria DUAS transactions com is_transfer=true: payable na origem, receivable
+      // no destino. Elas ajustam o saldo de cada banco mas NÃO entram no DRE.
+      if (dec.action === "transfer") {
+        if (!dec.pair_temp_id) {
+          errors.push(`${dec.descricao}: transferência sem par identificado.`);
+          continue;
+        }
+        const pairKey = [dec.temp_id, dec.pair_temp_id].sort().join("::");
+        if (processedPair.has(pairKey)) {
+          skipped++;
+          continue;
+        }
+        processedPair.add(pairKey);
+
+        const srcCc = dec.transfer_source_cc_id;
+        const tgtCc = dec.transfer_target_cc_id;
+        const srcBank = dec.transfer_source_bank_account_id;
+        const tgtBank = dec.transfer_target_bank_account_id;
+        if (!srcCc || !tgtCc || !srcBank || !tgtBank) {
+          errors.push(`${dec.descricao}: transferência interna incompleta — precisa dos dois bancos e CC.`);
+          continue;
+        }
+
+        // Escolhe conta contábil neutra por CC (account_id é NOT NULL em transactions).
+        // Como is_transfer=true faz o DRE ignorar, qualquer conta ativa serve.
+        async function pickNeutralAccount(ccId: string, kind: "expense" | "revenue") {
+          const { data: acc } = await context.supabase
+            .from("accounts")
+            .select("id, name")
+            .eq("cost_center_id", ccId)
+            .eq("kind", kind)
+            .eq("is_active", true)
+            .order("name")
+            .limit(50);
+          const list = (acc ?? []) as Array<{ id: string; name: string }>;
+          return (
+            list.find((a) => /transfer[êe]ncia\s+entre\s+contas/i.test(a.name))?.id ??
+            list.find((a) => /transfer[êe]ncia/i.test(a.name))?.id ??
+            list[0]?.id ??
+            null
+          );
+        }
+        const srcAccId = await pickNeutralAccount(srcCc, "expense");
+        const tgtAccId = await pickNeutralAccount(tgtCc, "revenue");
+        if (!srcAccId || !tgtAccId) {
+          errors.push(`${dec.descricao}: sem conta contábil ativa disponível no CC para transferência.`);
+          continue;
+        }
+
+        // Dedupe: se qualquer perna já foi importada, pula tudo.
+        const dedupeKeys = [dec.of_dedupe_key].filter(Boolean) as string[];
+        if (dedupeKeys.length > 0) {
+          const { data: dup } = await context.supabase
+            .from("transactions")
+            .select("id")
+            .in("of_dedupe_key", dedupeKeys)
+            .limit(1);
+          if (dup && dup.length > 0) {
+            skipped++;
+            continue;
+          }
+        }
+
+        const paidAt = new Date(`${dec.data}T12:00:00Z`).toISOString();
+        const amount = Math.abs(Number(dec.valor.toFixed(2)));
+        const tag = dec.dedupe_tag;
+        const baseDesc = `${tag} [TRANSF] ${dec.instituicao} — ${dec.descricao}`.slice(0, 500);
+
+        // Perna de SAÍDA (payable na origem)
+        const { error: e1 } = await context.supabase.from("transactions").insert({
+          cost_center_id: srcCc,
+          account_id: srcAccId,
+          bank_account_id: srcBank,
+          type: "payable",
+          amount,
+          description: `${baseDesc} · saída`,
+          due_date: dec.data,
+          document_datetime: paidAt,
+          status: "reconciled",
+          paid_at: paidAt,
+          created_by: context.userId,
+          of_dedupe_key: dec.of_dedupe_key ?? null,
+          is_transfer: true,
+        } as never);
+        if (e1) {
+          errors.push(`${dec.descricao}: ${e1.message}`);
+          continue;
+        }
+        // Perna de ENTRADA (receivable no destino) — dedupe_key da OUTRA perna,
+        // se disponível, para evitar reimport quando o mesmo extrato roda de novo.
+        const otherDec = data.decisions.find((d) => d.temp_id === dec.pair_temp_id);
+        const otherKey = otherDec?.of_dedupe_key ?? null;
+        const { error: e2 } = await context.supabase.from("transactions").insert({
+          cost_center_id: tgtCc,
+          account_id: tgtAccId,
+          bank_account_id: tgtBank,
+          type: "receivable",
+          amount,
+          description: `${baseDesc} · entrada`,
+          due_date: dec.data,
+          document_datetime: paidAt,
+          status: "reconciled",
+          paid_at: paidAt,
+          created_by: context.userId,
+          of_dedupe_key: otherKey,
+          is_transfer: true,
+        } as never);
+        if (e2) {
+          errors.push(`${dec.descricao}: ${e2.message}`);
+          continue;
+        }
+        transfers++;
+        continue;
+      }
+
+
 
       // -------------------- VINCULAR A LOTE DE VENDA --------------------
       // Cria uma bank_statement_lines com sales_batch_id preenchido. O trigger
@@ -1279,5 +1406,5 @@ export const confirmOpenFinanceImport = createServerFn({ method: "POST" })
       created++;
     }
 
-    return { reconciled, created, aportes, attached_to_batch, skipped, errors };
+    return { reconciled, created, aportes, transfers, attached_to_batch, skipped, errors };
   });

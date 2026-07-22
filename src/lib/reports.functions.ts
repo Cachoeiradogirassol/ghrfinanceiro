@@ -210,10 +210,11 @@ export const buildCostAnalytics = createServerFn({ method: "POST" })
     let q = context.supabase
       .from("transactions")
       .select(
-        "id, amount, type, status, due_date, document_datetime, account_id, accounts(name, kind), cost_centers(enterprise), transaction_allocations(amount, cost_centers(enterprise))",
+        "id, amount, type, status, due_date, document_datetime, account_id, is_transfer, accounts(name, kind), cost_centers(enterprise), transaction_allocations(amount, cost_centers(enterprise))",
       )
       .gte("due_date", from)
       .lte("due_date", to)
+      .eq("is_transfer", false)
       .limit(8000);
     if (data.accountId) q = q.eq("account_id", data.accountId);
     const { data: txs, error } = await q;

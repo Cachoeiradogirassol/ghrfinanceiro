@@ -105,6 +105,7 @@ export function CashFlowProjectionPanel({
   // Modo "blank" força visualização apenas simulada.
   const [scenario, setScenario] = useState<Scenario>(mode === "blank" ? "sim" : "real");
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [view, setView] = useState<"normal" | "sheet">("normal");
 
   const ccs = useQuery({ queryKey: ["ccs"], queryFn: () => ccFn() });
   const filteredCcs = useMemo(

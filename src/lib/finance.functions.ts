@@ -1311,6 +1311,7 @@ export const buildDRE = createServerFn({ method: "POST" })
 
     for (const tx of txs) {
       if (tx.status === "pending") continue; // DRE = realizado
+      if (tx.is_transfer) continue; // transferências internas não entram no DRE
       // Data de competência: prioriza document_datetime (data do fato/nota)
       const competenceIso =
         (tx as { document_datetime?: string | null }).document_datetime ?? tx.due_date;

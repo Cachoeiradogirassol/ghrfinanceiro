@@ -444,7 +444,23 @@ function List() {
         />
       )}
 
-      {!gridMode && (
+      {!gridMode && sheetView && (
+        <div className="space-y-2">
+          <p className="text-xs text-muted-foreground">
+            Modo planilha · saldo acumulado a partir de{" "}
+            <span className="font-mono text-foreground">R$ 0,00</span> (base zero) — reflete apenas
+            o impacto das transações listadas, incluindo pendentes.
+          </p>
+          <SpreadsheetView
+            rows={sheetRows}
+            startingBalance={0}
+            fileName="lancamentos_planilha"
+            maxHeight="70vh"
+          />
+        </div>
+      )}
+
+      {!gridMode && !sheetView && (
         <div className="rounded-md border">
           <Table>
             <TableHeader>

@@ -388,12 +388,14 @@ export function OpenFinanceImporter({ onImported }: { onImported?: () => void })
                   <SelectTrigger>
                     <SelectValue placeholder="Só se não houver sugestão" />
                   </SelectTrigger>
-                  <SelectContent>
-                    {(accs.data ?? []).map((a) => (
-                      <SelectItem key={a.id} value={a.id}>
-                        {a.name} ({a.kind})
-                      </SelectItem>
-                    ))}
+                    <SelectContent>
+                    {(accs.data ?? [])
+                      .filter((a) => a.is_active && !/aporte/i.test(a.name))
+                      .map((a) => (
+                        <SelectItem key={a.id} value={a.id}>
+                          {a.name} ({a.kind})
+                        </SelectItem>
+                      ))}
                   </SelectContent>
                 </Select>
               </div>

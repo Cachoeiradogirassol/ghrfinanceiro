@@ -1178,7 +1178,7 @@ async function loadFinanceData(supabase: {
     supabase
       .from("transactions")
       .select(
-        "id, type, amount, due_date, document_datetime, status, account_id, cost_center_id, bank_account_id, accounts(name)",
+        "id, type, amount, due_date, document_datetime, status, account_id, cost_center_id, bank_account_id, is_transfer, accounts(name)",
       ),
     supabase.from("transaction_allocations").select("transaction_id, cost_center_id, amount"),
     supabase.from("accounts").select("id, kind, is_administrative"),
@@ -1207,6 +1207,7 @@ async function loadFinanceData(supabase: {
         cost_center_id: string;
 
         bank_account_id: string | null;
+        is_transfer: boolean | null;
         accounts: { name?: string } | null;
       }>;
     },

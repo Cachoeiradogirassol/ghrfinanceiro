@@ -116,9 +116,10 @@ export const buildComparativeDRE = createServerFn({ method: "POST" })
     const { data: txs, error } = await context.supabase
       .from("transactions")
       .select(
-        "id, type, amount, due_date, document_datetime, status, cost_centers(enterprise)",
+        "id, type, amount, due_date, document_datetime, status, is_transfer, cost_centers(enterprise)",
       )
       .gte("due_date", from.toISOString().slice(0, 10))
+      .eq("is_transfer", false)
       .limit(5000);
     if (error) throw new Error(error.message);
 

@@ -245,6 +245,7 @@ export type ParsedItem = {
     | "duplicate"
     | "no_cost_center"
     | "internal"
+    | "transfer"
     | "aporte"
     | "aporte_incomplete";
   match_transaction_id: string | null;

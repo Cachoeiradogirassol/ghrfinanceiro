@@ -865,9 +865,28 @@ export function OpenFinanceImporter({ onImported }: { onImported?: () => void })
                   </div>
                   <div className="flex items-center gap-2">
                     {step === 2 && uncategorized.length > 0 && (
-                      <span className="text-xs text-amber-600 font-medium">
-                        {uncategorized.length} linha(s) sem categoria. Resolva ou marque como Ignorar.
-                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const firstId = uncategorized[0].temp_id;
+                          const idx = items.findIndex((x) => x.temp_id === firstId);
+                          if (idx >= 0) {
+                            setFilter("all");
+                            setPage(Math.floor(idx / PAGE_SIZE));
+                          }
+                          const missing = uncategorized
+                            .slice(0, 5)
+                            .map((it) => `• ${it.data} ${it.descricao.slice(0, 60)}`)
+                            .join("\n");
+                          toast.warning(
+                            `${uncategorized.length} linha(s) sem categoria`,
+                            { description: missing, duration: 8000 },
+                          );
+                        }}
+                        className="text-xs text-amber-600 font-medium underline"
+                      >
+                        {uncategorized.length} sem categoria — clique para localizar
+                      </button>
                     )}
                     {step === 3 && pendingAporte.length > 0 && (
                       <span className="text-xs text-amber-600 font-medium">

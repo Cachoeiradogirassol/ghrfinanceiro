@@ -13,7 +13,8 @@ import {
   Legend,
   ReferenceLine,
 } from "recharts";
-import { AlertTriangle, ChevronDown, ChevronRight, Wallet, Sparkles, Layers } from "lucide-react";
+import { AlertTriangle, ChevronDown, ChevronRight, Wallet, Sparkles, Layers, Table as TableIcon, Rows3 } from "lucide-react";
+import { SpreadsheetView, type SpreadsheetRow } from "@/components/SpreadsheetView";
 
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";

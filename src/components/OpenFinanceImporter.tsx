@@ -56,6 +56,18 @@ type RowState = {
   sales_batch_id: string | null;
 };
 
+type AccountOption = { id: string; name: string; kind: string };
+
+const filterAccountsByDirection = (
+  accounts: AccountOption[],
+  value: number,
+): AccountOption[] =>
+  accounts.filter((a) => {
+    if (/aporte/i.test(a.name)) return false;
+    if (value < 0) return a.kind === "expense";
+    return a.kind === "revenue";
+  });
+
 const brl = (v: number) =>
   v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 

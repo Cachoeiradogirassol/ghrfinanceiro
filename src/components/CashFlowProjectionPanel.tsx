@@ -235,6 +235,40 @@ export function CashFlowProjectionPanel({
     "Real + Simulação": "hsl(160 84% 39%)",
   };
 
+  // Planilha corrida: achata o breakdown por mês em linhas transação-a-transação,
+  // respeitando o cenário ativo (mesma regra de filtro por source do gráfico).
+  const sheetRows = useMemo<SpreadsheetRow[]>(() => {
+    const breakdown = q.data?.breakdown ?? {};
+    const monthOrder = (q.data?.months ?? []).map((m) => m.month);
+    const rows: SpreadsheetRow[] = [];
+    const sourceMap: Record<CashFlowSource, string> = {
+      realized: "Realizado",
+      committed: "Compromisso",
+      estimated: "Estimativa",
+      manual: "Simulação",
+    };
+    for (const mkey of monthOrder) {
+      const items = breakdown[mkey] ?? [];
+      // dia estimado = primeiro dia do mês de competência (sem dia exato disponível)
+      const date = `${mkey}-01`;
+      for (const it of items) {
+        if (scenario === "real" && it.source === "manual") continue;
+        if (scenario === "sim" && it.source !== "manual") continue;
+        rows.push({
+          date,
+          description: `${it.account_name} — ${it.cost_center_name}`,
+          type: it.flow,
+          category: it.account_name,
+          amount: it.amount,
+          isEstimate: it.source === "estimated" || it.source === "manual",
+          sourceLabel: sourceMap[it.source],
+        });
+      }
+    }
+    return rows;
+  }, [q.data, scenario]);
+  const sheetStartBalance = scenario === "sim" ? 0 : currentBalance;
+
   return (
     <div className="space-y-4">
       {/* Seletor de cenário */}

@@ -284,6 +284,7 @@ export function OpenFinanceImporter({ onImported }: { onImported?: () => void })
       duplicate: { label: "duplicado", variant: "outline" },
       no_cost_center: { label: "sem CC", variant: "destructive" },
       internal: { label: "interna", variant: "outline" },
+      transfer: { label: "TRANSF INTERNA", variant: "secondary" },
       aporte: { label: "APORTE", variant: "default" },
       aporte_incomplete: { label: "aporte ½", variant: "destructive" },
     };

@@ -21,7 +21,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Trash2, Layers, User, Download, Pencil, Grid3x3, Zap } from "lucide-react";
+import { Plus, Trash2, Layers, User, Download, Pencil, Grid3x3, Zap, Table as TableIcon, Rows3 } from "lucide-react";
+import { SpreadsheetView, type SpreadsheetRow } from "@/components/SpreadsheetView";
 import { toast } from "sonner";
 import { useAuth } from "@/lib/auth";
 import { useMemo, useState } from "react";

@@ -92,9 +92,15 @@ const scenarioMeta: Record<Scenario, { label: string; desc: string; icon: typeof
 export function CashFlowProjectionPanel({
   mode = "real_based",
   scenarioId = null,
+  horizon = 6,
+  simulationOverlay,
 }: {
   mode?: "real_based" | "blank";
   scenarioId?: string | null;
+  /** Horizonte em meses futuros (mês atual + horizon). */
+  horizon?: number;
+  /** Camada de simulação vinda do Simulador de DRE, somada à camada manual. */
+  simulationOverlay?: Record<string, { in: number; out: number }>;
 } = {}) {
   const buildFn = useServerFn(buildCashFlowProjection);
   const balanceFn = useServerFn(buildProjection);
@@ -117,17 +123,18 @@ export function CashFlowProjectionPanel({
   );
 
   const q = useQuery({
-    queryKey: ["cash-flow-projection", enterprise, ccId, scenarioId, mode],
+    queryKey: ["cash-flow-projection", enterprise, ccId, scenarioId, mode, horizon],
     queryFn: () =>
       buildFn({
         data: {
           enterprise: enterprise === "__all__" ? undefined : enterprise,
           cost_center_id: ccId === "__all__" ? undefined : ccId,
-          horizon_months: 6,
+          horizon_months: horizon,
           scenario_id: scenarioId ?? undefined,
         },
       }),
   });
+
 
 
   // Saldo consolidado atual — ancora do "Caixa Real Projetado".

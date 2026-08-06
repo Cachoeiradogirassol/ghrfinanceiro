@@ -26,7 +26,10 @@ import {
 import { QuickGrid, type GridColumnDef } from "@/components/QuickGrid";
 import { AccountCombobox } from "@/components/AccountCombobox";
 import { groupAccounts } from "@/lib/account-options";
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
+import { DreSimulator } from "@/components/DreSimulator";
+import type { SimulationResult } from "@/lib/simulation-compute";
+
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";

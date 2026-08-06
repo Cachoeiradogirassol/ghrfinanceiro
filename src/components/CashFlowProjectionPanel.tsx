@@ -181,7 +181,11 @@ export function CashFlowProjectionPanel({
       const realNet =
         m.realized.in + m.committed.in + m.estimated.in -
         (m.realized.out + m.committed.out + m.estimated.out);
-      const simNet = m.manual.in - m.manual.out;
+      // Camada de simulação = projeções manuais do motor + hipóteses do Simulador de DRE.
+      const ov = simulationOverlay?.[m.month] ?? { in: 0, out: 0 };
+      const simIn = m.manual.in + ov.in;
+      const simOut = m.manual.out + ov.out;
+      const simNet = simIn - simOut;
 
       cumReal += realNet;
       cumSim += simNet;
@@ -199,14 +203,15 @@ export function CashFlowProjectionPanel({
       } else if (scenario === "sim") {
         net = simNet;
         cumulative = cumSim;
-        entradas = m.manual.in;
-        saidas = m.manual.out;
+        entradas = simIn;
+        saidas = simOut;
       } else {
         net = realNet + simNet;
         cumulative = cumMixed;
-        entradas = m.realized.in + m.committed.in + m.estimated.in + m.manual.in;
-        saidas = m.realized.out + m.committed.out + m.estimated.out + m.manual.out;
+        entradas = m.realized.in + m.committed.in + m.estimated.in + simIn;
+        saidas = m.realized.out + m.committed.out + m.estimated.out + simOut;
       }
+
 
       const negative = cumulative < 0;
       if (negative) {

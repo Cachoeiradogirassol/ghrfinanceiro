@@ -239,7 +239,7 @@ export function CashFlowProjectionPanel({
       });
     }
     return { chartData: chart, monthRows: rows, scenarioAlerts: alerts };
-  }, [q.data, scenario, currentBalance]);
+  }, [q.data, scenario, currentBalance, simulationOverlay]);
 
   const scenarioLineColor: Record<string, string> = {
     Real: "hsl(221 83% 53%)",

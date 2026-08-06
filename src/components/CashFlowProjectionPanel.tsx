@@ -22,10 +22,13 @@ import { Button } from "@/components/ui/button";
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+
 import {
   Table,
   TableBody,
@@ -40,18 +43,18 @@ import {
   type CashFlowSource,
 } from "@/lib/cash-flow-projection.functions";
 import { listCostCenters, buildProjection } from "@/lib/finance.functions";
+import { ENTERPRISES, ENTERPRISE_GROUPS } from "@/lib/enterprises";
+
 
 const fmt = (n: number) =>
   n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
-const ENTERPRISES = [
+// Estrutura oficial de empreendimentos (src/lib/enterprises.ts).
+const ENTERPRISE_OPTIONS: { value: string; label: string; group?: string }[] = [
   { value: "__all__", label: "Todas as empresas" },
-  { value: "restaurante", label: "Restaurante" },
-  { value: "vinhedo", label: "Vinhedo / Cachoeira" },
-  { value: "turismo", label: "Turismo" },
-  { value: "ghr_aldeia", label: "GHR Aldeia" },
-  { value: "ghr_jk", label: "GHR JK" },
+  ...ENTERPRISES.map((e) => ({ value: e.value as string, label: e.label, group: e.group })),
 ];
+
 
 const sourceLabel: Record<CashFlowSource, string> = {
   realized: "Realizado",
@@ -92,9 +95,15 @@ const scenarioMeta: Record<Scenario, { label: string; desc: string; icon: typeof
 export function CashFlowProjectionPanel({
   mode = "real_based",
   scenarioId = null,
+  horizon = 6,
+  simulationOverlay,
 }: {
   mode?: "real_based" | "blank";
   scenarioId?: string | null;
+  /** Horizonte em meses futuros (mês atual + horizon). */
+  horizon?: number;
+  /** Camada de simulação vinda do Simulador de DRE, somada à camada manual. */
+  simulationOverlay?: Record<string, { in: number; out: number }>;
 } = {}) {
   const buildFn = useServerFn(buildCashFlowProjection);
   const balanceFn = useServerFn(buildProjection);
@@ -117,17 +126,18 @@ export function CashFlowProjectionPanel({
   );
 
   const q = useQuery({
-    queryKey: ["cash-flow-projection", enterprise, ccId, scenarioId, mode],
+    queryKey: ["cash-flow-projection", enterprise, ccId, scenarioId, mode, horizon],
     queryFn: () =>
       buildFn({
         data: {
           enterprise: enterprise === "__all__" ? undefined : enterprise,
           cost_center_id: ccId === "__all__" ? undefined : ccId,
-          horizon_months: 6,
+          horizon_months: horizon,
           scenario_id: scenarioId ?? undefined,
         },
       }),
   });
+
 
 
   // Saldo consolidado atual — ancora do "Caixa Real Projetado".
@@ -174,7 +184,11 @@ export function CashFlowProjectionPanel({
       const realNet =
         m.realized.in + m.committed.in + m.estimated.in -
         (m.realized.out + m.committed.out + m.estimated.out);
-      const simNet = m.manual.in - m.manual.out;
+      // Camada de simulação = projeções manuais do motor + hipóteses do Simulador de DRE.
+      const ov = simulationOverlay?.[m.month] ?? { in: 0, out: 0 };
+      const simIn = m.manual.in + ov.in;
+      const simOut = m.manual.out + ov.out;
+      const simNet = simIn - simOut;
 
       cumReal += realNet;
       cumSim += simNet;
@@ -192,14 +206,15 @@ export function CashFlowProjectionPanel({
       } else if (scenario === "sim") {
         net = simNet;
         cumulative = cumSim;
-        entradas = m.manual.in;
-        saidas = m.manual.out;
+        entradas = simIn;
+        saidas = simOut;
       } else {
         net = realNet + simNet;
         cumulative = cumMixed;
-        entradas = m.realized.in + m.committed.in + m.estimated.in + m.manual.in;
-        saidas = m.realized.out + m.committed.out + m.estimated.out + m.manual.out;
+        entradas = m.realized.in + m.committed.in + m.estimated.in + simIn;
+        saidas = m.realized.out + m.committed.out + m.estimated.out + simOut;
       }
+
 
       const negative = cumulative < 0;
       if (negative) {
@@ -227,7 +242,7 @@ export function CashFlowProjectionPanel({
       });
     }
     return { chartData: chart, monthRows: rows, scenarioAlerts: alerts };
-  }, [q.data, scenario, currentBalance]);
+  }, [q.data, scenario, currentBalance, simulationOverlay]);
 
   const scenarioLineColor: Record<string, string> = {
     Real: "hsl(221 83% 53%)",
@@ -308,7 +323,10 @@ export function CashFlowProjectionPanel({
           <div className="mt-3 text-xs text-muted-foreground flex items-center gap-2">
             <Wallet className="h-3.5 w-3.5" />
             Saldo inicial (caixa consolidado{" "}
-            {enterprise === "__all__" ? "geral" : ENTERPRISES.find((e) => e.value === enterprise)?.label}
+            {enterprise === "__all__"
+              ? "geral"
+              : ENTERPRISE_OPTIONS.find((e) => e.value === enterprise)?.label}
+
             ):{" "}
             <span className="font-mono font-semibold text-foreground">
               {ccId === "__all__" ? fmt(currentBalance) : "— (filtrado por CC)"}
@@ -354,12 +372,19 @@ export function CashFlowProjectionPanel({
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {ENTERPRISES.map((e) => (
-                <SelectItem key={e.value} value={e.value}>
-                  {e.label}
-                </SelectItem>
+              <SelectItem value="__all__">Todas as empresas</SelectItem>
+              {ENTERPRISE_GROUPS.map((g) => (
+                <SelectGroup key={g.key}>
+                  <SelectLabel>{g.label}</SelectLabel>
+                  {ENTERPRISES.filter((e) => e.group === g.key).map((e) => (
+                    <SelectItem key={e.value} value={e.value}>
+                      {e.label}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
               ))}
             </SelectContent>
+
           </Select>
         </div>
         <div className="space-y-1">
@@ -379,8 +404,9 @@ export function CashFlowProjectionPanel({
           </Select>
         </div>
         <div className="text-xs text-muted-foreground ml-auto max-w-md text-right">
-          Horizonte: mês atual + 6 meses · Estimativa = média dos últimos 3 meses realizados por
-          categoria · Simulação = projeções manuais/IA
+          Horizonte: mês atual + {horizon} meses · Estimativa = média dos últimos 3 meses
+          realizados por categoria · Simulação = Simulador de DRE + projeções manuais/IA
+
         </div>
         <div className="flex items-center gap-2">
           <Button

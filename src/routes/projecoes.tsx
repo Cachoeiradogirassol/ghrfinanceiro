@@ -26,7 +26,10 @@ import {
 import { QuickGrid, type GridColumnDef } from "@/components/QuickGrid";
 import { AccountCombobox } from "@/components/AccountCombobox";
 import { groupAccounts } from "@/lib/account-options";
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
+import { DreSimulator } from "@/components/DreSimulator";
+import type { SimulationResult } from "@/lib/simulation-compute";
+
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -166,6 +169,10 @@ type ProjectionRow = {
 
 function ProjectionsPage() {
   const qc = useQueryClient();
+  // Camada de simulação (Simulador de DRE) → alimenta o cenário Misto do motor de fluxo.
+  const [simResult, setSimResult] = useState<SimulationResult | null>(null);
+  const handleSimResult = useCallback((r: SimulationResult) => setSimResult(r), []);
+
   const nav = useNavigate();
   const ccFn = useServerFn(listCostCenters);
   const accFn = useServerFn(listAccounts);
@@ -921,8 +928,9 @@ function ProjectionsPage() {
         </AccordionItem>
       </Accordion>
 
-      <Tabs defaultValue="fluxo" className="w-full">
+      <Tabs defaultValue="simulador" className="w-full">
         <TabsList>
+          <TabsTrigger value="simulador">Simulador de DRE</TabsTrigger>
           <TabsTrigger value="fluxo">
             {activeMode === "real_based"
               ? "Fluxo Projetado (Real / Simulação / Misto)"
@@ -932,10 +940,25 @@ function ProjectionsPage() {
           <TabsTrigger value="grafico">Curva isolada</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="fluxo" className="mt-4">
-          <CashFlowProjectionPanel mode={activeMode} scenarioId={activeScenarioId} />
-
+        <TabsContent value="simulador" className="mt-4 space-y-4">
+          <DreSimulator scenarioId={activeScenarioId} onResult={handleSimResult} />
+          <CashFlowProjectionPanel
+            mode={activeMode}
+            scenarioId={activeScenarioId}
+            horizon={simResult ? simResult.months.length - 1 : 6}
+            simulationOverlay={simResult?.overlay}
+          />
         </TabsContent>
+
+        <TabsContent value="fluxo" className="mt-4">
+          <CashFlowProjectionPanel
+            mode={activeMode}
+            scenarioId={activeScenarioId}
+            horizon={simResult ? simResult.months.length - 1 : 6}
+            simulationOverlay={simResult?.overlay}
+          />
+        </TabsContent>
+
 
         <TabsContent value="gerenciar" className="space-y-6 mt-4">
           <Accordion type="single" collapsible>

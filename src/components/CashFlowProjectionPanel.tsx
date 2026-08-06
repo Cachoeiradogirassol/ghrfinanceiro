@@ -44,14 +44,12 @@ import { listCostCenters, buildProjection } from "@/lib/finance.functions";
 const fmt = (n: number) =>
   n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
-const ENTERPRISES = [
+// Estrutura oficial de empreendimentos (src/lib/enterprises.ts).
+const ENTERPRISE_OPTIONS: { value: string; label: string; group?: string }[] = [
   { value: "__all__", label: "Todas as empresas" },
-  { value: "restaurante", label: "Restaurante" },
-  { value: "vinhedo", label: "Vinhedo / Cachoeira" },
-  { value: "turismo", label: "Turismo" },
-  { value: "ghr_aldeia", label: "GHR Aldeia" },
-  { value: "ghr_jk", label: "GHR JK" },
+  ...ENTERPRISES.map((e) => ({ value: e.value as string, label: e.label, group: e.group })),
 ];
+
 
 const sourceLabel: Record<CashFlowSource, string> = {
   realized: "Realizado",

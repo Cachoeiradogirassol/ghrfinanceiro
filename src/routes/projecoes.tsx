@@ -166,6 +166,10 @@ type ProjectionRow = {
 
 function ProjectionsPage() {
   const qc = useQueryClient();
+  // Camada de simulação (Simulador de DRE) → alimenta o cenário Misto do motor de fluxo.
+  const [simResult, setSimResult] = useState<SimulationResult | null>(null);
+  const handleSimResult = useCallback((r: SimulationResult) => setSimResult(r), []);
+
   const nav = useNavigate();
   const ccFn = useServerFn(listCostCenters);
   const accFn = useServerFn(listAccounts);

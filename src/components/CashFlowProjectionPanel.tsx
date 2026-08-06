@@ -40,6 +40,8 @@ import {
   type CashFlowSource,
 } from "@/lib/cash-flow-projection.functions";
 import { listCostCenters, buildProjection } from "@/lib/finance.functions";
+import { ENTERPRISES, ENTERPRISE_GROUPS } from "@/lib/enterprises";
+
 
 const fmt = (n: number) =>
   n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });

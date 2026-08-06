@@ -404,8 +404,9 @@ export function CashFlowProjectionPanel({
           </Select>
         </div>
         <div className="text-xs text-muted-foreground ml-auto max-w-md text-right">
-          Horizonte: mês atual + 6 meses · Estimativa = média dos últimos 3 meses realizados por
-          categoria · Simulação = projeções manuais/IA
+          Horizonte: mês atual + {horizon} meses · Estimativa = média dos últimos 3 meses
+          realizados por categoria · Simulação = Simulador de DRE + projeções manuais/IA
+
         </div>
         <div className="flex items-center gap-2">
           <Button

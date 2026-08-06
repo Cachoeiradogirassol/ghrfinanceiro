@@ -65,6 +65,8 @@ import {
 } from "@/lib/simulation.functions";
 import {
   computeSimulation,
+  adjustedItemSeries,
+
   monthLabel,
   horizonMonths,
   addMonthsToKey,

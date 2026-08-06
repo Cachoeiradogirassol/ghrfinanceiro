@@ -529,10 +529,12 @@ export function DreSimulator({
                   <TableBody>
                     {c.items.map((it) => {
                       const ModeIcon = MODE_META[it.mode].icon;
-                      const total = months.reduce((s, m) => {
-                        const cat = result.categories.find((x) => x.id === c.id);
-                        return s + 0 * (cat ? 1 : 0);
-                      }, 0);
+                      const series = adjustedItemSeries(it, months, basesQ.data ?? {}, {
+                        revenuePct,
+                        expensePct,
+                      });
+                      const total = months.reduce((s, m) => s + (series[m] ?? 0), 0);
+
                       return (
                         <TableRow key={it.id}>
                           <TableCell className="text-xs font-medium">{it.name}</TableCell>

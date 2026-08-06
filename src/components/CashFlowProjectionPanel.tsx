@@ -320,7 +320,10 @@ export function CashFlowProjectionPanel({
           <div className="mt-3 text-xs text-muted-foreground flex items-center gap-2">
             <Wallet className="h-3.5 w-3.5" />
             Saldo inicial (caixa consolidado{" "}
-            {enterprise === "__all__" ? "geral" : ENTERPRISES.find((e) => e.value === enterprise)?.label}
+            {enterprise === "__all__"
+              ? "geral"
+              : ENTERPRISE_OPTIONS.find((e) => e.value === enterprise)?.label}
+
             ):{" "}
             <span className="font-mono font-semibold text-foreground">
               {ccId === "__all__" ? fmt(currentBalance) : "— (filtrado por CC)"}

@@ -369,12 +369,19 @@ export function CashFlowProjectionPanel({
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {ENTERPRISES.map((e) => (
-                <SelectItem key={e.value} value={e.value}>
-                  {e.label}
-                </SelectItem>
+              <SelectItem value="__all__">Todas as empresas</SelectItem>
+              {ENTERPRISE_GROUPS.map((g) => (
+                <SelectGroup key={g.key}>
+                  <SelectLabel>{g.label}</SelectLabel>
+                  {ENTERPRISES.filter((e) => e.group === g.key).map((e) => (
+                    <SelectItem key={e.value} value={e.value}>
+                      {e.label}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
               ))}
             </SelectContent>
+
           </Select>
         </div>
         <div className="space-y-1">

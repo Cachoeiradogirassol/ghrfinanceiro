@@ -13,6 +13,7 @@ import {
   ChevronDown,
   Users,
   Landmark,
+  Wallet,
   FileBarChart,
   BarChart3,
   Sparkle,

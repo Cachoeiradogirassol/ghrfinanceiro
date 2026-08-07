@@ -900,18 +900,18 @@ export function DreSimulator({
                     </div>
                   </div>
                   <div className="rounded-md bg-muted/50 p-2 text-xs">
-                    Base histórica ({enterpriseLabel(draft.enterprise)},{" "}
-                    {draft.flow === "in" ? "entradas" : "saídas"}, média dos últimos 3 meses
-                    conciliados):{" "}
+                    Base sazonal 2025 ({enterpriseLabel(draft.enterprise)},{" "}
+                    {draft.flow === "in" ? "entradas" : "saídas"}) — cada mês da projeção repete o
+                    mês correspondente de 2025. Média:{" "}
                     <span className="font-mono font-semibold">
                       {fmt(
-                        ((draft.flow === "in"
-                          ? basesQ.data?.[draft.enterprise]?.in
-                          : basesQ.data?.[draft.enterprise]?.out) ?? 0) * (draft.factor || 1),
+                        seasonalAverage(basesQ.data ?? {}, draft.enterprise, draft.flow) *
+                          (draft.factor || 1),
                       )}
                     </span>
                     /mês
                   </div>
+
                 </div>
               )}
 

@@ -676,6 +676,39 @@ export type Database = {
           },
         ]
       }
+      seasonal_baseline: {
+        Row: {
+          amount: number
+          created_at: string
+          enterprise: Database["public"]["Enums"]["enterprise_type"]
+          flow: string
+          id: string
+          month: number
+          updated_at: string
+          year: number
+        }
+        Insert: {
+          amount?: number
+          created_at?: string
+          enterprise: Database["public"]["Enums"]["enterprise_type"]
+          flow: string
+          id?: string
+          month: number
+          updated_at?: string
+          year?: number
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          enterprise?: Database["public"]["Enums"]["enterprise_type"]
+          flow?: string
+          id?: string
+          month?: number
+          updated_at?: string
+          year?: number
+        }
+        Relationships: []
+      }
       sim_categories: {
         Row: {
           created_at: string

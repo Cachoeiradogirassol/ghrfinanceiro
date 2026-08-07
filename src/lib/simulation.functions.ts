@@ -260,39 +260,26 @@ export const saveSimSettings = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
-// ---------- BASE SAZONAL (histórico realizado por empreendimento) ----------
-// Média mensal dos últimos 3 meses conciliados, por empreendimento e fluxo.
-// Mesma base que a camada "estimado" usa: transações conciliadas, sem transferências.
+// ---------- BASE SAZONAL (série real de 2025 por empreendimento) ----------
+// Lê a tabela de referência seasonal_baseline: valor por mês-calendário (1–12).
 export const getSeasonalBases = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
-  .handler(async ({ context }): Promise<Record<string, { in: number; out: number }>> => {
-    const now = new Date();
-    const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 3, 1));
-    const end = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 0));
-    const { data, error } = await context.supabase
-      .from("transactions")
-      .select("type, amount, is_transfer, status, cost_centers(enterprise)")
-      .eq("is_transfer", false)
-      .eq("status", "reconciled")
-      .gte("due_date", start.toISOString().slice(0, 10))
-      .lte("due_date", end.toISOString().slice(0, 10));
-    if (error) throw new Error(error.message);
-    type Row = {
-      type: "receivable" | "payable";
-      amount: number | string;
-      cost_centers: { enterprise: string } | null;
-    };
-    const acc: Record<string, { in: number; out: number }> = {};
-    for (const r of (data ?? []) as unknown as Row[]) {
-      const ent = r.cost_centers?.enterprise;
-      if (!ent) continue;
-      acc[ent] = acc[ent] ?? { in: 0, out: 0 };
-      if (r.type === "receivable") acc[ent].in += Number(r.amount);
-      else acc[ent].out += Number(r.amount);
-    }
-    for (const k of Object.keys(acc)) {
-      acc[k].in = acc[k].in / 3;
-      acc[k].out = acc[k].out / 3;
-    }
-    return acc;
-  });
+  .handler(
+    async ({
+      context,
+    }): Promise<Record<string, { in: Record<number, number>; out: Record<number, number> }>> => {
+      const { data, error } = await context.supabase
+        .from("seasonal_baseline" as never)
+        .select("enterprise, flow, month, amount")
+        .eq("year" as never, 2025);
+      if (error) throw new Error(error.message);
+      type Row = { enterprise: string; flow: "in" | "out"; month: number; amount: number | string };
+      const acc: Record<string, { in: Record<number, number>; out: Record<number, number> }> = {};
+      for (const r of (data ?? []) as unknown as Row[]) {
+        acc[r.enterprise] = acc[r.enterprise] ?? { in: {}, out: {} };
+        acc[r.enterprise][r.flow === "in" ? "in" : "out"][Number(r.month)] = Number(r.amount);
+      }
+      return acc;
+    },
+  );
+

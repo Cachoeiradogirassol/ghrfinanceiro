@@ -66,6 +66,8 @@ import {
 import {
   computeSimulation,
   adjustedItemSeries,
+  seasonalAverage,
+
 
   monthLabel,
   horizonMonths,

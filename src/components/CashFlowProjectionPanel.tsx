@@ -333,17 +333,23 @@ export function CashFlowProjectionPanel({
 
         </div>
         {(scenario === "real" || scenario === "mixed") && (
-          <div className="mt-3 text-xs text-muted-foreground flex items-center gap-2">
+          <div className="mt-3 text-xs text-muted-foreground flex flex-wrap items-center gap-2">
             <Wallet className="h-3.5 w-3.5" />
-            Saldo inicial (caixa consolidado{" "}
+            Saldo inicial ({" "}
             {enterprise === "__all__"
               ? "geral"
               : ENTERPRISE_OPTIONS.find((e) => e.value === enterprise)?.label}
-
             ):{" "}
             <span className="font-mono font-semibold text-foreground">
               {ccId === "__all__" ? fmt(currentBalance) : "— (filtrado por CC)"}
             </span>
+            {ccId === "__all__" && (
+              <Badge variant={balanceIsManual ? "default" : "outline"} className="text-[10px]">
+                {balanceIsManual
+                  ? `informado manualmente${manualAsOf ? ` em ${manualAsOf.slice(8, 10)}/${manualAsOf.slice(5, 7)}` : ""}`
+                  : "derivado das conciliações"}
+              </Badge>
+            )}
           </div>
         )}
       </Card>

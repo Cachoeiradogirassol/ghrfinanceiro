@@ -98,6 +98,7 @@ export function AppLayout({ children }: { children?: React.ReactNode }) {
             { to: "/configuracoes/usuarios", label: "Usuários", icon: Users },
             { to: "/configuracoes/contas-bancarias", label: "Contas Bancárias", icon: Landmark },
             { to: "/configuracoes/plano-de-contas", label: "Plano de Contas", icon: FileBarChart },
+            { to: "/configuracoes/saldos-iniciais", label: "Saldo Inicial das Contas", icon: Wallet },
           ],
         },
       ],

@@ -23,6 +23,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as LancamentosIndexRouteImport } from './routes/lancamentos.index'
 import { Route as LancamentosNovoRouteImport } from './routes/lancamentos.novo'
 import { Route as ConfiguracoesUsuariosRouteImport } from './routes/configuracoes.usuarios'
+import { Route as ConfiguracoesSaldosIniciaisRouteImport } from './routes/configuracoes.saldos-iniciais'
 import { Route as ConfiguracoesPlanoDeContasRouteImport } from './routes/configuracoes.plano-de-contas'
 import { Route as ConfiguracoesContasBancariasRouteImport } from './routes/configuracoes.contas-bancarias'
 import { Route as AuthRedefinirSenhaRouteImport } from './routes/auth.redefinir-senha'
@@ -101,6 +102,12 @@ const ConfiguracoesUsuariosRoute = ConfiguracoesUsuariosRouteImport.update({
   path: '/usuarios',
   getParentRoute: () => ConfiguracoesRoute,
 } as any)
+const ConfiguracoesSaldosIniciaisRoute =
+  ConfiguracoesSaldosIniciaisRouteImport.update({
+    id: '/saldos-iniciais',
+    path: '/saldos-iniciais',
+    getParentRoute: () => ConfiguracoesRoute,
+  } as any)
 const ConfiguracoesPlanoDeContasRoute =
   ConfiguracoesPlanoDeContasRouteImport.update({
     id: '/plano-de-contas',
@@ -158,6 +165,7 @@ export interface FileRoutesByFullPath {
   '/auth/redefinir-senha': typeof AuthRedefinirSenhaRoute
   '/configuracoes/contas-bancarias': typeof ConfiguracoesContasBancariasRoute
   '/configuracoes/plano-de-contas': typeof ConfiguracoesPlanoDeContasRoute
+  '/configuracoes/saldos-iniciais': typeof ConfiguracoesSaldosIniciaisRoute
   '/configuracoes/usuarios': typeof ConfiguracoesUsuariosRoute
   '/lancamentos/novo': typeof LancamentosNovoRoute
   '/lancamentos/': typeof LancamentosIndexRoute
@@ -181,6 +189,7 @@ export interface FileRoutesByTo {
   '/auth/redefinir-senha': typeof AuthRedefinirSenhaRoute
   '/configuracoes/contas-bancarias': typeof ConfiguracoesContasBancariasRoute
   '/configuracoes/plano-de-contas': typeof ConfiguracoesPlanoDeContasRoute
+  '/configuracoes/saldos-iniciais': typeof ConfiguracoesSaldosIniciaisRoute
   '/configuracoes/usuarios': typeof ConfiguracoesUsuariosRoute
   '/lancamentos/novo': typeof LancamentosNovoRoute
   '/lancamentos': typeof LancamentosIndexRoute
@@ -205,6 +214,7 @@ export interface FileRoutesById {
   '/auth/redefinir-senha': typeof AuthRedefinirSenhaRoute
   '/configuracoes/contas-bancarias': typeof ConfiguracoesContasBancariasRoute
   '/configuracoes/plano-de-contas': typeof ConfiguracoesPlanoDeContasRoute
+  '/configuracoes/saldos-iniciais': typeof ConfiguracoesSaldosIniciaisRoute
   '/configuracoes/usuarios': typeof ConfiguracoesUsuariosRoute
   '/lancamentos/novo': typeof LancamentosNovoRoute
   '/lancamentos/': typeof LancamentosIndexRoute
@@ -230,6 +240,7 @@ export interface FileRouteTypes {
     | '/auth/redefinir-senha'
     | '/configuracoes/contas-bancarias'
     | '/configuracoes/plano-de-contas'
+    | '/configuracoes/saldos-iniciais'
     | '/configuracoes/usuarios'
     | '/lancamentos/novo'
     | '/lancamentos/'
@@ -253,6 +264,7 @@ export interface FileRouteTypes {
     | '/auth/redefinir-senha'
     | '/configuracoes/contas-bancarias'
     | '/configuracoes/plano-de-contas'
+    | '/configuracoes/saldos-iniciais'
     | '/configuracoes/usuarios'
     | '/lancamentos/novo'
     | '/lancamentos'
@@ -276,6 +288,7 @@ export interface FileRouteTypes {
     | '/auth/redefinir-senha'
     | '/configuracoes/contas-bancarias'
     | '/configuracoes/plano-de-contas'
+    | '/configuracoes/saldos-iniciais'
     | '/configuracoes/usuarios'
     | '/lancamentos/novo'
     | '/lancamentos/'
@@ -403,6 +416,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ConfiguracoesUsuariosRouteImport
       parentRoute: typeof ConfiguracoesRoute
     }
+    '/configuracoes/saldos-iniciais': {
+      id: '/configuracoes/saldos-iniciais'
+      path: '/saldos-iniciais'
+      fullPath: '/configuracoes/saldos-iniciais'
+      preLoaderRoute: typeof ConfiguracoesSaldosIniciaisRouteImport
+      parentRoute: typeof ConfiguracoesRoute
+    }
     '/configuracoes/plano-de-contas': {
       id: '/configuracoes/plano-de-contas'
       path: '/plano-de-contas'
@@ -468,12 +488,14 @@ const AuthRouteWithChildren = AuthRoute._addFileChildren(AuthRouteChildren)
 interface ConfiguracoesRouteChildren {
   ConfiguracoesContasBancariasRoute: typeof ConfiguracoesContasBancariasRoute
   ConfiguracoesPlanoDeContasRoute: typeof ConfiguracoesPlanoDeContasRoute
+  ConfiguracoesSaldosIniciaisRoute: typeof ConfiguracoesSaldosIniciaisRoute
   ConfiguracoesUsuariosRoute: typeof ConfiguracoesUsuariosRoute
 }
 
 const ConfiguracoesRouteChildren: ConfiguracoesRouteChildren = {
   ConfiguracoesContasBancariasRoute: ConfiguracoesContasBancariasRoute,
   ConfiguracoesPlanoDeContasRoute: ConfiguracoesPlanoDeContasRoute,
+  ConfiguracoesSaldosIniciaisRoute: ConfiguracoesSaldosIniciaisRoute,
   ConfiguracoesUsuariosRoute: ConfiguracoesUsuariosRoute,
 }
 
@@ -503,13 +525,3 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}

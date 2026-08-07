@@ -43,6 +43,7 @@ import {
   type CashFlowSource,
 } from "@/lib/cash-flow-projection.functions";
 import { listCostCenters, buildProjection } from "@/lib/finance.functions";
+import { getManualOpeningBalance } from "@/lib/account-balances.functions";
 import { ENTERPRISES, ENTERPRISE_GROUPS } from "@/lib/enterprises";
 
 

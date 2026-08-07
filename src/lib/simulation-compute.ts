@@ -68,9 +68,14 @@ export function itemSeries(
       if (key in out) out[key] = per;
     }
   } else if (item.mode === "seasonal") {
+    // Sazonal: usa o valor do mês-calendário correspondente na base de 2025 × fator.
     const base = bases[item.enterprise];
-    const val = (item.flow === "in" ? base?.in : base?.out) ?? 0;
-    for (const m of months) if (m >= startKey) out[m] = val * (item.factor || 1);
+    const table = (item.flow === "in" ? base?.in : base?.out) ?? {};
+    for (const m of months) {
+      if (m < startKey) continue;
+      const monthNumber = Number(m.split("-")[1]);
+      out[m] = Number(table[monthNumber] ?? 0) * (item.factor || 1);
+    }
   } else {
     for (const m of months) out[m] = Number(item.monthly_values?.[m] ?? 0);
   }

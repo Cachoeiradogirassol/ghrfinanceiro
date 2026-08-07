@@ -149,8 +149,19 @@ export function CashFlowProjectionPanel({
     queryKey: ["cash-flow-current-balance", balanceEnterprise],
     queryFn: () => balanceFn({ data: { enterprise: balanceEnterprise as never } }),
   });
+  // Saldo informado manualmente (tela "Saldo inicial das contas") tem prioridade.
+  const manualQ = useQuery({
+    queryKey: ["manual-opening-balance", balanceEnterprise],
+    queryFn: () => manualBalanceFn({ data: { enterprise: balanceEnterprise } }),
+  });
+  const manualTotal = manualQ.data?.total ?? null;
+  const manualAsOf = manualQ.data?.as_of_date ?? null;
+  const derivedBalance = balanceQ.data?.currentBalance ?? 0;
+  const anchorBalance = manualTotal ?? derivedBalance;
   const currentBalance =
-    mode === "blank" ? 0 : ccId === "__all__" ? balanceQ.data?.currentBalance ?? 0 : 0;
+    mode === "blank" ? 0 : ccId === "__all__" ? anchorBalance : 0;
+  const balanceIsManual = mode !== "blank" && ccId === "__all__" && manualTotal !== null;
+
 
 
   type ChartPoint = {

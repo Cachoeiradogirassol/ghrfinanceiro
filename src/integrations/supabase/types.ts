@@ -638,6 +638,153 @@ export type Database = {
           },
         ]
       }
+      sim_categories: {
+        Row: {
+          created_at: string
+          created_by: string
+          id: string
+          name: string
+          scenario_id: string | null
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string
+          id?: string
+          name: string
+          scenario_id?: string | null
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          id?: string
+          name?: string
+          scenario_id?: string | null
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sim_categories_scenario_id_fkey"
+            columns: ["scenario_id"]
+            isOneToOne: false
+            referencedRelation: "projection_scenarios"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sim_items: {
+        Row: {
+          adjust_pct: number
+          amount: number
+          category_id: string
+          created_at: string
+          created_by: string
+          enterprise: Database["public"]["Enums"]["enterprise_type"]
+          factor: number
+          flow: string
+          id: string
+          mode: string
+          monthly_values: Json
+          months_count: number
+          name: string
+          sort_order: number
+          start_month: string | null
+          total_amount: number
+          updated_at: string
+        }
+        Insert: {
+          adjust_pct?: number
+          amount?: number
+          category_id: string
+          created_at?: string
+          created_by?: string
+          enterprise?: Database["public"]["Enums"]["enterprise_type"]
+          factor?: number
+          flow?: string
+          id?: string
+          mode?: string
+          monthly_values?: Json
+          months_count?: number
+          name: string
+          sort_order?: number
+          start_month?: string | null
+          total_amount?: number
+          updated_at?: string
+        }
+        Update: {
+          adjust_pct?: number
+          amount?: number
+          category_id?: string
+          created_at?: string
+          created_by?: string
+          enterprise?: Database["public"]["Enums"]["enterprise_type"]
+          factor?: number
+          flow?: string
+          id?: string
+          mode?: string
+          monthly_values?: Json
+          months_count?: number
+          name?: string
+          sort_order?: number
+          start_month?: string | null
+          total_amount?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sim_items_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "sim_categories"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sim_settings: {
+        Row: {
+          created_at: string
+          created_by: string
+          expense_adjust_pct: number
+          horizon_months: number
+          id: string
+          revenue_adjust_pct: number
+          scenario_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string
+          expense_adjust_pct?: number
+          horizon_months?: number
+          id?: string
+          revenue_adjust_pct?: number
+          scenario_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          expense_adjust_pct?: number
+          horizon_months?: number
+          id?: string
+          revenue_adjust_pct?: number
+          scenario_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sim_settings_scenario_id_fkey"
+            columns: ["scenario_id"]
+            isOneToOne: false
+            referencedRelation: "projection_scenarios"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       transaction_allocations: {
         Row: {
           amount: number

@@ -1,6 +1,23 @@
 import type { SimCategory, SimItem } from "@/lib/simulation.functions";
 
-export type SeasonalBases = Record<string, { in: number; out: number }>;
+/** Base sazonal 2025: por empreendimento, valor de cada mês-calendário (1–12). */
+export type SeasonalBases = Record<
+  string,
+  { in: Record<number, number>; out: Record<number, number> }
+>;
+
+/** Média anual da base sazonal (usada apenas para exibição/resumo). */
+export function seasonalAverage(
+  bases: SeasonalBases,
+  enterprise: string,
+  flow: "in" | "out",
+): number {
+  const m = bases[enterprise]?.[flow];
+  if (!m) return 0;
+  const vals = Object.values(m);
+  if (!vals.length) return 0;
+  return vals.reduce((a, b) => a + b, 0) / vals.length;
+}
 
 export function currentMonthKey(): string {
   const d = new Date();

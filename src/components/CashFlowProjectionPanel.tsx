@@ -108,6 +108,7 @@ export function CashFlowProjectionPanel({
 } = {}) {
   const buildFn = useServerFn(buildCashFlowProjection);
   const balanceFn = useServerFn(buildProjection);
+  const manualBalanceFn = useServerFn(getManualOpeningBalance);
   const ccFn = useServerFn(listCostCenters);
 
   const [enterprise, setEnterprise] = useState<string>("__all__");

@@ -29,6 +29,7 @@ import { Route as ConfiguracoesContasBancariasRouteImport } from './routes/confi
 import { Route as AuthRedefinirSenhaRouteImport } from './routes/auth.redefinir-senha'
 import { Route as ApiChatReportsRouteImport } from './routes/api/chat-reports'
 import { Route as ApiChatRouteImport } from './routes/api/chat'
+import { Route as ApiPublicReceberPdvRouteImport } from './routes/api/public/receber-pdv'
 import { Route as ApiPublicWebhooksPdvRestauranteRouteImport } from './routes/api/public/webhooks/pdv-restaurante'
 import { Route as ApiPublicWebhooksBankingRouteImport } from './routes/api/public/webhooks/banking'
 
@@ -135,6 +136,11 @@ const ApiChatRoute = ApiChatRouteImport.update({
   path: '/api/chat',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicReceberPdvRoute = ApiPublicReceberPdvRouteImport.update({
+  id: '/api/public/receber-pdv',
+  path: '/api/public/receber-pdv',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiPublicWebhooksPdvRestauranteRoute =
   ApiPublicWebhooksPdvRestauranteRouteImport.update({
     id: '/api/public/webhooks/pdv-restaurante',
@@ -169,6 +175,7 @@ export interface FileRoutesByFullPath {
   '/configuracoes/usuarios': typeof ConfiguracoesUsuariosRoute
   '/lancamentos/novo': typeof LancamentosNovoRoute
   '/lancamentos/': typeof LancamentosIndexRoute
+  '/api/public/receber-pdv': typeof ApiPublicReceberPdvRoute
   '/api/public/webhooks/banking': typeof ApiPublicWebhooksBankingRoute
   '/api/public/webhooks/pdv-restaurante': typeof ApiPublicWebhooksPdvRestauranteRoute
 }
@@ -193,6 +200,7 @@ export interface FileRoutesByTo {
   '/configuracoes/usuarios': typeof ConfiguracoesUsuariosRoute
   '/lancamentos/novo': typeof LancamentosNovoRoute
   '/lancamentos': typeof LancamentosIndexRoute
+  '/api/public/receber-pdv': typeof ApiPublicReceberPdvRoute
   '/api/public/webhooks/banking': typeof ApiPublicWebhooksBankingRoute
   '/api/public/webhooks/pdv-restaurante': typeof ApiPublicWebhooksPdvRestauranteRoute
 }
@@ -218,6 +226,7 @@ export interface FileRoutesById {
   '/configuracoes/usuarios': typeof ConfiguracoesUsuariosRoute
   '/lancamentos/novo': typeof LancamentosNovoRoute
   '/lancamentos/': typeof LancamentosIndexRoute
+  '/api/public/receber-pdv': typeof ApiPublicReceberPdvRoute
   '/api/public/webhooks/banking': typeof ApiPublicWebhooksBankingRoute
   '/api/public/webhooks/pdv-restaurante': typeof ApiPublicWebhooksPdvRestauranteRoute
 }
@@ -244,6 +253,7 @@ export interface FileRouteTypes {
     | '/configuracoes/usuarios'
     | '/lancamentos/novo'
     | '/lancamentos/'
+    | '/api/public/receber-pdv'
     | '/api/public/webhooks/banking'
     | '/api/public/webhooks/pdv-restaurante'
   fileRoutesByTo: FileRoutesByTo
@@ -268,6 +278,7 @@ export interface FileRouteTypes {
     | '/configuracoes/usuarios'
     | '/lancamentos/novo'
     | '/lancamentos'
+    | '/api/public/receber-pdv'
     | '/api/public/webhooks/banking'
     | '/api/public/webhooks/pdv-restaurante'
   id:
@@ -292,6 +303,7 @@ export interface FileRouteTypes {
     | '/configuracoes/usuarios'
     | '/lancamentos/novo'
     | '/lancamentos/'
+    | '/api/public/receber-pdv'
     | '/api/public/webhooks/banking'
     | '/api/public/webhooks/pdv-restaurante'
   fileRoutesById: FileRoutesById
@@ -312,6 +324,7 @@ export interface RootRouteChildren {
   ApiChatReportsRoute: typeof ApiChatReportsRoute
   LancamentosNovoRoute: typeof LancamentosNovoRoute
   LancamentosIndexRoute: typeof LancamentosIndexRoute
+  ApiPublicReceberPdvRoute: typeof ApiPublicReceberPdvRoute
   ApiPublicWebhooksBankingRoute: typeof ApiPublicWebhooksBankingRoute
   ApiPublicWebhooksPdvRestauranteRoute: typeof ApiPublicWebhooksPdvRestauranteRoute
 }
@@ -458,6 +471,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiChatRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/receber-pdv': {
+      id: '/api/public/receber-pdv'
+      path: '/api/public/receber-pdv'
+      fullPath: '/api/public/receber-pdv'
+      preLoaderRoute: typeof ApiPublicReceberPdvRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/webhooks/pdv-restaurante': {
       id: '/api/public/webhooks/pdv-restaurante'
       path: '/api/public/webhooks/pdv-restaurante'
@@ -519,19 +539,10 @@ const rootRouteChildren: RootRouteChildren = {
   ApiChatReportsRoute: ApiChatReportsRoute,
   LancamentosNovoRoute: LancamentosNovoRoute,
   LancamentosIndexRoute: LancamentosIndexRoute,
+  ApiPublicReceberPdvRoute: ApiPublicReceberPdvRoute,
   ApiPublicWebhooksBankingRoute: ApiPublicWebhooksBankingRoute,
   ApiPublicWebhooksPdvRestauranteRoute: ApiPublicWebhooksPdvRestauranteRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}

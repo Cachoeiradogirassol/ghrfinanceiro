@@ -90,6 +90,36 @@ export type Database = {
           },
         ]
       }
+      accounts_bkp_20260824: {
+        Row: {
+          cost_center_id: string | null
+          created_at: string | null
+          id: string | null
+          is_active: boolean | null
+          is_administrative: boolean | null
+          kind: string | null
+          name: string | null
+        }
+        Insert: {
+          cost_center_id?: string | null
+          created_at?: string | null
+          id?: string | null
+          is_active?: boolean | null
+          is_administrative?: boolean | null
+          kind?: string | null
+          name?: string | null
+        }
+        Update: {
+          cost_center_id?: string | null
+          created_at?: string | null
+          id?: string | null
+          is_active?: boolean | null
+          is_administrative?: boolean | null
+          kind?: string | null
+          name?: string | null
+        }
+        Relationships: []
+      }
       bank_accounts: {
         Row: {
           bank: string | null
@@ -124,6 +154,45 @@ export type Database = {
           is_active?: boolean
           master_only?: boolean
           name?: string
+          pluggy_account_id?: string | null
+          pluggy_item_id?: string | null
+        }
+        Relationships: []
+      }
+      bank_accounts_bkp_20260824: {
+        Row: {
+          bank: string | null
+          created_at: string | null
+          enterprise: Database["public"]["Enums"]["enterprise_type"] | null
+          id: string | null
+          initial_balance: number | null
+          is_active: boolean | null
+          master_only: boolean | null
+          name: string | null
+          pluggy_account_id: string | null
+          pluggy_item_id: string | null
+        }
+        Insert: {
+          bank?: string | null
+          created_at?: string | null
+          enterprise?: Database["public"]["Enums"]["enterprise_type"] | null
+          id?: string | null
+          initial_balance?: number | null
+          is_active?: boolean | null
+          master_only?: boolean | null
+          name?: string | null
+          pluggy_account_id?: string | null
+          pluggy_item_id?: string | null
+        }
+        Update: {
+          bank?: string | null
+          created_at?: string | null
+          enterprise?: Database["public"]["Enums"]["enterprise_type"] | null
+          id?: string | null
+          initial_balance?: number | null
+          is_active?: boolean | null
+          master_only?: boolean | null
+          name?: string | null
           pluggy_account_id?: string | null
           pluggy_item_id?: string | null
         }
@@ -436,6 +505,42 @@ export type Database = {
         }
         Relationships: []
       }
+      contacts_bkp_20260824: {
+        Row: {
+          created_at: string | null
+          document_number: string | null
+          document_type: string | null
+          id: string | null
+          master_only: boolean | null
+          name: string | null
+          phone: string | null
+          type: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          document_number?: string | null
+          document_type?: string | null
+          id?: string | null
+          master_only?: boolean | null
+          name?: string | null
+          phone?: string | null
+          type?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          document_number?: string | null
+          document_type?: string | null
+          id?: string | null
+          master_only?: boolean | null
+          name?: string | null
+          phone?: string | null
+          type?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       cost_centers: {
         Row: {
           code: number
@@ -527,6 +632,39 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      intercompany_transfers_bkp_20260824: {
+        Row: {
+          amount: number | null
+          created_at: string | null
+          created_by: string | null
+          id: string | null
+          projection_id: string | null
+          source_cost_center_id: string | null
+          target_cost_center_id: string | null
+          transaction_id: string | null
+        }
+        Insert: {
+          amount?: number | null
+          created_at?: string | null
+          created_by?: string | null
+          id?: string | null
+          projection_id?: string | null
+          source_cost_center_id?: string | null
+          target_cost_center_id?: string | null
+          transaction_id?: string | null
+        }
+        Update: {
+          amount?: number | null
+          created_at?: string | null
+          created_by?: string | null
+          id?: string | null
+          projection_id?: string | null
+          source_cost_center_id?: string | null
+          target_cost_center_id?: string | null
+          transaction_id?: string | null
+        }
+        Relationships: []
       }
       projection_scenarios: {
         Row: {
@@ -1018,6 +1156,90 @@ export type Database = {
           },
         ]
       }
+      transactions_bkp_20260824: {
+        Row: {
+          account_id: string | null
+          amount: number | null
+          bank_account_id: string | null
+          contact_id: string | null
+          cost_center_id: string | null
+          created_at: string | null
+          created_by: string | null
+          description: string | null
+          document_datetime: string | null
+          due_date: string | null
+          id: string | null
+          installment_number: number | null
+          installment_total: number | null
+          is_batch: boolean | null
+          is_recurring: boolean | null
+          is_transfer: boolean | null
+          of_dedupe_key: string | null
+          paid_at: string | null
+          parent_transaction_id: string | null
+          payment_method: string | null
+          recurrence_group_id: string | null
+          status: Database["public"]["Enums"]["transaction_status"] | null
+          type: Database["public"]["Enums"]["transaction_type"] | null
+          updated_at: string | null
+          updated_by: string | null
+        }
+        Insert: {
+          account_id?: string | null
+          amount?: number | null
+          bank_account_id?: string | null
+          contact_id?: string | null
+          cost_center_id?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          document_datetime?: string | null
+          due_date?: string | null
+          id?: string | null
+          installment_number?: number | null
+          installment_total?: number | null
+          is_batch?: boolean | null
+          is_recurring?: boolean | null
+          is_transfer?: boolean | null
+          of_dedupe_key?: string | null
+          paid_at?: string | null
+          parent_transaction_id?: string | null
+          payment_method?: string | null
+          recurrence_group_id?: string | null
+          status?: Database["public"]["Enums"]["transaction_status"] | null
+          type?: Database["public"]["Enums"]["transaction_type"] | null
+          updated_at?: string | null
+          updated_by?: string | null
+        }
+        Update: {
+          account_id?: string | null
+          amount?: number | null
+          bank_account_id?: string | null
+          contact_id?: string | null
+          cost_center_id?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          document_datetime?: string | null
+          due_date?: string | null
+          id?: string | null
+          installment_number?: number | null
+          installment_total?: number | null
+          is_batch?: boolean | null
+          is_recurring?: boolean | null
+          is_transfer?: boolean | null
+          of_dedupe_key?: string | null
+          paid_at?: string | null
+          parent_transaction_id?: string | null
+          payment_method?: string | null
+          recurrence_group_id?: string | null
+          status?: Database["public"]["Enums"]["transaction_status"] | null
+          type?: Database["public"]["Enums"]["transaction_type"] | null
+          updated_at?: string | null
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
       user_roles: {
         Row: {
           created_at: string
@@ -1134,6 +1356,7 @@ export type Database = {
         Args: { _transaction_id: string }
         Returns: undefined
       }
+      usuario_integracao_pdv: { Args: never; Returns: string }
     }
     Enums: {
       app_role: "master" | "user"
@@ -1164,12 +1387,12 @@ export type Tables<
   DefaultSchemaTableNameOrOptions extends
     | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
         DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -1193,11 +1416,11 @@ export type TablesInsert<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -1218,11 +1441,11 @@ export type TablesUpdate<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -1243,11 +1466,11 @@ export type Enums<
   DefaultSchemaEnumNameOrOptions extends
     | keyof DefaultSchema["Enums"]
     | { schema: keyof DatabaseWithoutInternals },
-  EnumName extends DefaultSchemaEnumNameOrOptions extends {
+  EnumName extends (DefaultSchemaEnumNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaEnumNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -1260,11 +1483,11 @@ export type CompositeTypes<
   PublicCompositeTypeNameOrOptions extends
     | keyof DefaultSchema["CompositeTypes"]
     | { schema: keyof DatabaseWithoutInternals },
-  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
+  CompositeTypeName extends (PublicCompositeTypeNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
-    : never = never,
+    : never) = never,
 > = PublicCompositeTypeNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
